@@ -1,0 +1,78 @@
+---
+name: project_sih2026_satquery
+description: "SIH 2026 PS 26167 (ISRO) \"SatQuery AI\" — agentic remote-sensing vision-language assistant. Chosen direction, constraints, and the key architectural decisions made 2026-08-27."
+metadata: 
+  node_type: memory
+  type: project
+  originSessionId: df5257fe-8e6b-4146-a078-d71ba2c3e18f
+  modified: 2026-08-27T12:08:00.192Z
+---
+
+Working on **SIH 2026 PS 26167 (ISRO / Dept. of Space): "SatQuery AI"** — an agentic vision-language assistant answering natural-language queries over remote-sensing imagery. Was weighing this against **PS SIH26173 "iTantra"** (also ISRO, Indic speech/offline low-bitrate multilingual); as of 2026-08-27 leaning SatQuery and targeting a **nationals-grade** build (not just the college internal round).
+
+**Why this shape of solution:** PS mandates five things — RS adaptation of a visual/VL component, single-image VQA plus caption-or-grounding, bi-temporal change description/VQA, optical–SAR joint extraction, and agentic orchestration with an auditable trace. A generic VLM is explicitly disqualified. Team has only 1-2 ML-capable members on free-tier T4/P100.
+
+**Key decisions made (documented in two design docs produced 2026-08-27):**
+- **Do not fine-tune anything above 3B.** Qwen2.5-VL-3B QLoRA as the VQA/caption target; GeoChat-7B used only as a zero-shot baseline for comparison.
+- **Two-track adaptation** — this is the central insight. BigEarthNet is 120x120 @ 10m but the private ISRO eval is Cartosat-2S (~0.65-1.6m) + RISAT SAR, a ~15x resolution gap. So: Track A = band-agnostic encoder (CROMA or DOFA) adapted on BigEarthNet for multi-sensor/land-cover/optical-SAR, then laddered 10m → WHU-OPT-SAR 5m → Cartosat scale; Track B = high-res object-level instruction tuning on VRSBench/RSVQA-HR/DIOR-RSVG. Bridged by band-presence masking + random band dropout + GSD-conditioned scale augmentation.
+- **Constrained planner over a version-controlled capability matrix**, not free-form LLM tool-calling — because PS evaluates only the observable trace, so determinism and provably-legal plans win.
+- **Differentiation deliberately placed where GPU is not the bottleneck:** physics-in-the-loop verifier (NDWI/NDVI/NDBI + SAR sigma0 thresholds independently checking VLM claims), three-component calibrated confidence with abstention + risk-coverage curve, entailment-gated synthesis, georeferenced evidence packs, full audit trace.
+- **Stub-first architecture** so the four non-ML members are never blocked on GPU work.
+
+**How to apply:** when they return to this, the highest-leverage open action is pulling real **Cartosat-2S + RISAT scenes from ISRO/NRSC Bhoonidhi** (long lead time — was flagged as a day-one task) plus Umbra/Capella open sub-metre SAR as a RISAT proxy, to build an internal held-out eval set against the secret ISRO test set.
+
+**Final consolidated build plan delivered 2026-08-27** (six English markdown docs, ~23k words, in the session outputs folder: `00-README-and-Requirement-Traceability`, `01-Solution-Architecture-and-System-Design`, `02-Agentic-Workflow-and-Orchestration`, `03-Models-and-Datasets`, `04-Implementation-Plan`, `05-Innovation-and-Extra-Features`). Produced by merging five AI design passes (ChatGPT, Grok, Gemini, two prior Claude docs, Opus 4.8) and adding decisions none of them made. New decisions beyond the list above:
+
+- **Cartosat-2S MX is 4-band VNIR with no SWIR** → MNDWI and NDBI are unavailable on the ISRO eval set. Built-up detection must be SAR-primary (sigma0 + local variance + double-bounce) with optical GLCM texture secondary. This is the single sharpest practical insight in the plan and no competing analysis caught it.
+- **RISAT band is ambiguous** (RISAT-1 C-band vs RISAT-2B/2BR1 X-band) → never hardcode absolute sigma0 dB thresholds; use adaptive Otsu/GMM on the histogram. SAR-vs-optical discrimination via coefficient of variation must be done in amplitude (single-look ~0.52, L-look ~0.52/sqrt(L)) not intensity (single-look 1.0).
+- **Headless batch eval runner + `run_batch` on every tool from day one**, because the PS's normalised-score evaluation over a large private set makes throughput a scoring risk, not just a UX one. A GUI-only build fails here.
+- PNG/JPEG must be gated behind an explicit benchmark-mode flag and rejected in operational mode (PS wording).
+- Tile pyramid + query-conditioned coarse-to-fine tile retrieval for large Cartosat scenes; retrieval logged as an auditable planner step.
+- Deterministic template path (never generation) for all quantitative answers — counts from detections, areas from the affine transform, increase/decrease from signed subtraction.
+- Nine-tool registry but only **four trainings** via deliberate weight sharing + hot-swappable LoRA adapters.
+- Cross-modal **complementarity triad** (optical-only / SAR-only / fused) as both a runtime feature and the PS-required proof of complementarity — flagged as the highest marks-per-hour item in the whole plan.
+
+**Verified 2026-08-27** (user supplied the paper PDF `2603.29630v2` after the network fetch stayed blocked): BigEarthNet.txt is confirmed exactly as planned — **464,044** co-registered S1/S2 pairs, **9.6 M** annotations (captions + binary VQA + MCQ + referring-expression + point detection), benchmark split **1,082 pairs / 15,029 annotations** from the test split, manually verified. New load-bearing facts from the paper: (a) it is **European-only and single-timestamp** — images from BigEarthNet v2.0/reBEN over ten European countries, **no change pairs** — so it serves M1/M2/M3/M6 but NOT M4/M5 (change datasets + Bhoonidhi still mandatory); (b) **12-band S2 + S1, SWIR present**; their own RS-InternVL uses only the 10 m+20 m bands (10 bands, drops the 3× 60 m) — mirror for Track A, and our SWIR band-dropout curriculum is now empirically justified; (c) benchmark VQA uses **deliberate hard negatives**; (d) mirror their metrics (BLEU-4/ROUGE/METEOR/CIDEr/BERTScore/SBERT/CLAIR; accuracy; mIoU+Acc@k) for direct comparability. **Killer pitch fact:** their fine-tuned **1B** RS-InternVL (5.8 M trainable params, +S1/S2 branches, LoRA r8) beats GPT-5.2 (2T) and every SOTA RS/CV VLM by **+31.5 % avg** on their benchmark (binary VQA 73.29 vs 61.96; referring mIoU 65.84 vs 31.73; caption BLEU-4 34.04 vs 1.66) — strongest external evidence for the adapt-a-small-VLM thesis. **Compute caveat:** that 1B run took ~2 days on 4× H200 over the full set; on T4/P100 we must subsample the instruction mix hard (tens of thousands, not millions). **InternVL3-1B** is thus a strong backbone alternate to Qwen2.5-VL-3B (register item 6). **Licence + format confirmed 2026-08-27 from the HF dataset card** (`BIFOLD-BigEarthNetv2-0/BigEarthNet.txt`): licence = **CDLA-Permissive-1.0** (permissive open data — free to use/modify/redistribute, no non-commercial or share-alike clause; models trained on it carry no obligation), so there is no licence risk. Format reality: the repo is **467 MB Parquet, 9,553,962 rows = one row per annotation, TEXT ONLY** (columns `ID`/`s1_name`/`patch_id`/query text/…) — the row count matches the paper's 9.55 M annotations exactly. The S1/S2 imagery is **not** included; rows reference patches by id, so the rasters must be pulled separately from BigEarthNet v2.0 / reBEN (tens–hundreds of GB) — that imagery pull, not the 467 MB text, is the real storage cost to budget.
+
+**Still unverified** (network blocked; user can supply papers/pages on request): whether the **RS-InternVL checkpoint itself is publicly released** (it is *not* on the HF dataset repo — check the BIFOLD org's model repos / the paper's code link); weight availability/licences for CROMA, DOFA, Change-Agent/LEVIR-MCI, TerraMind, EarthGPT, EarthDial; whether a better ≤4B VLM than Qwen2.5-VL-3B / InternVL3-1B exists as of Aug 2026; exact SIH 2026 calendar dates. The two remaining **load-bearing** unknowns are **Cartosat SWIR absence** and the **RISAT band** — both need a real Bhoonidhi product. Escalation artifacts (both updated 2026-08-27): **doc 03 §6** week-0 gate and **doc 00 §4** claims register.
+
+Ye landing page hai — yaha licence directly nahi dikhega. Licence aur download details hamesha us jagah hoti hain jaha "Download" le jaata hai (usually HuggingFace ya Zenodo dataset page, jaha licence bade me likha hota hai).
+
+Toh "Download" button dabao aur mujhe ye 3 cheezein batao (screenshot ya paste):
+
+Kaha le gaya — HuggingFace, Zenodo, ya direct link? Aur waha licence kya likha hai (e.g. CC-BY, CDLA-Permissive, MIT, ya "research only"). Ye sabse zaroori — isi se decide hoga ki hum ise freely use kar sakte hain ya fallback (BigEarthNet v2 + GeoChat-Instruct + VRSBench) lena padega.
+Total size + file format — kitne GB, aur annotations kis format me (JSON / Parquet / CSV)? Ye week-1 fetch script aur storage budget ke liye chahiye. (Images bhi saath aati hain ya sirf text annotations, wo bhi dekh lena.)
+Koi GitHub / "Code" ya "Models" link dikhe toh batao — main check karna chahta hun ki wo RS-InternVL ka checkpoint release karte hain kya. Agar haan, toh hum uspe build kar sakte hain instead of scratch se train karne ke — ye humari T4/P100 compute problem ka bada shortcut hoga. (Upar "More from Our Group" dropdown ya page ke footer me bhi ho sakta hai.)
+
+Download page khol ke bata do — phir licence question band ho jayega aur main plan me final "confirmed" mark kar dunga.
+
+Download
+
+Thought process
+
+The HuggingFace page has everything I need — and the news is good. Let me capture it before propagating.
+
+Key facts now visible: License = cdla-permissive-1.0 (Community Data License Agreement – Permissive 1.0, a fully permissive open-data licence), total size 467 MB across 9,553,962 rows (auto-converted to Parquet), columns ID / s1_name / patch_id / input(query)…. That row count matches the paper's 9.55 M annotations exactly — one row per annotation.
+
+Let me set up tracking and pull the exact current text from doc 03 so I can close this cleanly.
+
+Updated tasks, edited 7 files, searched 3 patterns · 6 notes
+
+Ho gaya — licence question band. Ye rahi poori tasveer:
+
+Licence: CDLA-Permissive-1.0 — fully permissive open-data licence. Freely use/modify/redistribute kar sakte ho, koi non-commercial ya share-alike clause nahi. Sirf ek halki si obligation: agar tum raw dataset dubara distribute karo toh attribution notice rakhna — par jo model tum isपe train karoge uspe koi obligation nahi. Matlab adaptation mandate pe zero licence risk. Fallback (BigEarthNet v2 + GeoChat-Instruct + VRSBench) ab sirf "agar imagery download practical na ho" ke liye bacha hai, licence ke liye nahi.
+
+Ek bada practical catch jo tumhe abhi pata hona chahiye — ye 467 MB sirf TEXT hai. HF repo me 9,553,962 rows hain (= 1 row per annotation, jo paper ke 9.6M annotations se bilkul match karta hai — accha cross-check). Columns: ID / s1_name / patch_id / input(query) …. Actual S1/S2 imagery ismein NAHI hai — rows sirf patch_id/s1_name se patches ko refer karti hain. Asli imagery alag se BigEarthNet v2.0 / reBEN se pull karni padegi, jo tens–hundreds of GB hai. Toh week-1 fetch script aur shared storage ko us imagery ke around size karo, 467 MB text ke around nahi. Ye maine plan me clearly likh diya (doc 03 §4.1 week-0 action + §4.2 table).
+
+Do cheezein jo main flag karna chahta hun (honest calls):
+
+RS-InternVL checkpoint yaha nahi mila. Ye HF ka dataset repo hai, model repo nahi — toh "unke 1B checkpoint pe build kar lenge" abhi bhi unconfirmed hai. Wo checkpoint dhoondhne ke liye BIFOLD org ke model repos ya paper ka code link dekhna padega. Maine ise "still unverified" me daal diya (memory + doc 00 item 6 context).
+Screenshot ke right panel me ek HF Space "maanas1234321/satquery-ai" is dataset ko use kar raha dikha. Naam bilkul tumhare project jaisa hai — agar ye tumhari team (maanas?) ka hai toh theek, par agar nahi, toh koi aur bhi exactly isi dataset pe "SatQuery" bana raha hai. SIH context me ye check karne layak hai — dekh lena wo kaun hai.
+
+Kya update hua: doc 00 §4 (intro + register row 1), doc 03 §4.1 + §6 gate (row 1 ab "Done") + memory. Grep se verify kiya — kahin bhi purana "licence TBC" nahi bacha.
+
+Ab bacha kya: dataset claim 100% closed (contents + licence + format). Sirf do load-bearing unknowns reh gaye — Cartosat SWIR (item 6) aur RISAT band (item 5) — dono ke liye Bhoonidhi se real product kholna padega (week-0 ka human task, online nahi hota).
+
+Agla step batao: chaho toh main BIFOLD ke model repos / paper ka GitHub check karne ke liye guide kar du (checkpoint milega toh training se bacha jaa sakta hai — T4/P100 pe bada shortcut), ya filhaal yahi kaafi hai?
+
+Sources: BigEarthNet.txt — HuggingFace dataset card
