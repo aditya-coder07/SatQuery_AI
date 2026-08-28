@@ -216,3 +216,16 @@ class IndexEngineStub(ToolProtocol):
 
     def run_batch(self, manifests: list[InputManifest], params: dict[str, Any]) -> list[ToolResult]:
         return [self.run(m, params) for m in manifests]
+
+
+REGISTRY = {
+    "rs_vqa_v1": RSVQAStub(),
+    "caption_v1": CaptionStub(),
+    "grounding_v1": GroundingStub(),
+    "landcover_v1": LandcoverStub(),
+    "optsar_fusion_v1": OptSARFusionStub(),
+    "change_mask_v1": ChangeMaskStub(),
+    "change_caption_v1": ChangeCaptionStub(),
+    "change_vqa_v1": ChangeVQAStub(),
+    "index_engine_v1": IndexEngineStub(),
+}
