@@ -52,6 +52,7 @@ def test_input_manifest_instantiation():
 def test_plan_instantiation():
     plan = Plan(
         run_id="run_123",
+        legal_tasks=["SINGLE_VQA", "SINGLE_CAPTION", "SINGLE_GROUND", "SINGLE_LANDCOVER", "CLARIFY_OR_ABSTAIN"],
         tasks=["SINGLE_VQA"],
         steps=[
             PlanStep(
@@ -145,6 +146,7 @@ def test_negative_plan_invalid_task():
     with pytest.raises(ValidationError):
         Plan(
             run_id="run_123",
+            legal_tasks=["SINGLE_VQA"],
             tasks=["INVALID_TASK_NAME"],
             steps=[],
             fallbacks={},

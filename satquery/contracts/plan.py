@@ -35,6 +35,7 @@ class PlanStep(BaseModel):
 
 class Plan(BaseModel):
     run_id: str
+    legal_tasks: list[TaskID]
     tasks: list[TaskID]
     steps: list[PlanStep]
     fallbacks: dict[str, str]
