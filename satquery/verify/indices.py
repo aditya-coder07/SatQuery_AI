@@ -131,30 +131,50 @@ def swir_free_builtup_proxy(
 
     This is a *proxy*, not NDBI, and is deliberately named so.
     """
-    terms: list[np.ndarray] = []
+    # Terms are accumulated in place rather than stacked. Stacking N
+    # full-resolution terms allocates an (N, H, W) array - 896 MiB for two
+    # terms on a 59-megapixel Cartosat scene - which exhausted memory on real
+    # data. A running sum and count give the identical NaN-aware mean at the
+    # cost of one array instead of N+1.
+    total: np.ndarray | None = None
+    count: np.ndarray | None = None
+
+    def accumulate(term: np.ndarray) -> None:
+        nonlocal total, count
+        present = np.isfinite(term)
+        contribution = np.where(present, term, 0.0).astype("float32")
+        if total is None:
+            total = contribution
+            count = present.astype("float32")
+        else:
+            total += contribution
+            count += present
+
+    def normalise(values: np.ndarray) -> np.ndarray | None:
+        """Rescale to [0, 1] using the 10th-90th percentile range."""
+        finite = values[np.isfinite(values)]
+        if finite.size == 0:
+            return None
+        lo, hi = np.percentile(finite, [10, 90])
+        if hi <= lo:
+            return None
+        return np.clip((values - lo) / (hi - lo), 0.0, 1.0)
 
     # Low NDVI is necessary but not sufficient for built-up.
-    veg = ndvi(red, nir)
-    terms.append(np.clip((0.2 - veg) / 0.4, 0.0, 1.0))
+    accumulate(np.clip((0.2 - ndvi(red, nir)) / 0.4, 0.0, 1.0))
 
     if sigma0_vv is not None:
-        s = _as_float(sigma0_vv)
-        finite = s[np.isfinite(s)]
-        if finite.size:
-            lo, hi = np.percentile(finite, [10, 90])
-            if hi > lo:
-                terms.append(np.clip((s - lo) / (hi - lo), 0.0, 1.0))
+        scaled = normalise(_as_float(sigma0_vv))
+        if scaled is not None:
+            accumulate(scaled)
 
     if texture is not None:
-        t = _as_float(texture)
-        finite = t[np.isfinite(t)]
-        if finite.size:
-            lo, hi = np.percentile(finite, [10, 90])
-            if hi > lo:
-                terms.append(np.clip((t - lo) / (hi - lo), 0.0, 1.0))
+        scaled = normalise(_as_float(texture))
+        if scaled is not None:
+            accumulate(scaled)
 
-    stacked = np.stack(terms)
-    return np.nanmean(stacked, axis=0)
+    with np.errstate(divide="ignore", invalid="ignore"):
+        return np.where(count > 0, total / count, np.nan)
 
 
 def index_stats(arr: np.ndarray) -> dict[str, float]:

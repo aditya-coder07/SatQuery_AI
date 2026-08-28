@@ -8,7 +8,7 @@ numbers, including where they are weak.
 
 | # | Task | Status | Evidence |
 |---|---|---|---|
-| 1.1 | Layer 0 ingest: reader, adaptive modality inference, checks, co-registration, band harmonisation | **Done** | `satquery/ingest/`, 37 tests in `tests/test_ingest.py` |
+| 1.1 | Layer 0 ingest: reader, adaptive modality inference, checks, co-registration, band harmonisation | **Done, validated on real ISRO data** | `satquery/ingest/`, 37 synthetic + 24 real-product tests |
 | 1.2 | `index_engine_v1` real: NDVI/NDWI/MNDWI/NDBI, σ⁰, VH/VV, GLCM, CoV, adaptive Otsu/GMM, SWIR-free fallbacks, COG output | **Done** | `satquery/verify/`, `satquery/tools/index_engine.py`, 62 tests |
 | 1.3 | Controller: config gating, Tier-1 classifier, planner, validation, VRAM manager | **Done** | `satquery/controller/`, 29 tests; **illegal-plan rate 0 / 153 plans** |
 | 1.4 | Synthetic query bank + Tier-1 training and evaluation | **Done** | `satquery/synth/query_bank.py` (3,600 examples), metrics below |
@@ -20,7 +20,7 @@ numbers, including where they are weak.
 | 1.10 | Track A v0: encoder + land-cover head on BigEarthNet subset | **Blocked** | Same reason as 1.7 |
 | 1.11 | Golden trace tests for 10 cases | **Done** | `tests/test_golden_traces.py`, 10 goldens, order-independent |
 
-**9 of 11 done, 1 partial, 2 blocked on GPU/datasets.** Test suite: **216 passing**.
+**9 of 11 done, 1 partial, 2 blocked on GPU access.** Test suite: **281 passing**, including 24 tests against real ISRO products.
 
 ## Honest metrics
 
@@ -79,6 +79,38 @@ Stated plainly so the trace is not mistaken for more than it is:
   tiles; coarse-to-fine retrieval is task 2.10.
 - **Non-VQA metrics** return `metric_status: "not_implemented"` rather than a
   fabricated score.
+
+## Validation against real ISRO products (2026-08-29)
+
+Four real Bhoonidhi products were ingested: Cartosat-2E MX (`5132611`),
+EOS-04 FRS-1 (`226981731`), EOS-04 MRS (`226981721`) and EOS-04 MRS SLC
+(`247111021`). This closed verification items 5, 6 and 11, and exposed four
+defects that synthetic fixtures could never have found.
+
+**The full vertical slice now runs end to end on a real 59-megapixel
+Cartosat-2E scene** in ~90 s: multi-file ingest, routing to SINGLE_LANDCOVER,
+the deterministic index engine, and a streamed trace. The SWIR-free fallback
+path was exercised on the actual target sensor it was designed for, and
+confidence came back **MEDIUM (0.74), not HIGH**, because two of three
+thresholds could not find a bimodal split and fell back to fixed priors -
+the honest-degradation behaviour working on real data rather than fixtures.
+
+| Defect found | Why synthetic data missed it |
+|---|---|
+| **Vendor products ship one file per band** (Cartosat `BAND1..4.tif`, EOS-04 `scene_<POL>/imagery_<POL>.tif`). Ingest read a single file and called a 4-band MX product a 1-band PAN image. | Every fixture was a single multi-band GeoTIFF. |
+| **SLC ScanSAR products** split each polarisation across 8 sub-swath beams and are ungeoreferenced (`MapProjection=NA`). Stacking beams as bands would fabricate a raster whose pixels do not correspond. | No fixture modelled a processing level below L2. |
+| **Memory blow-up**: full-resolution float64 intermediates cost ~450 MiB each on a 59-megapixel scene; the built-up proxy stacked terms into a 896 MiB array. Real scenes OOMed. | Fixtures are 128x128. |
+| **Numerical instability**: windowed variance as `E[x^2] - E[x]^2` suffers catastrophic cancellation on large SAR intensities, returning negative variances in float32. | Small synthetic values never triggered it. |
+
+Fixes: a `satquery/ingest/product.py` resolver that assembles multi-file
+products into one logical raster via a GDAL VRT (so the frozen `ImageMeta`
+contract did not have to change); explicit SLC detection with a named
+`geocoding_required` check instead of a bare "no CRS"; float32 working dtype
+with in-place accumulation; and variance computed about a shifted origin.
+
+Residual limit, stated plainly: the index engine still processes whole scenes
+in memory. It now fits a 59-megapixel Cartosat scene, but the tile pyramid
+(task 2.10) remains the structural fix for anything larger.
 
 ## Fixes and findings during Phase 1
 

@@ -15,6 +15,8 @@ from pathlib import Path
 
 import rasterio
 
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
 RASTER_SUFFIXES = {".tif", ".tiff", ".img", ".jp2", ".h5", ".hdf", ".nc", ".ntf"}
 
 # Tag keys worth surfacing verbatim — these are where sensor, frequency,
@@ -128,7 +130,9 @@ def inspect(path: Path, all_tags: bool = False) -> None:
             print("      i.e. NO SWIR. Confirm against the band descriptions and")
             print("      the vendor metadata file shipped alongside the raster.")
         elif src.count == 1:
-            print("      1 band — likely a PAN product, not MX. Item 6 needs an MX product.")
+            print("      1 band - likely a PAN product, or one band of a multi-file")
+            print("      product. If a vendor layout was recognised above, trust that")
+            print("      band count instead of this per-file one.")
         elif src.count > 4:
             print("      MORE than 4 bands - SWIR may be present. If so, the MNDWI/NDBI")
             print("      index paths can be enabled (pure upside per docs/03 section 6).")
@@ -150,6 +154,26 @@ def main() -> int:
     if not args.path.exists():
         print(f"Path does not exist: {args.path}")
         return 1
+
+    # Prefer the product resolver: real vendor products split one logical
+    # image across many files (Cartosat MX BAND1..4.tif, EOS-04
+    # scene_<POL>/imagery_<POL>.tif). Inspecting those files individually
+    # reports four 1-band "PAN" images instead of one 4-band MX product,
+    # which is exactly the wrong answer for verification item 6.
+    try:
+        from satquery.ingest.product import discover
+
+        layout = discover(args.path)
+        if layout.kind != "single_file":
+            print(f"Recognised vendor product: {layout.kind}")
+            print(f"  band files : {len(layout.band_files)}")
+            print(f"  band names : {layout.band_names}")
+            meta = {k: v for k, v in layout.metadata.items() if k != "raw"}
+            for k, v in meta.items():
+                print(f"  {k:<24}: {v}")
+            print()
+    except Exception as exc:  # noqa: BLE001 - inspection must never hard-fail
+        print(f"(product detection unavailable: {type(exc).__name__}: {exc})\n")
 
     rasters = find_rasters(args.path)
     if not rasters:

@@ -11,19 +11,26 @@ assumption.
 | 2 | BigEarthNet.txt headline figures | **Resolved** | `2603.29630v2` verified — 464,044 pairs / 9.6M annotations / 1,082-pair benchmark all match. | ML lead | 2026-08-27 |
 | 3 | CROMA / DOFA checkpoints downloadable, permissive licence | **Open** | Not yet checked. Fallback if false: torchgeo SSL weights (guaranteed). | ML #2 | Pending — Phase 1 |
 | 4 | Change-Agent / LEVIR-MCI weights available | **Open** | Not yet checked. Fallback: TinyCD + separate caption head. | ML #2 | Pending — Phase 1 |
-| 5 | Which RISAT sensor/mode ISRO/SAC will use (C-band vs X-band, look count) | **Largely de-risked** | Which platform ISRO picks is still their call. But (2026-08-29): **EOS-04 / RISAT-1A is C-band at 5.35 GHz**, with modes HRS, FRS-1, FRS-2 (12 m, 30 km swath, quad-pol), MRS (25 m, 120 km), CRS (50 m, 240 km); selectable resolution 1–50 m, swath 10–223 km, co- and cross-pol. **5.35 GHz is within ~1% of Sentinel-1's C-band 5.405 GHz**, so backscatter physics transfers almost directly from the S1 training data — a major de-risking of the SAR track. RISAT-2B/2BR1 remain X-band if ISRO chooses those instead. **RISAT-1 MRS/CRS are open data for all**; FRS (Stripmap) is priced. Design mitigation unchanged: σ⁰ thresholds stay adaptive. | Geo lead | Frequency confirmed 2026-08-29; platform choice pending |
-| 6 | Cartosat-2S MX band composition — confirm 4-band VNIR, no SWIR | **Resolvable now** | A **Cartosat-2S MX sample product (`5132611.zip`) is directly downloadable** from the Bhoonidhi sample-products page — no order, no payment, no wait. Download it and run `scripts/inspect_product.py` to close this item. If SWIR turns out to be present, MNDWI/NDBI paths can be enabled (pure upside, no rework). | Geo lead | Pending — unblocked, hours of work |
+| 5 | Which RISAT sensor/mode ISRO/SAC will use (C-band vs X-band, look count) | **RESOLVED for EOS-04** | Read from a real Bhoonidhi product's `product.xml` (2026-08-29): **`radarCenterFrequency = 5.40e09 Hz` = 5.40 GHz = C-band.** Sentinel-1 is 5.405 GHz, a **0.09% difference**, so S1-trained backscatter behaviour transfers essentially directly. Look count answered too: MRS product reports `RangeLooks=2.0, AzimuthLooks=1.0`, `IncidenceAngle=37.8`, `NoOfPolarizations=2` (HH+HV), `OutputPixelSpacing=18.0 m`, 8 ScanSAR beams. FRS-1 sample is **quad-pol** (HH/HV/VH/VV). Residual risk: if ISRO instead uses RISAT-2B/2BR1 those are X-band; adaptive thresholds already cover that. | Geo lead | 2026-08-29 |
+| 6 | Cartosat-2S MX band composition - confirm 4-band VNIR, no SWIR | **RESOLVED** | Read from the real sample's `BAND_META.txt` (2026-08-29): **`NoOfBands=4`, `BandNumbers=1234`** - 4-band VNIR, **no SWIR**. The original assumption holds, so MNDWI/NDBI stay unavailable and the SWIR-free fallback paths are the operative ones. Also learned: `SatID=CARTOSAT-2E` (sample is 2E, same MX sensor family), `PixelSpacing=1.6 m` (matches the assumed GSD), **`BitsPerPixel=11` in a uint16 container**, `ORTHORECTIFIED`, UTM zone 45N / EPSG:32645, scene 7687x7640 px. | Geo lead | 2026-08-29 |
 | 7 | Newer ≤4B VLM beats Qwen2.5-VL-3B on the §2.1 criteria | **Open** | InternVL3-1B (used by the BigEarthNet.txt authors) flagged as the candidate to evaluate first. Not yet benchmarked. | ML lead | Pending — Phase 1 |
 | 8 | SpaceNet 6 / Umbra / Capella high-res SAR accessible and licensed | **Open** | Not yet checked. Fallback: run Stage A3 optical-only and document the limitation. | Geo lead | Pending — Phase 1 |
 | 9 | Prescribed benchmark test splits downloadable (VRSBench, RSVQA, CDVQA) | **Open** | Not yet checked. Fallback: use published splits from the papers' own repos. | Eval lead | Pending — Phase 1 |
 | 10 | SIH 2026 timeline: internal deadline, grand finale dates, submission format | **Open** | Not yet confirmed with team/organizers. Fallback: compress the phase plan in doc `04` proportionally once the real deadline is known. | Team lead | Pending |
-| 11 | Bhoonidhi registration approved; Cartosat-2S + RISAT products downloaded | **Partially resolved** | **Registration completed 2026-08-29.** Product download still outstanding — items 5 and 6 stay blocked until a real Cartosat-2S MX and a real RISAT product are on disk and their metadata has been read. Fallback if downloads prove unavailable: use any open Indian-context high-res imagery for qualitative work. | Geo lead | Registration 2026-08-29; download pending |
+| 11 | Bhoonidhi registration approved; Cartosat-2S + RISAT products downloaded | **RESOLVED** | **Registration completed and products downloaded 2026-08-29.** On disk: Cartosat-2E MX (5132611), EOS-04 FRS-1 (226981731, quad-pol), EOS-04 MRS x2 (226981721, 247111021). Items 5 and 6 were both closed from this data. The products are held out as the cross-sensor generalisation set per docs/03 section 4.3 and are never trained on. | Geo lead | 2026-08-29 |
 | 12 | GeoChat-7B / RS-LLaVA / LHRS-Bot downloadable for zero-shot baselines | **Open** | Not yet checked. Fallback: baseline against the un-finetuned base VLM only. | ML #2 | Pending — Phase 1 |
 
 ## Summary
 
-- **Resolved: 2/12** (items 1, 2 — both dataset-paper claims, closed 2026-08-27, before this repo's code existed).
-- **Open: 10/12**, but items 5, 6 and 11 are substantially de-risked as of 2026-08-29 (see below). All ten open items have a documented, costed fallback per doc `03` §6, so **none blocks starting Phase 1**.
+- **Resolved: 5/12** - items 1 and 2 (dataset paper, 2026-08-27), and items 5, 6
+  and 11, all closed 2026-08-29 by reading real Bhoonidhi product metadata.
+- **Open: 7/12** (items 3, 4, 7, 8, 9, 10, 12). Every one has a documented, costed
+  fallback per doc `03` section 6, and **none blocks Phase 2**.
+- **The two plan-changing unknowns are gone.** Cartosat-2E MX is confirmed 4-band
+  VNIR with no SWIR, so the SWIR-free fallback paths are the operative ones. EOS-04
+  is confirmed C-band at 5.40 GHz, within 0.09% of Sentinel-1's 5.405 GHz, which
+  means backscatter behaviour learned on S1 transfers to the target sensor almost
+  directly. Both were assumptions; both now rest on primary evidence.
 
 ## NEW RISK (discovered 2026-08-29, not in the original 12 items)
 

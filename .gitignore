@@ -23,3 +23,9 @@ artifacts/
 # Local environment / secrets
 .env
 .env.*
+
+# Datasets and downloaded satellite products. Never commit these: they are
+# large binaries, and per docs/03 section 4.3 the Bhoonidhi products are a
+# held-out cross-sensor generalisation set that must never be trained on.
+data/
+models/

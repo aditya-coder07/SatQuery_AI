@@ -139,10 +139,31 @@ def check_temporal_order(a: ImageMeta, b: ImageMeta) -> CheckResult:
     )
 
 
+def check_geocoding(img: ImageMeta) -> CheckResult | None:
+    """Flag products that are not geocoded, naming the real reason.
+
+    An SLC slant-range ScanSAR product genuinely cannot produce georeferenced
+    output without beam mosaicking and geocoding first. Reporting only
+    "no CRS" would be true but would send someone hunting for a projection
+    that was never there.
+    """
+    if not img.modality_evidence.get("requires_geocoding"):
+        return None
+    return _fail(
+        "geocoding_required",
+        f"{img.role}: "
+        + str(img.modality_evidence.get("unsupported_reason", "product is not geocoded")),
+        img.modality_evidence.get("processing_level"),
+    )
+
+
 def run_checks(images: list[ImageMeta], config: str) -> list[CheckResult]:
     """Run every check applicable to this input configuration."""
     results: list[CheckResult] = []
     for img in images:
+        geocoding = check_geocoding(img)
+        if geocoding is not None:
+            results.append(geocoding)
         results.append(check_crs_present(img))
         results.append(check_nodata(img))
         results.append(check_dimensions(img))

@@ -69,7 +69,11 @@ MODELS: list[Model] = [
         used_for="Track B base for rs_vqa_v1 and caption_v1 (two LoRA adapters)",
         licence="Apache-2.0",
         approx_size="~7 GB",
-        notes="Primary recommendation. Check for a newer small Qwen-VL first (item 7).",
+        notes=(
+            "Primary recommendation. Natively supported by transformers, so it "
+            "loads with trust_remote_code=False - no third-party Python is "
+            "executed. Check for a newer small Qwen-VL first (item 7)."
+        ),
     ),
     Model(
         key="internvl3_1b",
@@ -77,7 +81,13 @@ MODELS: list[Model] = [
         hf_repo="OpenGVLab/InternVL3-1B",
         used_for="Alternate Track B backbone to evaluate against Qwen (item 7)",
         approx_size="~2 GB",
-        notes="Used by the BigEarthNet.txt authors as their RS backbone.",
+        notes=(
+            "Used by the BigEarthNet.txt authors as their RS backbone. "
+            "REQUIRES trust_remote_code=True and custom *.py modeling files, "
+            "which allow_patterns deliberately excludes - enabling it executes "
+            "code from the model repo. Add \"*.py\" and pass the flag only as "
+            "a conscious decision."
+        ),
     ),
     Model(
         key="florence2_large",
@@ -85,7 +95,10 @@ MODELS: list[Model] = [
         hf_repo="microsoft/Florence-2-large",
         used_for="grounding_v1 - purpose-built for region tasks, 0.77B",
         approx_size="~1.5 GB",
-        notes="Trains in hours; the right specialist rather than forcing VQA to ground.",
+        notes=(
+            "Trains in hours; the right specialist rather than forcing VQA to "
+            "ground. Same trust_remote_code caveat as InternVL3."
+        ),
     ),
 ]
 

@@ -200,15 +200,24 @@ def build_model(args, torch, peft, transformers):
 
     processor = AutoProcessor.from_pretrained(args.model, local_files_only=True)
 
-    # AutoModelForVision2Seq covers Qwen-VL and most VL architectures; a
-    # specific class can be substituted once the base model is fixed (item 7).
-    from transformers import AutoModelForVision2Seq
+    # transformers v5 renamed the vision-language auto class:
+    # AutoModelForVision2Seq -> AutoModelForImageTextToText. Try the new name
+    # first and fall back, so this works on both v4 and v5 installs.
+    try:
+        from transformers import AutoModelForImageTextToText as AutoVLM
+    except ImportError:  # transformers < 5
+        from transformers import AutoModelForVision2Seq as AutoVLM
 
-    model = AutoModelForVision2Seq.from_pretrained(
+    model = AutoVLM.from_pretrained(
         args.model,
         quantization_config=quant,
         device_map="auto",
         local_files_only=True,
+        # Left False deliberately. Qwen2.5-VL is natively supported, so no
+        # remote code is needed; enabling it would execute arbitrary Python
+        # downloaded from the model repo. Models that require it (InternVL3,
+        # Florence-2) need a conscious decision, not a silent default.
+        trust_remote_code=False,
     )
 
     model = peft.prepare_model_for_kbit_training(

@@ -17,6 +17,7 @@ import rasterio
 from satquery.contracts.input_manifest import ImageMeta
 
 from .modality import detect_polarisations, harmonise_bands, infer_modality
+from .product import resolve as resolve_product
 
 # Metadata keys that commonly carry an acquisition timestamp.
 _DATE_KEYS = (
@@ -118,10 +119,31 @@ def read_image(
     role: Literal["single", "optical", "sar", "t1", "t2"] = "single",
 ) -> ImageMeta:
     """Open a raster and build its `ImageMeta`. Raises on unreadable files."""
-    path = Path(path)
+    # Vendor products ship one file per band (Cartosat MX: BAND1..4.tif;
+    # EOS-04: scene_<POL>/imagery_<POL>.tif). resolve_product() unifies those
+    # into a single openable path via a VRT, and hands back the vendor
+    # metadata, which carries the band/polarisation identities and the radar
+    # frequency that the raster headers do not.
+    original = Path(path)
+    path, layout = resolve_product(original)
+
     with rasterio.open(path) as src:
-        tags = src.tags()
+        tags = dict(src.tags())
         descriptions = list(src.descriptions)
+
+        # Vendor band/polarisation names beat the raster header, which for
+        # these products is empty.
+        if layout.band_names and len(layout.band_names) == src.count:
+            descriptions = list(layout.band_names)
+
+        # Surface vendor metadata as tags so modality inference can see the
+        # satellite, sensor and polarisations it would otherwise miss.
+        for key in ("satellite", "sensor", "radar_band", "imaging_mode"):
+            value = layout.metadata.get(key)
+            if value:
+                tags[key.upper()] = str(value)
+        if layout.metadata.get("polarisations"):
+            tags["POLARISATION"] = " ".join(layout.metadata["polarisations"])
         sample = _read_sample(src)
 
         modality, evidence = infer_modality(
@@ -131,6 +153,14 @@ def read_image(
             band_descriptions=descriptions,
             sample=sample,
         )
+
+        # Carry vendor-level limitations into the evidence dict so the
+        # checks can name the real reason a product is unusable, rather than
+        # only reporting the downstream symptom (a missing CRS).
+        for key in ("requires_geocoding", "unsupported_reason", "processing_level",
+                    "radar_frequency_ghz", "radar_band", "n_beams"):
+            if layout.metadata.get(key) is not None:
+                evidence[key] = layout.metadata[key]
 
         bands, band_presence = harmonise_bands(descriptions, modality)
         pols = detect_polarisations(tags, descriptions)
@@ -163,5 +193,8 @@ def read_image(
             cloud_pct=None,  # requires a cloud mask; Phase 2 work
             sensor_guess=str(sensor_guess) if sensor_guess else None,
             polarisations=pols or None,
-            look_count_est=None,  # requires vendor metadata; see verification item 5
+            # Equivalent number of looks, from the vendor's RangeLooks x
+            # AzimuthLooks. Confirmed present in real EOS-04 metadata
+            # (verification item 5), so it is no longer a placeholder.
+            look_count_est=layout.metadata.get("equivalent_looks"),
         )
