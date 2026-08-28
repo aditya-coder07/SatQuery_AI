@@ -218,6 +218,11 @@ class IndexEngineStub(ToolProtocol):
         return [self.run(m, params) for m in manifests]
 
 
+# index_engine_v1 is the first tool promoted from stub to real (plan task 1.2).
+# Imported here rather than at module top to keep the stub definitions above
+# free of any dependency on the real implementation.
+from satquery.tools.index_engine import IndexEngine  # noqa: E402
+
 REGISTRY = {
     "rs_vqa_v1": RSVQAStub(),
     "caption_v1": CaptionStub(),
@@ -227,5 +232,5 @@ REGISTRY = {
     "change_mask_v1": ChangeMaskStub(),
     "change_caption_v1": ChangeCaptionStub(),
     "change_vqa_v1": ChangeVQAStub(),
-    "index_engine_v1": IndexEngineStub(),
+    "index_engine_v1": IndexEngine(),
 }

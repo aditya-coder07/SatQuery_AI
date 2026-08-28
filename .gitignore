@@ -5,3 +5,21 @@ checkpoints/
 checkpoints_backup/
 
 *.egg-info/
+
+# Python packaging / test caches
+build/
+dist/
+.pytest_cache/
+
+# Frontend build output and dependencies
+frontend/node_modules/
+frontend/.next/
+frontend/out/
+
+# Runtime output: index rasters, evidence packs, the SQLite run store
+artifacts/
+*.db
+
+# Local environment / secrets
+.env
+.env.*
