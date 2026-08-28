@@ -18,9 +18,10 @@ jobs:
           python-version: "3.11"
 
       - name: Install dependencies
-        run: |
-          pip install -e .
-          pip install pytest
+        # The dev extra carries pytest and httpx; httpx is required by
+        # fastapi.testclient, so installing pytest alone makes tests/test_api.py
+        # fail at import.
+        run: pip install -e ".[dev]"
 
       - name: Run capability matrix validation
         run: satquery matrix --validate
