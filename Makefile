@@ -14,3 +14,7 @@ offline-test:
 demo:
 	# Run the demo bundle
 	docker-compose up
+
+test-resume:
+	python training/run_checkpoint_test.py
+
