@@ -1,0 +1,77 @@
+"""Controller: the single entry point from files + query to a Trace.
+
+Wires the vertical slice together: ingest -> route -> execute -> trace.
+Everything the API and the eval CLI need goes through here, so there is one
+code path and one place where the ordering guarantees hold.
+"""
+
+from __future__ import annotations
+
+from pathlib import Path
+
+from satquery.contracts.input_manifest import IngestMode, InputManifest
+from satquery.contracts.plan import Plan
+from satquery.contracts.trace import Trace
+from satquery.controller.executor import Executor
+from satquery.controller.matrix_loader import CapabilityMatrix, load_matrix
+from satquery.controller.router import Router
+from satquery.ingest import ingest
+
+DEFAULT_MATRIX_PATH = Path("configs/capability_matrix.yaml")
+
+
+class Controller:
+    def __init__(
+        self,
+        matrix: CapabilityMatrix | None = None,
+        matrix_path: str | Path = DEFAULT_MATRIX_PATH,
+        vram_budget_mb: int | None = None,
+    ):
+        self.matrix = matrix or load_matrix(matrix_path)
+        self.router = Router(self.matrix, vram_budget_mb=vram_budget_mb)
+        self.executor = Executor()
+
+    def run(
+        self,
+        paths: list[str | Path],
+        query: str,
+        mode: IngestMode = IngestMode.OPERATIONAL,
+        benchmark: str | None = None,
+        run_id: str | None = None,
+        tool_params: dict | None = None,
+    ) -> Trace:
+        """Full pipeline from raster paths and a query to a validated Trace."""
+        manifest = ingest(paths, mode=mode, benchmark=benchmark, run_id=run_id)
+        return self.run_on_manifest(manifest, query, tool_params=tool_params)
+
+    def run_on_manifest(
+        self, manifest: InputManifest, query: str, tool_params: dict | None = None
+    ) -> Trace:
+        """Route and execute against an already-built manifest."""
+        plan = self.router.route(query, manifest)
+        prediction = getattr(self.router, "last_prediction", None)
+        if manifest.blocking_failures:
+            # Routing was decided by the input checks, not the classifier.
+            prediction = None
+
+        if tool_params:
+            plan = self._apply_tool_params(plan, tool_params)
+
+        return self.executor.execute(plan, manifest, query, prediction=prediction)
+
+    def _apply_tool_params(self, plan: Plan, tool_params: dict) -> Plan:
+        """Merge caller-supplied params, then re-validate.
+
+        Caller parameters are not trusted: the plan is validated against the
+        matrix again after merging, so a caller cannot inject a parameter the
+        matrix does not permit.
+        """
+        from satquery.controller.validator import assert_legal
+
+        steps = []
+        for step in plan.steps:
+            extra = tool_params.get(step.tool, {})
+            steps.append(step.model_copy(update={"params": {**step.params, **extra}}))
+        updated = plan.model_copy(update={"steps": steps})
+        assert_legal(updated, self.matrix)
+        return updated
