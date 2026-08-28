@@ -7,6 +7,17 @@ what it is meant to represent so a failure is interpretable.
 
 from __future__ import annotations
 
+import sys
+from pathlib import Path
+
+# The repo root holds `training/` and `scripts/`, which are operational code
+# rather than installed runtime packages. Putting the root on sys.path lets the
+# tests import them without publishing a generically-named `scripts` package in
+# the installed distribution, where it could collide with another project's.
+_ROOT = Path(__file__).resolve().parent.parent
+if str(_ROOT) not in sys.path:
+    sys.path.insert(0, str(_ROOT))
+
 import numpy as np
 import pytest
 import rasterio
