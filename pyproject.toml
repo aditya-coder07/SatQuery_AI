@@ -15,3 +15,6 @@ dependencies = [
 
 [project.scripts]
 satquery = "satquery.__main__:main"
+
+[tool.setuptools.packages.find]
+include = ["satquery*"]
