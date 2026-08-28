@@ -1,0 +1,109 @@
+{
+  "abstain_reason": "input validation failed (crs_present) - resolve the input before a reliable answer is possible",
+  "abstained": true,
+  "answer": "input validation failed (crs_present) - resolve the input before a reliable answer is possible",
+  "artifacts": [],
+  "code_version": "0.2.0-phase1",
+  "confidence": {
+    "band": "HIGH",
+    "calibration": {
+      "T": 1.0,
+      "ece_after": -1.0,
+      "method": "uncalibrated"
+    },
+    "components": {
+      "agreement": 1.0,
+      "input_quality": 0.5,
+      "model": 1.0
+    },
+    "final": 0.7937
+  },
+  "execution": [],
+  "ingest": {
+    "checks": [
+      {
+        "message": "single: no CRS - cannot georeference outputs or co-register",
+        "name": "crs_present",
+        "status": "FAIL"
+      },
+      {
+        "message": "single: 0.0% nodata",
+        "name": "nodata_fraction",
+        "status": "PASS"
+      },
+      {
+        "message": "single: 64x64",
+        "name": "min_dimension",
+        "status": "PASS"
+      }
+    ],
+    "config": "SINGLE",
+    "images": [
+      {
+        "bands": [
+          "BLUE",
+          "GREEN",
+          "RED"
+        ],
+        "crs": "UNKNOWN",
+        "gsd_m": 1.0,
+        "modality": "OPTICAL",
+        "modality_reason": "band_count_lt_4_no_names_assumed_optical",
+        "nodata_pct": 0.0,
+        "path": "<volatile>",
+        "polarisations": null,
+        "role": "single",
+        "sensor_guess": null
+      }
+    ],
+    "index_availability": {
+      "cov": false,
+      "glcm_texture": true,
+      "mndwi": false,
+      "ndbi": false,
+      "ndvi": false,
+      "ndwi": false,
+      "sigma0": false,
+      "vh_vv_ratio": false
+    },
+    "mode": "operational",
+    "tiling": {
+      "applied": false,
+      "level1_tiles": null,
+      "retrieval_reason": null,
+      "retrieved_tiles": null
+    }
+  },
+  "query": "How many buildings are visible?",
+  "routing": {
+    "capability_matrix_version": "cm-2026.11.02",
+    "classifier": {
+      "margin": 0.0,
+      "name": "not_invoked",
+      "top1": 0.0
+    },
+    "legal_tasks": [
+      "SINGLE_VQA",
+      "SINGLE_CAPTION",
+      "SINGLE_GROUND",
+      "SINGLE_LANDCOVER",
+      "CLARIFY_OR_ABSTAIN"
+    ],
+    "llm_tiebreak_invoked": false,
+    "selected_task": "CLARIFY_OR_ABSTAIN"
+  },
+  "run_id": "<volatile>",
+  "timestamp_utc": "<volatile>",
+  "verification": {
+    "built_up_path": "not_computed",
+    "complementarity": {},
+    "conflicts": [],
+    "entailment_gate": {
+      "flagged": 0,
+      "retained": 0,
+      "sentences": 0
+    },
+    "physics_agreement": {}
+  },
+  "weights_hashes": {}
+}
