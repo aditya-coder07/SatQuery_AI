@@ -27,12 +27,20 @@ class ToolResult(BaseModel):
     # `softmax_temp_scaled` was removed: it was claimed by two tools that
     # never temperature-scaled anything, and keeping a name in the contract
     # that nothing computes invites the same mistake again.
+    #
+    # `segmentation_derived` was added for `change_vqa_v1`'s semantic path.
+    # The arithmetic over the predicted change maps is exact; every bit of
+    # the uncertainty lives in the segmentation that produced them, and no
+    # per-answer probability is available from an argmax over class logits.
+    # It is a fixed conservative constant, named so that nobody mistakes it
+    # for a measured one.
     confidence_method: Literal[
         "logprob",
         "sharpness",
         "mean_asserted_probability",
         "threshold_rule",
         "deterministic",
+        "segmentation_derived",
     ]
     model_card: str
     runtime_ms: int

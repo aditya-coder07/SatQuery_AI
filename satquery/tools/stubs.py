@@ -274,6 +274,19 @@ def _grounding_tool():
     return GroundingTool() if is_available()[0] else GroundingStub()
 
 
+def _change_vqa_tool():
+    """Semantic change path when SATQUERY_CHANGE_VQA is set (task 2.6).
+
+    The template path is not a stub - it is a real deterministic answerer - so
+    the fallback here is a working tool rather than a placeholder. Setting the
+    variable adds the semantic path behind it, which is what makes CDVQA's
+    per-class questions answerable at all.
+    """
+    from satquery.tools.change_vqa import ChangeVQASemantic, semantic_available
+
+    return ChangeVQASemantic() if semantic_available()[0] else ChangeVQATemplate()
+
+
 def _change_caption_tool():
     """Real change captioner when SATQUERY_CHANGE_CAPTION is set (task 2.5)."""
     from satquery.tools.change_caption import ChangeCaptionTool, is_available
@@ -289,6 +302,6 @@ REGISTRY = {
     "optsar_fusion_v1": _fusion_tool(),
     "change_mask_v1": _change_mask_tool(),
     "change_caption_v1": _change_caption_tool(),
-    "change_vqa_v1": ChangeVQATemplate(),
+    "change_vqa_v1": _change_vqa_tool(),
     "index_engine_v1": IndexEngine(),
 }

@@ -19,7 +19,7 @@ import tarfile
 
 import pytest
 
-from training.prepare.cdvqa import build, load_official
+from training.prepare.cdvqa import build, build_from_second, load_official
 
 # One official pair of image records, three questions, three answers.
 OFFICIAL = {
@@ -259,3 +259,60 @@ class TestManifest:
         ])
         report = _build(annotations, shards, tmp_path, limit=1)
         assert report["n_items"] == 1
+
+
+class TestSecondSource:
+    """SECOND is the better image source, and the reason is coverage.
+
+    CDVQA's splits partition SECOND's 2,968 labelled pairs, so every image id
+    resolves and the manifest reaches 100% instead of whatever fraction of the
+    32 GB mirror finished downloading.
+    """
+
+    @pytest.fixture
+    def second(self, tmp_path):
+        root = tmp_path / "second"
+        for sub in ("im1", "im2"):
+            (root / sub).mkdir(parents=True)
+            for name in ("00031.png", "00042.png"):
+                (root / sub / name).write_bytes(PNG)
+        return root
+
+    def test_every_official_question_appears(self, annotations, second, tmp_path):
+        out = tmp_path / "out" / "cdvqa_test.json"
+        report = build_from_second(annotations, second, "Test", out)
+
+        assert report["n_items"] == report["official_questions"] == 3
+        assert report["question_coverage"] == 1.0
+        assert report["n_pairs"] == 2
+
+    def test_the_manifest_points_at_second_and_loads(
+        self, annotations, second, tmp_path
+    ):
+        from evaluation.harness import load_benchmark
+
+        out = tmp_path / "out" / "cdvqa_test.json"
+        build_from_second(annotations, second, "Test", out)
+        items = load_benchmark(out)
+
+        assert len(items) == 3
+        assert items[0]["item_id"] == "cdvqa_test_000000"
+        assert items[0]["answer_type"] == "change_or_not"
+        for image in items[0]["images"]:
+            assert (out.parent / image).exists()
+
+    def test_an_id_missing_from_second_is_counted_not_fatal(
+        self, annotations, second, tmp_path
+    ):
+        (second / "im1" / "00042.png").unlink()
+        report = build_from_second(
+            annotations, second, "Test", tmp_path / "out" / "m.json"
+        )
+        assert report["n_items"] == 2
+        assert report["dropped_incomplete_sample"] == 1
+
+    def test_a_missing_second_root_names_the_download(self, annotations, tmp_path):
+        with pytest.raises(SystemExit, match="SECOND_train_set"):
+            build_from_second(
+                annotations, tmp_path / "absent", "Test", tmp_path / "m.json"
+            )

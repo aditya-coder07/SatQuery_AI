@@ -96,6 +96,95 @@ def load_official(annotations: Path, split: str) -> dict[int, dict[str, Any]]:
     return official
 
 
+def build_from_second(
+    annotations: Path,
+    second: Path,
+    split: str,
+    manifest_out: Path,
+    limit: int | None = None,
+) -> dict[str, Any]:
+    """Build the manifest directly from SECOND, which is the better source.
+
+    CDVQA's splits **partition SECOND's 2,968 labelled pairs** - 1,600 train,
+    400 val, 968 test, and every CDVQA image id resolves in SECOND. So the
+    imagery can come from the 2.4 GB SECOND archive instead of the ~32 GB
+    webdataset mirror, at **100% coverage instead of whatever fraction of the
+    shards finished downloading**, with the official annotations as the only
+    source of questions and answers.
+
+    That the splits partition SECOND also carries a warning worth stating
+    here: SECOND's labels for the 968 *test* pairs are on the same disk.
+    Training a semantic head on them would leak the benchmark. Train on the
+    ids in CDVQA's Train split only.
+    """
+    official = load_official(annotations, split)
+    if not (second / "im1").is_dir():
+        raise SystemExit(
+            f"No im1/ under {second}. Download SECOND first:\n"
+            "  curl -L -o SECOND_train_set.rar 'https://drive.usercontent.google.com"
+            "/download?id=1QlAdzrHpfBIOZ6SK78yHF2i1u6tikmBc&export=download&confirm=t'"
+        )
+
+    manifest_out.parent.mkdir(parents=True, exist_ok=True)
+    root = manifest_out.parent.resolve()
+
+    items: list[dict[str, Any]] = []
+    pairs: set[str] = set()
+    missing_images: set[str] = set()
+
+    for qid, truth in sorted(official.items()):
+        image_id = truth["image_id"]
+        if image_id is None:
+            continue
+        t1 = (second / "im1" / image_id).resolve()
+        t2 = (second / "im2" / image_id).resolve()
+        if not (t1.exists() and t2.exists()):
+            missing_images.add(image_id)
+            continue
+        pairs.add(image_id)
+        items.append(
+            {
+                "item_id": f"cdvqa_{split.lower()}_{qid:06d}",
+                "images": [_relative(t1, root), _relative(t2, root)],
+                "question": truth["question"],
+                "answer": str(truth["answer"]),
+                "answer_type": truth["type"],
+            }
+        )
+        if limit is not None and len(items) >= limit:
+            break
+
+    manifest_out.write_text(json.dumps(items, indent=1), encoding="utf-8")
+
+    by_type: dict[str, int] = {}
+    for item in items:
+        by_type[item["answer_type"]] = by_type.get(item["answer_type"], 0) + 1
+
+    return {
+        "split": split,
+        "source": "second",
+        "n_items": len(items),
+        "n_pairs": len(pairs),
+        "official_questions": len(official),
+        "official_pairs": len({v["image_id"] for v in official.values()}),
+        "question_coverage": round(len(items) / len(official), 6) if official else 0.0,
+        "by_type": dict(sorted(by_type.items())),
+        "shards_read": 0,
+        "shards_unreadable": [],
+        "dropped_mismatched": 0,
+        "dropped_unknown_question_id": 0,
+        "dropped_incomplete_sample": len(missing_images),
+    }
+
+
+def _relative(path: Path, root: Path) -> str:
+    """Path relative to the manifest's directory, or absolute if not under it."""
+    try:
+        return path.relative_to(root).as_posix()
+    except ValueError:
+        return path.as_posix()
+
+
 def build(
     annotations: Path,
     shards: Path,
@@ -240,16 +329,34 @@ def build(
 def main() -> int:
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--annotations", type=Path, default=Path("data/cdvqa"))
-    p.add_argument("--shards", type=Path, required=True)
+    p.add_argument(
+        "--second",
+        type=Path,
+        help="SECOND root (im1/, im2/). Preferred: it resolves every CDVQA "
+        "image id, so the manifest reaches 100%% coverage.",
+    )
+    p.add_argument(
+        "--shards",
+        type=Path,
+        help="webdataset mirror shards; the fallback when SECOND is not on disk",
+    )
     p.add_argument("--split", default="Test", choices=["Train", "Val", "Test", "Test2"])
     p.add_argument("--images", type=Path, default=Path("data/cdvqa/images"))
     p.add_argument("--out", type=Path, required=True)
     p.add_argument("--limit", type=int)
     args = p.parse_args()
 
-    report = build(
-        args.annotations, args.shards, args.split, args.images, args.out, args.limit
-    )
+    if not (args.second or args.shards):
+        p.error("supply --second (preferred) or --shards")
+
+    if args.second:
+        report = build_from_second(
+            args.annotations, args.second, args.split, args.out, args.limit
+        )
+    else:
+        report = build(
+            args.annotations, args.shards, args.split, args.images, args.out, args.limit
+        )
     if report["n_items"] == 0:
         print("No usable items produced.", file=sys.stderr)
         print(json.dumps(report, indent=2), file=sys.stderr)

@@ -282,6 +282,12 @@ class TestRuntimeRegistry:
         assert set(allowed) == {
             "logprob", "sharpness", "mean_asserted_probability",
             "threshold_rule", "deterministic",
+            # Added with change_vqa_v1's semantic path. Decided NOT
+            # calibratable: the arithmetic over the change maps is exact and
+            # the value is a fixed conservative constant, so there is no
+            # per-answer probability to fit. What describes that head's
+            # reliability is the segmenter's mIoU.
+            "segmentation_derived",
         }
         for method in allowed:
             assert method not in CALIBRATABLE_CONFIDENCE_METHODS, method

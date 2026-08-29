@@ -108,6 +108,11 @@ class Registry:
 #   here, which was wrong. Removing it changes no observable behaviour - there
 #   is no accepted fit for the VQA head either - but the gate should mean what
 #   it says.
+# * `segmentation_derived` - `change_vqa_v1`'s semantic path. A fixed
+#   constant standing in for "the arithmetic is exact, the segmentation is
+#   not". There is no per-answer probability to calibrate; the number that
+#   describes this head's reliability is the segmenter's mIoU, which lives in
+#   its model card rather than in a reliability curve.
 #
 # An empty set is the correct state, not a gap. The fitted parameters and
 # their ECE tables are the deliverable of task 3.3; this path activates by
