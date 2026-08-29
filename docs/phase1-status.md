@@ -82,6 +82,59 @@ Stated plainly so the trace is not mistaken for more than it is:
 - **Non-VQA metrics** return `metric_status: "not_implemented"` rather than a
   fabricated score.
 
+## Tasks 2.7 and 2.8 - grounding and scene captioning (2026-08-29)
+
+### 2.7 referring grounding (DIOR-RSVG) - a weak baseline with a named flaw
+
+| metric | value |
+|---|---|
+| mIoU | 0.1405 |
+| Acc@0.5 | 0.0762 |
+| Acc@0.7 | 0.0088 |
+
+Published DIOR-RSVG results reach roughly 70-80% Acc@0.5. This does not, and
+the cause is architectural rather than mysterious: the model global-average-
+pools the visual feature map to a single vector before regressing the box,
+which discards exactly the spatial information localisation depends on. It
+can only learn an "average" box. A working grounder needs spatial attention
+or a heatmap head; that is the fix, and it is not built.
+
+**Florence-2 was deliberately not used.** It requires
+`trust_remote_code=True` and custom modeling files - executing third-party
+Python from a model repo. That risk was flagged when
+`scripts/fetch_models.py` was written and its download patterns exclude
+those files; accepting it quietly here because it was convenient would have
+contradicted that decision.
+
+Note also that `danielz01/DIOR-RSVG` is a **gated** repo (401 without
+authentication). An ungated mirror was used instead. That mirror ships no
+published train/test split, so a deterministic 85/15 split was made
+**grouped by image**, since one image carries several referring expressions
+and splitting by expression would put the same picture on both sides. This
+is not the published split and must not be compared against published
+numbers.
+
+### 2.8 scene captioning (RSICD)
+
+BLEU-4 **0.2446** over 1,093 test images against all 5 references, with only
+**13.4% unique captions**. Published RSICD results reach ~0.5-0.65.
+
+The samples show what the number means: predictions are fluent, plausible
+remote-sensing captions that often describe the wrong scene - "the
+playground is next to the road" against a reference of "The airport is very
+large." The model learned the corpus's caption *style* without learning to
+ground it in the specific image. Unique-caption count is reported alongside
+BLEU precisely because a captioner emitting one generic string per scene type
+can still post a respectable score.
+
+**Division of labour, which is the point of 2.8.** The land-cover narrative
+half already existed: `satquery/synth/narrative.py` builds prose from
+measured NDVI/NDWI/built-up fractions and the verifier checks those claims
+against the same indices. Anything the physics can measure is described
+deterministically and verified; only genuinely open-ended description is
+left to this learned model. That keeps quantitative claims auditable and
+confines hallucination risk to the qualitative part of an answer.
+
 ## Task 2.5 - mask-conditioned change captioning (2026-08-29)
 
 Trained on LEVIR-MCI (6,815 train / 1,929 test pairs, official splits), 0.29M
