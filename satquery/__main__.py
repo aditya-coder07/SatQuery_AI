@@ -27,6 +27,10 @@ def build_parser() -> argparse.ArgumentParser:
     ask_parser.add_argument("images", type=Path, nargs="+", help="one or two rasters")
     ask_parser.add_argument("--query", required=True)
     ask_parser.add_argument("--trace", action="store_true", help="print the full trace")
+    ask_parser.add_argument(
+        "--evidence", type=Path,
+        help="write an evidence pack (ZIP) to this directory",
+    )
 
     return parser
 
@@ -37,6 +41,13 @@ def _run_ask(args) -> int:
     from satquery.controller.pipeline import Controller
 
     trace = Controller().run(args.images, args.query)
+
+    if args.evidence:
+        from satquery.report import export
+
+        archive = export(trace, args.evidence, artifact_dir="artifacts")
+        print(f"Evidence pack: {archive}")
+
     if args.trace:
         print(trace.model_dump_json(indent=2))
     else:
