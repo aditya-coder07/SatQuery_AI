@@ -68,9 +68,22 @@ class Controller:
         return self.run_on_manifest(manifest, query, tool_params=tool_params)
 
     def run_on_manifest(
-        self, manifest: InputManifest, query: str, tool_params: dict | None = None
+        self,
+        manifest: InputManifest,
+        query: str,
+        tool_params: dict | None = None,
+        on_event=None,
     ) -> Trace:
-        """Route and execute against an already-built manifest."""
+        """Route and execute against an already-built manifest.
+
+        `on_event` is forwarded to the executor so the SSE endpoint can stream
+        stages through THIS method rather than reaching past it into the
+        executor. It used to do the latter, and the paths drifted: the
+        streamed path never passed `config_excluded`, so the task 3.8 notice
+        ("this input configuration cannot support TEMPORAL_CHANGE_MAP") was
+        missing from the streamed answer - which is the path the frontend
+        actually uses. One method, one behaviour.
+        """
         plan = self.router.route(query, manifest)
         prediction = getattr(self.router, "last_prediction", None)
         if manifest.blocking_failures:
@@ -82,6 +95,7 @@ class Controller:
 
         return self.executor.execute(
             plan, manifest, query, prediction=prediction,
+            on_event=on_event,
             config_excluded=getattr(self.router, "last_config_excluded", None),
         )
 

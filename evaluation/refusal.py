@@ -89,7 +89,25 @@ def matched_pairs(examples: list[dict]) -> list[tuple[dict, dict]]:
 
 
 def evaluate(predict, examples: list[dict], pairs: list[tuple[dict, dict]]) -> dict:
-    """Score a `predict(example) -> str` callable."""
+    """Score a `predict(example) -> str` callable.
+
+    Predictions are memoised per example. The metrics below each need the same
+    outputs - recall, false-refusal, per-reason and the matched pairs all
+    re-read them - and without this a real model regenerates every example
+    about four times. Free for the degenerate baselines, four GPU passes for
+    an adapter.
+    """
+    cache: dict[int, str] = {}
+    # Bound to a separate name: `predict = cached` would make `cached` close
+    # over itself and recurse until the stack dies.
+    generate = predict
+
+    def predict(example: dict) -> str:  # noqa: F811 - deliberate shadow
+        key = id(example)
+        if key not in cache:
+            cache[key] = generate(example)
+        return cache[key]
+
     refusals = [e for e in examples if e.get("kind") == "refusal"]
     answerable = [e for e in examples if e.get("kind") != "refusal"]
 
@@ -179,16 +197,25 @@ def main() -> int:
                 file=sys.stderr,
             )
         else:
-            from satquery.tools.rs_vqa import load_handle_for_eval  # type: ignore
+            # Delegated rather than reimplemented. An earlier version called a
+            # `load_handle_for_eval` helper that never existed, so this branch
+            # raised ImportError the moment an adapter was passed - the tests
+            # only exercised --baselines-only and never reached it.
+            # `track_b_eval.Adapter` is the one loader, and it mirrors the
+            # deployed tool's quantisation and decode settings.
+            from evaluation.track_b_eval import Adapter
 
-            handle = load_handle_for_eval(args.base, args.adapter)
-            results["track_b"] = evaluate(
-                lambda e: handle.answer(
-                    str(args.data / e["image"]), e["question"]
-                ),
-                examples,
-                pairs,
-            )
+            adapter = Adapter(args.base, args.adapter)
+            try:
+                results["track_b"] = evaluate(
+                    lambda e: adapter.answer(
+                        args.data / e["image"], e["question"]
+                    ),
+                    examples,
+                    pairs,
+                )
+            finally:
+                adapter.close()
 
     for name, row in results.items():
         print(f"\n{name}:")
