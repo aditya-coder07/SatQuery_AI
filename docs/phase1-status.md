@@ -14,7 +14,7 @@ numbers, including where they are weak.
 | 1.4 | Synthetic query bank + Tier-1 training and evaluation | **Done** | `satquery/synth/query_bank.py` (3,600 examples), metrics below |
 | 1.5 | FastAPI + SSE trace streaming + SQLite run store | **Done** | `satquery/api/`, 18 tests; verified live over HTTP and from a browser |
 | 1.6 | Frontend shell: upload, live trace panel, confidence card, answer view | **Partial** | `frontend/app/page.tsx`; builds, type-checks, verified end to end in a browser. **No OpenLayers map viewer yet** |
-| 1.7 | Track B v0: QLoRA on VRSBench + RSVQA subset | **Blocked** | Needs a GPU and multi-GB dataset downloads — not possible in this environment |
+| 1.7 | Track B v0: QLoRA on VRSBench + RSVQA subset | **Trains and resumes on a local RTX 4050 (6 GB)**; not yet wired into `rs_vqa_v1` | See "Track B v0" below |
 | 1.8 | `satquery eval` CLI + `--dry-run` + prediction schemas for all four annotation types | **Done** | `satquery/cli/evaluate.py`, `evaluation/schemas.py`, 28 tests |
 | 1.9 | Eval harness v1 with VQA metrics | **Done** | `evaluation/harness.py`, `evaluation/metrics/vqa.py` |
 | 1.10 | Track A v0: encoder + land-cover head on BigEarthNet subset | **Blocked** | Same reason as 1.7 |
@@ -79,6 +79,42 @@ Stated plainly so the trace is not mistaken for more than it is:
   tiles; coarse-to-fine retrieval is task 2.10.
 - **Non-VQA metrics** return `metric_status: "not_implemented"` rather than a
   fabricated score.
+
+## Track B v0 - QLoRA on a 6 GB laptop GPU (2026-08-29)
+
+Ran on an RTX 4050 Laptop (6 GB, compute 8.9, bf16), not a cloud T4.
+
+| Measurement | Value |
+|---|---|
+| Base model 4-bit (NF4 + double quant) | **2.25 GiB** weights, 3.75 GiB free |
+| Peak VRAM while training | **4391 / 6141 MiB (71%)** |
+| Trainable LoRA params | 37,152,768 of 3,791,775,744 (**0.98%**) |
+| GPU utilisation / temp | 91% / 73 C |
+
+I had predicted the 3B would be "tight - plausible, not guaranteed" on 6 GB.
+It is not tight: it trains with ~1.75 GiB to spare. Kaggle is not needed for
+Track B v0.
+
+**Resume proven on the real script**, which is the point of plan item 0.10.
+A run was killed at step 24 and restarted with `--resume`:
+
+- earlier run: step 5 loss 15.03 -> step 10 loss 12.12
+- after resume: `RESUMED AT STEP 24`, step 25 loss **6.86** -> step 40 loss 6.36
+
+Had resume silently reinitialised, loss would have jumped back to ~15. It
+continued at 6.86 and kept falling, so model, optimizer and RNG state were
+genuinely restored. Zero `.tmp` files survived the kill, confirming the
+atomic checkpoint write.
+
+**Dataset finding.** VRSBench cannot train anything alone: it ships
+annotations only, and its images live in the separate DOTA/DIOR datasets
+(verification item 9). Track B v0 therefore used `dmarsili/RSVQA-LR-2k`
+(174 MB, CC-BY-4.0), which embeds its images - 2,000 QA pairs over 256x256
+tiles. RSVQA-LR is a P0 prescribed benchmark in its own right.
+
+Remaining for 1.7: the trained adapter is **not yet loaded by `rs_vqa_v1`**,
+which is still a stub. "Trains" and "loads" are done; "answers through the
+real pipeline" is not.
 
 ## Validation against real ISRO products (2026-08-29)
 
