@@ -22,3 +22,19 @@ abstention:
   # If the entailment gate removed every sentence, decline rather than show
   # a corrected-to-nothing answer.
   abstain_when_all_sentences_flagged: true
+
+# Three-component confidence weights (plan task 3.4).
+#
+# These are EQUAL and that is deliberate, not an oversight. Fitting them needs
+# a labelled set of (components -> was the answer actually correct) pairs, and
+# none exists: every learned tool is still a stub or reports a quantity that
+# is not a probability of correctness, the same gap recorded under tasks 3.3
+# and 3.6. A weight fitted against that would be fitted to nothing.
+#
+# The mechanism is here so that fitting them later is a config change rather
+# than a code change. Set them from a real labelled run, not by intuition.
+confidence:
+  weights:
+    model: 1.0
+    agreement: 1.0
+    input_quality: 1.0

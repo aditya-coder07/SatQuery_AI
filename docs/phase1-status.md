@@ -1149,3 +1149,84 @@ perform, on one split, with one metric.** Land-cover classification is the
 natural choice - ask the VLM "which of these 19 classes are present" on the
 same BigEarthNet test shard the specialist head is scored on. That is a run
 that has not happened, not a number that is missing.
+
+## Task 3.4 - three-component confidence, weights and stress response (2026-08-29)
+
+### The combiner is now weighted, and the weights are equal on purpose
+
+`geometric_mean` accepts weights, read from `configs/thresholds.yaml` under
+`confidence.weights`. They ship as **1.0 / 1.0 / 1.0**, and that is a decision
+rather than an oversight:
+
+> Fitting them needs a labelled set of (components → was the answer actually
+> correct) pairs, and no such set exists. Every learned tool is still a stub
+> or reports a quantity that is not a probability of correctness - the same
+> gap recorded under tasks 3.3 and 3.6 - so any fitted weight would be fitted
+> to nothing.
+
+The mechanism is in place so the fit is a config change rather than a code
+change once the data exists. A test asserts the shipped weights are still
+equal, so fitting them forces the fit to be documented.
+
+The zero-collapse property survives weighting: any component at zero drives
+the score to zero regardless of its weight, which is the entire reason for a
+geometric rather than arithmetic mean.
+
+### "Components move sensibly under stress" - made into a measurement
+
+The plan's acceptance criterion is not a measurement as written.
+`evaluation/confidence_stress.py` makes it one: each stressor degrades **one**
+dimension and the run is compared against a clean baseline, reporting
+
+* **sensitivity** - did the targeted component fall?
+* **specificity** - did the others stay put?
+
+Specificity is the property that matters, because task 3.6's abstention
+messages name the *limiting* component, and that is only useful advice if the
+component that moved is the one the problem lives in. A breakdown where every
+stressor moves every component looks informative on a dashboard and tells a
+user nothing.
+
+Baseline: model 0.80, agreement 1.00, input_quality 1.00, final 0.9283.
+
+| stressor | targets | Δmodel | Δagreement | Δinput_quality | Δfinal | sensitivity | specificity |
+|---|---|---|---|---|---|---|---|
+| 94% nodata | input_quality | 0.00 | −0.48 | −0.15 | −0.2212 | OK | OK* |
+| 16×16 px scene | input_quality | **+0.20** | 0.00 | −0.50 | −0.1346 | OK | OK* |
+| flat scene (no bimodal split) | agreement | 0.00 | −0.48 | 0.00 | −0.1818 | OK | OK |
+| 10 m / 120 m GSD pair | input_quality | 0.00 | 0.00 | −0.30 | −0.1041 | OK | OK |
+
+**Sensitivity 4/4, specificity 4/4** - with two declared exceptions, marked
+`*`. Both are declared in the stressor definition *before* the run, not
+explained away after the number appeared, because deciding a movement was
+acceptable once it is on screen is how a real failure gets rationalised.
+
+1. **94% nodata also moves `agreement`, and that is correct.** With most
+   pixels missing the indices genuinely lose their bimodal split, so the
+   physics really is less trustworthy. A stressor that degrades two dimensions
+   should move two components.
+2. **The 16×16 scene moves `model` UP (+0.20), and that is a real wart.** The
+   blocking check short-circuits before any learned tool runs, so
+   `model_confidence` keeps its initial 1.0 and the component *rises* under
+   stress. 1.0 there means "no model ran", not "the model was certain", and a
+   neutral value of 1.0 inflates the geometric mean. `physics_agreement`
+   documents exactly this choice deliberately; here it is an accident of the
+   initialiser. Nothing user-facing depends on it today - the abstention fires
+   on `input_validation` first - but it is recorded rather than hidden.
+
+### The harness had a bug of its own, which is the point of writing it down
+
+The first `high_nodata` stressor wrote zeros **without setting the raster's
+nodata value**. That produces a flat region, not missing data: the ingest
+nodata check never fired, the indices lost their bimodal split, and the
+stressor moved `agreement` instead of `input_quality`. Reported naively it
+looked like a specificity failure of the *system*. It was a bug in the
+*measurement*. `write_raster` now takes an optional `nodata`, defaulted off so
+no golden scene changes.
+
+### UI
+
+The frontend confidence card already showed the three-component breakdown from
+Phase 1 (`frontend/app/page.tsx`), so that half of the acceptance criterion
+was already met; what was missing was any evidence the components mean
+anything, which is what the stress table above supplies.

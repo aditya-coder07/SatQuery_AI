@@ -22,6 +22,8 @@ the combination below remains an unweighted geometric mean.
 
 from __future__ import annotations
 
+import math
+
 from satquery.contracts.input_manifest import InputManifest
 from satquery.contracts.trace import (
     ConfidenceCalibrationTrace,
@@ -69,14 +71,76 @@ def physics_agreement(agreements: dict[str, float]) -> float:
     return max(0.0, min(1.0, sum(values) / len(values)))
 
 
-def geometric_mean(*values: float) -> float:
-    """Geometric mean, zero if any component is zero."""
-    product = 1.0
-    for v in values:
-        if v <= 0:
+def geometric_mean(*values: float, weights: tuple[float, ...] | None = None) -> float:
+    """Weighted geometric mean, zero if any component is zero.
+
+    Weights are supported (task 3.4) but ship EQUAL, and the reason is worth
+    stating rather than leaving as an apparent oversight: fitting them needs a
+    labelled set of (components -> was the answer actually correct) pairs, and
+    no such set exists. Every learned tool is still a stub or reports a
+    quantity that is not a probability of correctness - the same gap recorded
+    under tasks 3.3 and 3.6 - so any fitted weight would be fitted to nothing.
+    Equal weights are the honest default; the mechanism is here so the fit is
+    a config change rather than a code change once the data exists.
+    """
+    if not values:
+        return 0.0
+    if weights is None:
+        weights = (1.0,) * len(values)
+    if len(weights) != len(values):
+        raise ValueError("weights and values must have the same length")
+
+    total = sum(weights)
+    if total <= 0:
+        raise ValueError("weights must sum to a positive number")
+
+    accumulated = 0.0
+    for value, weight in zip(values, weights, strict=True):
+        if value <= 0:
+            # A zero in any component collapses the score, which is the whole
+            # reason for a geometric rather than arithmetic mean: a confident
+            # model on a corrupt input must not score 0.66 because two of
+            # three components were fine.
             return 0.0
-        product *= v
-    return product ** (1.0 / len(values))
+        accumulated += weight * math.log(value)
+    return math.exp(accumulated / total)
+
+
+# Component weights, in the order (model, agreement, input_quality). Read from
+# configs/thresholds.yaml under `confidence.weights` when present.
+DEFAULT_WEIGHTS = (1.0, 1.0, 1.0)
+
+
+def load_weights(path=None) -> tuple[float, float, float]:
+    """Load component weights, falling back to equal on any problem."""
+    import os
+    from pathlib import Path
+
+    from satquery.controller.abstention import (
+        DEFAULT_THRESHOLDS_PATH,
+        ENV_THRESHOLDS,
+    )
+
+    target = Path(
+        path or os.environ.get(ENV_THRESHOLDS) or DEFAULT_THRESHOLDS_PATH
+    )
+    if not target.exists():
+        return DEFAULT_WEIGHTS
+    try:
+        import yaml
+
+        blob = yaml.safe_load(target.read_text(encoding="utf-8")) or {}
+        section = (blob.get("confidence") or {}).get("weights") or {}
+        weights = (
+            float(section.get("model", 1.0)),
+            float(section.get("agreement", 1.0)),
+            float(section.get("input_quality", 1.0)),
+        )
+        if any(w < 0 for w in weights) or sum(weights) <= 0:
+            return DEFAULT_WEIGHTS
+        return weights
+    except Exception:  # noqa: BLE001 - degradation, not a crash
+        return DEFAULT_WEIGHTS
 
 
 def band(score: float) -> str:
@@ -110,7 +174,7 @@ def compute_confidence(
 
     agreement = physics_agreement(agreements)
     quality = input_quality(manifest)
-    final = geometric_mean(model, agreement, quality)
+    final = geometric_mean(model, agreement, quality, weights=load_weights())
 
     return ConfidenceTrace(
         final=round(final, 6),

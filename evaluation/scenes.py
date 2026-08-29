@@ -37,8 +37,16 @@ def write_raster(
     origin: tuple[float, float] = (500000.0, 2000000.0),
     tags: dict | None = None,
     dtype: str | None = None,
+    nodata: float | None = None,
 ):
-    """Write a (bands, h, w) array to a GeoTIFF with the given metadata."""
+    """Write a (bands, h, w) array to a GeoTIFF with the given metadata.
+
+    `nodata` is optional and defaults to unset, which is what every golden
+    scene uses. It exists for the confidence stress harness (task 3.4), which
+    needs a raster the ingest nodata check will actually fire on - writing
+    zeros without declaring them nodata produces a flat scene, not a nodata
+    scene, and measures the wrong component.
+    """
     if array.ndim == 2:
         array = array[np.newaxis, ...]
     count, height, width = array.shape
@@ -55,6 +63,7 @@ def write_raster(
         dtype=dtype,
         crs=crs,
         transform=transform,
+        **({"nodata": nodata} if nodata is not None else {}),
     ) as dst:
         dst.write(array.astype(dtype))
         if band_names:
