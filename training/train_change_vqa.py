@@ -60,6 +60,88 @@ N_CLASSES = len(CLASSES)
 CROP = 256
 
 
+def build_pretrained_model(dim: int = 64):
+    """Same design, but the shared encoder is an ImageNet-pretrained ResNet-18.
+
+    The from-scratch encoder was measured and found wanting: 0.1691 change-class
+    mIoU after 40 epochs, which put end-to-end CDVQA at 0.4439 - **below the
+    0.5084 a per-type majority answer scores**. 1,600 training pairs is very
+    little to learn general visual features from, and every published method on
+    SECOND starts from a pretrained backbone for exactly that reason.
+
+    Only the stem through layer3 is used, at stride 8, because the decoder has
+    to come back to full resolution and deeper stages cost more than they
+    return on 512px tiles with thin structures like roads and playgrounds.
+    """
+    import torch
+    import torch.nn as nn
+    from torchvision.models import ResNet18_Weights, resnet18
+
+    # ImageNet statistics, because the encoder's early filters were fitted
+    # under them. Feeding it 0-1 RGB unnormalised wastes the pretraining.
+    mean = torch.tensor([0.485, 0.456, 0.406]).view(1, 3, 1, 1)
+    std = torch.tensor([0.229, 0.224, 0.225]).view(1, 3, 1, 1)
+
+    class PretrainedSemanticChangeNet(nn.Module):
+        def __init__(self) -> None:
+            super().__init__()
+            backbone = resnet18(weights=ResNet18_Weights.IMAGENET1K_V1)
+            self.stem = nn.Sequential(
+                backbone.conv1, backbone.bn1, backbone.relu, backbone.maxpool,
+                backbone.layer1,
+            )                                   # stride 4, 64 channels
+            self.layer2 = backbone.layer2       # stride 8, 128
+            self.layer3 = backbone.layer3       # stride 16, 256
+            self.register_buffer("mean", mean)
+            self.register_buffer("std", std)
+
+            def block(cin, cout):
+                return nn.Sequential(
+                    nn.Conv2d(cin, cout, 3, padding=1, bias=False),
+                    nn.BatchNorm2d(cout), nn.ReLU(inplace=True),
+                )
+
+            def decoder():
+                return nn.ModuleDict({
+                    # 256 own + 256 difference at stride 16
+                    "d16": block(512, dim * 4),
+                    # + skip from stride 8
+                    "d8": block(dim * 4 + 128, dim * 2),
+                    # + skip from stride 4
+                    "d4": block(dim * 2 + 64, dim),
+                    "head": nn.Conv2d(dim, N_CLASSES, 1),
+                })
+
+            self.dec1 = decoder()
+            self.dec2 = decoder()
+            self.up = nn.Upsample(scale_factor=2, mode="bilinear", align_corners=False)
+
+        def encode(self, x):
+            x = (x - self.mean) / self.std
+            s4 = self.stem(x)
+            s8 = self.layer2(s4)
+            s16 = self.layer3(s8)
+            return s4, s8, s16
+
+        def _decode(self, dec, own, diff, skips):
+            s4, s8 = skips
+            y = dec["d16"](torch.cat([own, diff], dim=1))
+            y = dec["d8"](torch.cat([self.up(y), s8], dim=1))
+            y = dec["d4"](torch.cat([self.up(y), s4], dim=1))
+            return self.up(self.up(dec["head"](y)))
+
+        def forward(self, a, b):
+            a4, a8, a16 = self.encode(a)
+            b4, b8, b16 = self.encode(b)
+            diff = torch.abs(a16 - b16)
+            return (
+                self._decode(self.dec1, a16, diff, (a4, a8)),
+                self._decode(self.dec2, b16, diff, (b4, b8)),
+            )
+
+    return PretrainedSemanticChangeNet()
+
+
 def build_model(dim: int = 32):
     import torch
     import torch.nn as nn
@@ -244,6 +326,11 @@ def main() -> int:
     p.add_argument("--batch-size", type=int, default=8)
     p.add_argument("--lr", type=float, default=1e-3)
     p.add_argument("--dim", type=int, default=32)
+    p.add_argument(
+        "--pretrained",
+        action="store_true",
+        help="ImageNet-pretrained ResNet-18 encoder instead of the from-scratch one",
+    )
     p.add_argument("--crop", type=int, default=CROP)
     p.add_argument("--limit-train", type=int)
     p.add_argument("--seed", type=int, default=42)
@@ -288,7 +375,9 @@ def main() -> int:
     val_ds = SecondPairs(args.second, val_ids, crop=None)
     print(f"train {len(train_ds)} pairs | val {len(val_ds)} pairs")
 
-    model = build_model(args.dim).to(device)
+    model = (
+        build_pretrained_model(args.dim) if args.pretrained else build_model(args.dim)
+    ).to(device)
     n_params = sum(q.numel() for q in model.parameters())
     print(f"parameters: {n_params/1e6:.3f}M")
 
@@ -307,6 +396,7 @@ def main() -> int:
         "n_val_pairs": len(val_ds),
         "split_source": "CDVQA Train/Val image ids; test ids never read",
         "epochs": args.epochs, "lr": args.lr, "dim": args.dim, "crop": args.crop,
+        "encoder": "resnet18_imagenet" if args.pretrained else "from_scratch",
         "n_params": n_params,
         "class_weights": {n: float(w) for n, w in zip(CLASSES, weights)},
     })
@@ -354,6 +444,7 @@ def main() -> int:
                 args.ckpt_dir.mkdir(parents=True, exist_ok=True)
                 torch.save(
                     {"model": model.state_dict(), "dim": args.dim,
+                     "pretrained": bool(args.pretrained),
                      "classes": list(CLASSES), "step": step, "epoch": epoch + 1},
                     args.ckpt_dir / "best.pt",
                 )

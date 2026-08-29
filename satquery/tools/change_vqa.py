@@ -251,12 +251,16 @@ class _SemanticHandle:
     def __init__(self, checkpoint: Path):
         import torch
 
-        from training.train_change_vqa import build_model
+        from training.train_change_vqa import build_model, build_pretrained_model
 
         payload = torch.load(checkpoint, map_location="cpu", weights_only=False)
         state = payload.get("model", payload)
         dim = payload.get("dim", 48)
-        model = build_model(dim)
+        # The checkpoint records which encoder it was trained with. Guessing
+        # would load ImageNet weights into a from-scratch graph, or fail on a
+        # key mismatch that says nothing about the cause.
+        builder = build_pretrained_model if payload.get("pretrained") else build_model
+        model = builder(dim)
         model.load_state_dict(state)
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
         self.model = model.to(self.device).eval()

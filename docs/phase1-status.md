@@ -1817,3 +1817,135 @@ arbitrary, not random. It is enough to establish a *structural* zero, which is
 type-level and does not vary with the sample; it is **not** enough to quote a
 non-zero per-type accuracy against, should a later change produce one. Extend
 the shard download before publishing any improved number.
+
+## CDVQA, second measurement: the answer layer works, the segmenter does not (2026-08-30)
+
+Yesterday's CDVQA section ended with a 0.0000 and three structural causes.
+Two of them are now closed and the third is measured. **Read this section
+instead of the coverage caveat at the end of the previous one:** the test
+manifest is no longer a 7.3% mirror sample.
+
+### CDVQA's splits partition SECOND, which changed two things
+
+Every CDVQA image id resolves in the SECOND dataset, and the three splits
+partition its 2,968 labelled pairs exactly - **1,600 train, 400 val, 968 test,
+zero intersection, union 2,968** (`train_change_vqa.py --split-check`).
+
+First consequence: the imagery can come from SECOND's 2.4 GB archive rather
+than the ~32 GB webdataset mirror, so the benchmark manifest is now **all
+39,686 test questions over all 968 pairs - 100% coverage**. The previous
+section's 7.3% is retired.
+
+Second consequence, and the trap: **SECOND ships the labels for the 968 test
+pairs too.** Training a semantic head on all of SECOND would leak the
+benchmark entirely and produce a large, worthless number. The trainer takes
+its ids from CDVQA's own train index and refuses to start if any train id
+appears in test.
+
+### The whole benchmark is arithmetic over a pair of change maps
+
+Given two class maps over SECOND's six change classes plus "unchanged", every
+CDVQA question type is derivable in closed form. Measured against ground-truth
+maps (`evaluation/cdvqa_oracle.py`):
+
+| split | images | questions | oracle |
+|---|---|---|---|
+| Train (first 200) | 200 | 8,313 | 0.9989 |
+| **Val, fully held out** | 400 | 16,441 | **0.9981** |
+| **Test, full split** | 968 | 39,686 | **0.9975** |
+
+Six of the eight types derive at exactly **1.0000** on Test. The 0.25% that
+does not is two deliberate refusals, not error: when nothing changed at all
+there is no largest change, and when two classes changed by exactly equal
+areas the measurement does not discriminate. CDVQA answers both anyway - its
+generator takes an argmax over a row of zeros - and reproducing that would be
+scoring by imitation.
+
+**This reduces CDVQA to one segmentation problem.** The rules were developed on
+Train and confirmed on Val before Test was touched once. Three of them had to
+be measured rather than assumed:
+
+| rule | wrong version | right version |
+|---|---|---|
+| date qualifiers ("in the first image") select one date | 0.9350 | **1.0000** |
+| per-class ratios are of the whole scene | 0.6199 | **1.0000** |
+| "changed to what" is the majority destination class | - | **1.0000** |
+
+### The from-scratch segmenter loses to a constant
+
+A 2.3M-parameter siamese net, trained 40 epochs on the 1,600 train pairs,
+reached **change-class mIoU 0.1691** on Val. Through the answer layer, on the
+full test split:
+
+| question type | n | majority baseline | trained head | gain |
+|---|---|---|---|---|
+| `change_or_not` | 13,882 | 0.5617 | **0.5926** | **+0.0310** |
+| `change_ratio_types` | 5,811 | 0.4770 | 0.3376 | -0.1394 |
+| `decrease_or_not` | 4,658 | 0.6900 | 0.5930 | -0.0970 |
+| `increase_or_not` | 4,600 | 0.6663 | 0.4926 | -0.1737 |
+| `change_to_what` | 2,991 | 0.3805 | 0.3089 | -0.0715 |
+| `largest_change` | 2,904 | 0.4291 | 0.3230 | -0.1061 |
+| `smallest_change` | 2,904 | 0.2231 | 0.1095 | -0.1136 |
+| `change_ratio` | 1,936 | 0.1529 | 0.1136 | -0.0393 |
+| **overall** | **39,686** | **0.5084** | **0.4439** | **-0.0645** |
+
+**0.0000 -> 0.4439 is not the finding. The finding is that 0.4439 is worse
+than answering every question of a given type with that type's most common
+training answer.** It wins on one type of eight. This is the same shape as the
+land-cover head at threshold 0.5, and it is reported the same way.
+
+The baseline is the honest one to beat: the majority answer per question type,
+**fitted on Train and applied to Test**, never peeking at test labels. A single
+global majority ("no") scores 0.3115.
+
+### It is not an inference artifact
+
+The head trains on native-scale 256 crops and runs on whole 512 scenes, which
+is a scale mismatch worth ruling out before blaming the model. Three inference
+schemes on 120 val pairs (4,964 questions):
+
+| inference | val accuracy |
+|---|---|
+| full 512 scene | 0.4637 |
+| downsampled to 256 | 0.4972 |
+| 2x2 native-256 tiles | 0.4631 |
+
+All three sit below the 0.5084 baseline. The scale is worth about 3 points and
+the deficit is about 6; **the segmenter is genuinely weak**, and per-class IoU
+says where: `water` 0.068, `playgrounds` 0.071, `trees` 0.098 against
+`buildings` 0.298 and `NVG_surface` 0.258. The rare classes are exactly what
+`largest_change`, `smallest_change` and `change_to_what` are asking about,
+which is why those three lose the most.
+
+### What this does and does not establish
+
+**Established:** the design is right. A semantic change map plus arithmetic
+answers 99.75% of CDVQA, the answer layer contributes no error worth
+measuring, and the neural problem is isolated to one well-posed segmentation
+task with a published literature. The pipeline is wired end to end and the
+benchmark runs at 100% coverage in 220 seconds.
+
+**Not established:** that this system answers CDVQA better than a constant
+does. It does not, yet.
+
+The deficiency is identifiable rather than mysterious: **1,600 pairs is far too
+little to learn general visual features from scratch**, and every published
+method on SECOND starts from a pretrained backbone. Training loss was still
+falling at epoch 40 (2.40 -> 2.08) while val mIoU flattened, which is a model
+too small and too unpriored rather than one that has converged. An
+ImageNet-pretrained ResNet-18 encoder is the next run and is the one change
+most likely to matter; `--pretrained` selects it, and the checkpoint records
+which encoder it holds so the tool rebuilds the right graph.
+
+**Until a head beats 0.5084, the honest thing to publish is this table**, not
+the 0.4439 on its own and certainly not the jump from zero.
+
+**Reproduce:**
+
+```
+python training/prepare/cdvqa.py --second data/second --split Test \
+    --out data/cdvqa/cdvqa_test_full.json
+python evaluation/cdvqa_oracle.py --split Test --out artifacts/cdvqa/oracle_test.json
+SATQUERY_CHANGE_VQA=checkpoints/change_vqa/best.pt \
+    python -m evaluation.cdvqa_predict --split Test --out artifacts/cdvqa/head_test.json
+```
