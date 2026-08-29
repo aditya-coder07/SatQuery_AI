@@ -168,12 +168,24 @@ class Router:
     # -- entry point ------------------------------------------------------
     def route(self, query: str, manifest: InputManifest) -> Plan:
         legal = self.legal_tasks(manifest)
+        self.last_config_excluded: str | None = None
 
         if manifest.blocking_failures:
             # Inputs failed validation: no amount of query understanding makes
             # an answer defensible, so abstain and say why.
             task: TaskID = "CLARIFY_OR_ABSTAIN"
         else:
+            # Also classify WITHOUT the legality restriction. If the
+            # unconstrained best task is one the input configuration excludes,
+            # the user asked for something these images cannot support, and
+            # the answer should say so rather than quietly returning a
+            # different task's output. Config gating guarantees the plan is
+            # legal; it does not guarantee the user understands why they got
+            # a land-cover map when they asked about change.
+            unconstrained = self.classifier.predict(query)
+            if unconstrained.is_confident and unconstrained.task not in legal:
+                self.last_config_excluded = unconstrained.task
+
             prediction = self.classifier.predict(query, candidates=legal)
             if prediction.is_confident:
                 task = prediction.task

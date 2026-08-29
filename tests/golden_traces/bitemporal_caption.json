@@ -4,13 +4,13 @@
   "abstain_resolving_input": null,
   "abstain_trigger": null,
   "abstained": false,
-  "answer": "Produced a change mask; see the exported raster artifact.",
+  "answer": "A satellite image showing a fake landscape.",
   "artifacts": [
     "ndvi",
     "ndwi",
     "mndwi",
     "ndbi",
-    "change_mask"
+    "landcover_map"
   ],
   "code_version": "0.2.0-phase1",
   "confidence": {
@@ -23,9 +23,9 @@
     "components": {
       "agreement": 1.0,
       "input_quality": 1.0,
-      "model": 0.89
+      "model": 0.8
     },
-    "final": 0.9619
+    "final": 0.9283
   },
   "execution": [
     {
@@ -151,25 +151,39 @@
         ]
       },
       "params": {},
-      "rationale_tag": "EXPLICIT_CHANGE_LANGUAGE",
+      "rationale_tag": "MASK_CONDITIONED_CAPTION",
       "runtime_ms": "<volatile>",
       "step": "step_1",
       "tool": "index_engine_v1",
       "version": "1.0.0"
     },
     {
-      "confidence": 0.89,
+      "confidence": 0.8,
       "confidence_method": "threshold_rule",
       "outputs": {
-        "changed_pixels": 420
+        "classes": [
+          "forest",
+          "water"
+        ]
       },
-      "params": {
-        "change_threshold": 0.5
-      },
-      "rationale_tag": "EXPLICIT_CHANGE_LANGUAGE",
+      "params": {},
+      "rationale_tag": "MASK_CONDITIONED_CAPTION",
       "runtime_ms": "<volatile>",
       "step": "step_2",
-      "tool": "change_mask_v1",
+      "tool": "landcover_v1",
+      "version": "0.1.0-stub"
+    },
+    {
+      "confidence": 0.9,
+      "confidence_method": "threshold_rule",
+      "outputs": {
+        "caption": "A satellite image showing a fake landscape."
+      },
+      "params": {},
+      "rationale_tag": "MASK_CONDITIONED_CAPTION",
+      "runtime_ms": "<volatile>",
+      "step": "step_3",
+      "tool": "caption_v1",
       "version": "0.1.0-stub"
     }
   ],
@@ -280,13 +294,13 @@
       "retrieved_tiles": null
     }
   },
-  "query": "Produce a change mask.",
+  "query": "Describe this image.",
   "routing": {
     "capability_matrix_version": "cm-2026.11.02",
     "classifier": {
-      "margin": 0.996,
+      "margin": 0.9816,
       "name": "tfidf_logreg_v1",
-      "top1": 0.9974
+      "top1": 0.9871
     },
     "config_excluded_task": null,
     "legal_tasks": [
@@ -300,7 +314,7 @@
       "CLARIFY_OR_ABSTAIN"
     ],
     "llm_tiebreak_invoked": false,
-    "selected_task": "TEMPORAL_CHANGE_MAP"
+    "selected_task": "SINGLE_CAPTION"
   },
   "run_id": "<volatile>",
   "timestamp_utc": "<volatile>",

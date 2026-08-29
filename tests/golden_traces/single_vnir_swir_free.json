@@ -221,6 +221,7 @@
       "name": "tfidf_logreg_v1",
       "top1": 0.9959
     },
+    "config_excluded_task": null,
     "legal_tasks": [
       "SINGLE_VQA",
       "SINGLE_CAPTION",

@@ -4,13 +4,13 @@
   "abstain_resolving_input": null,
   "abstain_trigger": null,
   "abstained": false,
-  "answer": "Produced a change mask; see the exported raster artifact.",
+  "answer": "Index thresholds indicate 18% vegetation, 82% water and 82% built-up land. These classes are measured independently and may overlap.",
   "artifacts": [
     "ndvi",
     "ndwi",
     "mndwi",
     "ndbi",
-    "change_mask"
+    "landcover_map"
   ],
   "code_version": "0.2.0-phase1",
   "confidence": {
@@ -23,9 +23,9 @@
     "components": {
       "agreement": 1.0,
       "input_quality": 1.0,
-      "model": 0.89
+      "model": 0.8
     },
-    "final": 0.9619
+    "final": 0.9283
   },
   "execution": [
     {
@@ -151,25 +151,31 @@
         ]
       },
       "params": {},
-      "rationale_tag": "EXPLICIT_CHANGE_LANGUAGE",
+      "rationale_tag": "QUANTITATIVE_REQUEST",
       "runtime_ms": "<volatile>",
       "step": "step_1",
       "tool": "index_engine_v1",
       "version": "1.0.0"
     },
     {
-      "confidence": 0.89,
+      "confidence": 0.8,
       "confidence_method": "threshold_rule",
       "outputs": {
-        "changed_pixels": 420
+        "classes": [
+          "forest",
+          "water"
+        ]
       },
       "params": {
-        "change_threshold": 0.5
+        "classes": [
+          "built_up",
+          "water"
+        ]
       },
-      "rationale_tag": "EXPLICIT_CHANGE_LANGUAGE",
+      "rationale_tag": "QUANTITATIVE_REQUEST",
       "runtime_ms": "<volatile>",
       "step": "step_2",
-      "tool": "change_mask_v1",
+      "tool": "landcover_v1",
       "version": "0.1.0-stub"
     }
   ],
@@ -280,13 +286,13 @@
       "retrieved_tiles": null
     }
   },
-  "query": "Produce a change mask.",
+  "query": "Classify the land cover.",
   "routing": {
     "capability_matrix_version": "cm-2026.11.02",
     "classifier": {
-      "margin": 0.996,
+      "margin": 0.989,
       "name": "tfidf_logreg_v1",
-      "top1": 0.9974
+      "top1": 0.9916
     },
     "config_excluded_task": null,
     "legal_tasks": [
@@ -300,7 +306,7 @@
       "CLARIFY_OR_ABSTAIN"
     ],
     "llm_tiebreak_invoked": false,
-    "selected_task": "TEMPORAL_CHANGE_MAP"
+    "selected_task": "SINGLE_LANDCOVER"
   },
   "run_id": "<volatile>",
   "timestamp_utc": "<volatile>",
@@ -313,15 +319,18 @@
       "backend": "deterministic",
       "flagged": 0,
       "flagged_detail": [],
-      "retained": 0,
-      "sentences": 1,
+      "retained": 1,
+      "sentences": 2,
       "unverifiable": 1
     },
     "physics_agreement": {
+      "built_up:fraction": 1.0,
       "mndwi": 1.0,
       "ndbi": 1.0,
       "ndvi": 1.0,
-      "ndwi": 1.0
+      "ndwi": 1.0,
+      "vegetation:fraction": 1.0,
+      "water:fraction": 1.0
     }
   },
   "weights_hashes": {}

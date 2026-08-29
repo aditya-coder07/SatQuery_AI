@@ -4,10 +4,8 @@
   "abstain_resolving_input": null,
   "abstain_trigger": null,
   "abstained": false,
-  "answer": "Localised 1 matching region.",
-  "artifacts": [
-    "grounding_bboxes"
-  ],
+  "answer": "fake answer string",
+  "artifacts": [],
   "code_version": "0.2.0-phase1",
   "confidence": {
     "band": "HIGH",
@@ -19,53 +17,76 @@
     "components": {
       "agreement": 1.0,
       "input_quality": 1.0,
-      "model": 0.95
+      "model": 0.85
     },
-    "final": 0.983
+    "final": 0.9473
   },
   "execution": [
     {
-      "confidence": 0.95,
+      "confidence": 0.85,
       "confidence_method": "threshold_rule",
       "outputs": {
-        "bounding_boxes": [
-          {
-            "xmax": 50,
-            "xmin": 10,
-            "ymax": 50,
-            "ymin": 10
-          }
-        ]
+        "answer": "fake answer string"
       },
       "params": {
-        "confidence_threshold": 0.5
+        "answer_mode": "template"
       },
-      "rationale_tag": "DETECTED_THEN_COUNTED",
+      "rationale_tag": "VQA_INFERENCE",
       "runtime_ms": "<volatile>",
       "step": "step_1",
-      "tool": "grounding_v1",
+      "tool": "rs_vqa_v1",
       "version": "0.1.0-stub"
     }
   ],
   "ingest": {
     "checks": [
       {
-        "message": "single: CRS EPSG:32643",
+        "message": "optical: CRS EPSG:32643",
         "name": "crs_present",
         "status": "PASS"
       },
       {
-        "message": "single: 0.0% nodata",
+        "message": "optical: 0.0% nodata",
         "name": "nodata_fraction",
         "status": "PASS"
       },
       {
-        "message": "single: 128x128",
+        "message": "optical: 128x128",
         "name": "min_dimension",
+        "status": "PASS"
+      },
+      {
+        "message": "sar: CRS EPSG:32643",
+        "name": "crs_present",
+        "status": "PASS"
+      },
+      {
+        "message": "sar: 0.0% nodata",
+        "name": "nodata_fraction",
+        "status": "PASS"
+      },
+      {
+        "message": "sar: 128x128",
+        "name": "min_dimension",
+        "status": "PASS"
+      },
+      {
+        "message": "both images in EPSG:32643",
+        "name": "crs_match",
+        "status": "PASS"
+      },
+      {
+        "message": "GSD ratio 1.00x",
+        "name": "gsd_ratio",
+        "status": "PASS"
+      },
+      {
+        "message": "one optical and one SAR image present",
+        "name": "crossmodal_pairing",
         "status": "PASS"
       }
     ],
-    "config": "SINGLE",
+    "config": "CROSSMODAL_PAIR",
     "images": [
       {
         "bands": [
@@ -83,19 +104,37 @@
         "nodata_pct": 0.0,
         "path": "<volatile>",
         "polarisations": null,
-        "role": "single",
+        "role": "optical",
         "sensor_guess": "SENTINEL-2"
+      },
+      {
+        "bands": [
+          "VV",
+          "VH"
+        ],
+        "crs": "EPSG:32643",
+        "gsd_m": 10.0,
+        "modality": "SAR",
+        "modality_reason": "sar_metadata_present_and_no_optical_band_names",
+        "nodata_pct": 0.0,
+        "path": "<volatile>",
+        "polarisations": [
+          "VV",
+          "VH"
+        ],
+        "role": "sar",
+        "sensor_guess": "EOS-04"
       }
     ],
     "index_availability": {
-      "cov": false,
+      "cov": true,
       "glcm_texture": true,
       "mndwi": true,
       "ndbi": true,
       "ndvi": true,
       "ndwi": true,
-      "sigma0": false,
-      "vh_vv_ratio": false
+      "sigma0": true,
+      "vh_vv_ratio": true
     },
     "mode": "operational",
     "tiling": {
@@ -105,16 +144,17 @@
       "retrieved_tiles": null
     }
   },
-  "query": "Show me where the roads are.",
+  "query": "How many buildings are visible?",
   "routing": {
     "capability_matrix_version": "cm-2026.11.02",
     "classifier": {
-      "margin": 0.9882,
+      "margin": 0.978,
       "name": "tfidf_logreg_v1",
-      "top1": 0.9926
+      "top1": 0.9858
     },
     "config_excluded_task": null,
     "legal_tasks": [
+      "XMODAL_JOINT_EXTRACT",
       "SINGLE_VQA",
       "SINGLE_CAPTION",
       "SINGLE_GROUND",
@@ -122,7 +162,7 @@
       "CLARIFY_OR_ABSTAIN"
     ],
     "llm_tiebreak_invoked": false,
-    "selected_task": "SINGLE_GROUND"
+    "selected_task": "SINGLE_VQA"
   },
   "run_id": "<volatile>",
   "timestamp_utc": "<volatile>",

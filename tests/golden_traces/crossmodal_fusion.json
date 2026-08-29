@@ -378,6 +378,7 @@
       "name": "tfidf_logreg_v1",
       "top1": 0.9957
     },
+    "config_excluded_task": null,
     "legal_tasks": [
       "XMODAL_JOINT_EXTRACT",
       "SINGLE_VQA",

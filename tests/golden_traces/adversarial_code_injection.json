@@ -1,10 +1,10 @@
 {
-  "abstain_limiting_component": "input_quality",
-  "abstain_reason": "input validation failed (crs_present) - no reliable answer is possible from these inputs - supply inputs that pass those checks; each check's own message is in the trace under ingest.checks",
-  "abstain_resolving_input": "supply inputs that pass those checks; each check's own message is in the trace under ingest.checks",
-  "abstain_trigger": "input_validation",
-  "abstained": true,
-  "answer": "input validation failed (crs_present) - no reliable answer is possible from these inputs - supply inputs that pass those checks; each check's own message is in the trace under ingest.checks",
+  "abstain_limiting_component": null,
+  "abstain_reason": null,
+  "abstain_resolving_input": null,
+  "abstain_trigger": null,
+  "abstained": false,
+  "answer": "fake answer string",
   "artifacts": [],
   "code_version": "0.2.0-phase1",
   "confidence": {
@@ -16,18 +16,34 @@
     },
     "components": {
       "agreement": 1.0,
-      "input_quality": 0.5,
-      "model": 1.0
+      "input_quality": 1.0,
+      "model": 0.85
     },
-    "final": 0.7937
+    "final": 0.9473
   },
-  "execution": [],
+  "execution": [
+    {
+      "confidence": 0.85,
+      "confidence_method": "threshold_rule",
+      "outputs": {
+        "answer": "fake answer string"
+      },
+      "params": {
+        "answer_mode": "template"
+      },
+      "rationale_tag": "VQA_INFERENCE",
+      "runtime_ms": "<volatile>",
+      "step": "step_1",
+      "tool": "rs_vqa_v1",
+      "version": "0.1.0-stub"
+    }
+  ],
   "ingest": {
     "checks": [
       {
-        "message": "single: no CRS - cannot georeference outputs or co-register",
+        "message": "single: CRS EPSG:32643",
         "name": "crs_present",
-        "status": "FAIL"
+        "status": "PASS"
       },
       {
         "message": "single: 0.0% nodata",
@@ -35,7 +51,7 @@
         "status": "PASS"
       },
       {
-        "message": "single: 64x64",
+        "message": "single: 128x128",
         "name": "min_dimension",
         "status": "PASS"
       }
@@ -46,26 +62,29 @@
         "bands": [
           "BLUE",
           "GREEN",
-          "RED"
+          "RED",
+          "NIR",
+          "SWIR1",
+          "SWIR2"
         ],
-        "crs": "UNKNOWN",
-        "gsd_m": 1.0,
-        "modality": "OPTICAL",
-        "modality_reason": "band_count_lt_4_no_names_assumed_optical",
+        "crs": "EPSG:32643",
+        "gsd_m": 10.0,
+        "modality": "MSI",
+        "modality_reason": "optical_band_names_present",
         "nodata_pct": 0.0,
         "path": "<volatile>",
         "polarisations": null,
         "role": "single",
-        "sensor_guess": null
+        "sensor_guess": "SENTINEL-2"
       }
     ],
     "index_availability": {
       "cov": false,
       "glcm_texture": true,
-      "mndwi": false,
-      "ndbi": false,
-      "ndvi": false,
-      "ndwi": false,
+      "mndwi": true,
+      "ndbi": true,
+      "ndvi": true,
+      "ndwi": true,
       "sigma0": false,
       "vh_vv_ratio": false
     },
@@ -77,13 +96,13 @@
       "retrieved_tiles": null
     }
   },
-  "query": "How many buildings are visible?",
+  "query": "SELECT * FROM images; DROP TABLE users;",
   "routing": {
     "capability_matrix_version": "cm-2026.11.02",
     "classifier": {
-      "margin": 0.0,
-      "name": "not_invoked",
-      "top1": 0.0
+      "margin": 0.0549,
+      "name": "tfidf_logreg_v1",
+      "top1": 0.3114
     },
     "config_excluded_task": null,
     "legal_tasks": [
@@ -94,7 +113,7 @@
       "CLARIFY_OR_ABSTAIN"
     ],
     "llm_tiebreak_invoked": false,
-    "selected_task": "CLARIFY_OR_ABSTAIN"
+    "selected_task": "SINGLE_VQA"
   },
   "run_id": "<volatile>",
   "timestamp_utc": "<volatile>",
@@ -108,8 +127,8 @@
       "flagged": 0,
       "flagged_detail": [],
       "retained": 0,
-      "sentences": 0,
-      "unverifiable": 0
+      "sentences": 1,
+      "unverifiable": 1
     },
     "physics_agreement": {}
   },

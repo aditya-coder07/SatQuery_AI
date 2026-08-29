@@ -1,10 +1,10 @@
 {
   "abstain_limiting_component": "input_quality",
-  "abstain_reason": "input validation failed (crs_present) - no reliable answer is possible from these inputs - supply inputs that pass those checks; each check's own message is in the trace under ingest.checks",
+  "abstain_reason": "input validation failed (min_dimension) - no reliable answer is possible from these inputs - supply inputs that pass those checks; each check's own message is in the trace under ingest.checks",
   "abstain_resolving_input": "supply inputs that pass those checks; each check's own message is in the trace under ingest.checks",
   "abstain_trigger": "input_validation",
   "abstained": true,
-  "answer": "input validation failed (crs_present) - no reliable answer is possible from these inputs - supply inputs that pass those checks; each check's own message is in the trace under ingest.checks",
+  "answer": "input validation failed (min_dimension) - no reliable answer is possible from these inputs - supply inputs that pass those checks; each check's own message is in the trace under ingest.checks",
   "artifacts": [],
   "code_version": "0.2.0-phase1",
   "confidence": {
@@ -25,9 +25,9 @@
   "ingest": {
     "checks": [
       {
-        "message": "single: no CRS - cannot georeference outputs or co-register",
+        "message": "single: CRS EPSG:32643",
         "name": "crs_present",
-        "status": "FAIL"
+        "status": "PASS"
       },
       {
         "message": "single: 0.0% nodata",
@@ -35,23 +35,21 @@
         "status": "PASS"
       },
       {
-        "message": "single: 64x64",
+        "message": "single: 8x8 is too small to analyse",
         "name": "min_dimension",
-        "status": "PASS"
+        "status": "FAIL"
       }
     ],
     "config": "SINGLE",
     "images": [
       {
         "bands": [
-          "BLUE",
-          "GREEN",
-          "RED"
+          "BAND_1"
         ],
-        "crs": "UNKNOWN",
-        "gsd_m": 1.0,
-        "modality": "OPTICAL",
-        "modality_reason": "band_count_lt_4_no_names_assumed_optical",
+        "crs": "EPSG:32643",
+        "gsd_m": 10.0,
+        "modality": "PAN",
+        "modality_reason": "single_band_defaulted_to_panchromatic",
         "nodata_pct": 0.0,
         "path": "<volatile>",
         "polarisations": null,
@@ -77,7 +75,7 @@
       "retrieved_tiles": null
     }
   },
-  "query": "How many buildings are visible?",
+  "query": "Describe this image.",
   "routing": {
     "capability_matrix_version": "cm-2026.11.02",
     "classifier": {

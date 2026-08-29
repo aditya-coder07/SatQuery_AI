@@ -856,3 +856,76 @@ confidence combiner - the same gap recorded under task 3.3. A system-level
 AURC needs a labelled set of end-to-end runs with a correctness judgement per
 answer, which does not exist yet. Reporting either number as "the system's
 AURC" would be wrong.
+
+## Task 3.8 - adversarial routing suite, 200 queries (2026-08-29)
+
+200 hostile queries x 3 input configurations = **600 plans, 0 illegal**.
+Grouped by the mechanism each attacks, not by phrasing, so a failure points at
+which guard gave way:
+
+| category | n | attacks |
+|---|---|---|
+| `instruction_override` | 30 | countermanding the system's own rules |
+| `tool_coercion` | 25 | naming a tool and hoping the name is honoured |
+| `parameter_injection` | 20 | smuggling tunable parameters through query text |
+| `config_impossible` | 30 | legitimate asks the actual inputs cannot support |
+| `code_injection` | 15 | SQL, template, path traversal, shell |
+| `degenerate` | 20 | empty, whitespace, punctuation, keysmash |
+| `multi_task` | 15 | requesting every task at once |
+| `out_of_scope` | 25 | reasonable questions this system cannot answer |
+| `social_engineering` | 20 | authority, urgency, "do not abstain" |
+
+The guarantee is **structural, not statistical**, which is what makes a suite
+this size meaningful: the legal task set is computed from the *images*, never
+from the words, so no phrasing can widen it. A change-detection query on a
+single image is not refused for looking suspicious - `TEMPORAL_CHANGE_MAP` was
+never a candidate. Adding a 201st cleverly-worded query would test nothing new;
+adding a category that attacks a different gate would.
+
+### What 0/600 does NOT mean, and a fix for part of it
+
+Only **12.7% of adversarial queries abstain**. The rest route to a legal task
+and get answered - including **92% of out-of-scope queries**. "What is the
+weather forecast for this location?" routes to `SINGLE_VQA`. The capability
+matrix constrains which *tools* may run, not whether the *question* is
+answerable, and out-of-scope detection is a separate capability that is not
+built. `test_what_the_suite_does_not_prove` asserts this gap exists, so closing
+it forces someone to come back and update this claim rather than leaving a
+stale caveat here.
+
+One part of it was worth fixing immediately. A change question against a single
+image previously returned a land-cover answer with no indication that the
+question had not been answered. The router now also classifies **without** the
+legality restriction; if the unconstrained best task is one the configuration
+excludes, `RoutingTrace.config_excluded_task` records it and the answer opens
+with what was asked for and what was answered instead:
+
+> Note: this input configuration (SINGLE) cannot support TEMPORAL_CHANGE_MAP,
+> which is what the question asks for. Answering with SINGLE_LANDCOVER instead.
+
+It is a prefix rather than an abstention deliberately: the fallback answer is
+often still useful, and abstaining on every mismatch would trade a lot of
+coverage for a little precision.
+
+Full report in `docs/assets/adversarial/report.json`; regenerate with
+`python evaluation/adversarial.py`.
+
+## Task 3.14 - golden traces expanded to 31 (2026-08-29)
+
+From 10 to 31, chosen to pin what Phase 3 introduced and nothing else compares
+byte-for-byte. All **nine tasks** now appear in a golden - Phase 1 had none for
+`TEMPORAL_CHANGE_VQA`, so a change to the quantitative-change path broke
+nothing. Added: the seven remaining task/config combinations, three
+config-exclusion notices, three abstention triggers, five adversarial queries
+pinned end to end, and three sensor variants including the SWIR-free and
+panchromatic paths.
+
+A coverage test reads the recorded goldens and fails if any of the nine tasks
+is unrepresented, so the gap cannot silently reopen.
+
+The synthetic scene builders moved from `tests/conftest.py` to
+`evaluation/scenes.py` so the adversarial suite, the soak test and fault
+injection use the same definitions rather than importing from the test tree.
+The seeds and parameters are unchanged - the goldens are byte-compared against
+traces derived from these exact scenes, so changing a seed would silently
+invalidate all 31.

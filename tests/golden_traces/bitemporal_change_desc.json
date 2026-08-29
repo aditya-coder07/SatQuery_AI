@@ -303,6 +303,7 @@
       "name": "tfidf_logreg_v1",
       "top1": 0.9929
     },
+    "config_excluded_task": null,
     "legal_tasks": [
       "TEMPORAL_CHANGE_DESC",
       "TEMPORAL_CHANGE_VQA",

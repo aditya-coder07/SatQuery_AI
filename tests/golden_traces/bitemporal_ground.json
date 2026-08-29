@@ -50,22 +50,52 @@
   "ingest": {
     "checks": [
       {
-        "message": "single: CRS EPSG:32643",
+        "message": "t1: CRS EPSG:32643",
         "name": "crs_present",
         "status": "PASS"
       },
       {
-        "message": "single: 0.0% nodata",
+        "message": "t1: 0.0% nodata",
         "name": "nodata_fraction",
         "status": "PASS"
       },
       {
-        "message": "single: 128x128",
+        "message": "t1: 128x128",
         "name": "min_dimension",
+        "status": "PASS"
+      },
+      {
+        "message": "t2: CRS EPSG:32643",
+        "name": "crs_present",
+        "status": "PASS"
+      },
+      {
+        "message": "t2: 0.0% nodata",
+        "name": "nodata_fraction",
+        "status": "PASS"
+      },
+      {
+        "message": "t2: 128x128",
+        "name": "min_dimension",
+        "status": "PASS"
+      },
+      {
+        "message": "both images in EPSG:32643",
+        "name": "crs_match",
+        "status": "PASS"
+      },
+      {
+        "message": "GSD ratio 1.00x",
+        "name": "gsd_ratio",
+        "status": "PASS"
+      },
+      {
+        "message": "t1 2026-03-01 precedes t2 2026-06-01",
+        "name": "temporal_order",
         "status": "PASS"
       }
     ],
-    "config": "SINGLE",
+    "config": "BITEMPORAL_PAIR",
     "images": [
       {
         "bands": [
@@ -83,7 +113,26 @@
         "nodata_pct": 0.0,
         "path": "<volatile>",
         "polarisations": null,
-        "role": "single",
+        "role": "t1",
+        "sensor_guess": "SENTINEL-2"
+      },
+      {
+        "bands": [
+          "BLUE",
+          "GREEN",
+          "RED",
+          "NIR",
+          "SWIR1",
+          "SWIR2"
+        ],
+        "crs": "EPSG:32643",
+        "gsd_m": 10.0,
+        "modality": "MSI",
+        "modality_reason": "optical_band_names_present",
+        "nodata_pct": 0.0,
+        "path": "<volatile>",
+        "polarisations": null,
+        "role": "t2",
         "sensor_guess": "SENTINEL-2"
       }
     ],
@@ -109,12 +158,15 @@
   "routing": {
     "capability_matrix_version": "cm-2026.11.02",
     "classifier": {
-      "margin": 0.9882,
+      "margin": 0.9789,
       "name": "tfidf_logreg_v1",
-      "top1": 0.9926
+      "top1": 0.9846
     },
     "config_excluded_task": null,
     "legal_tasks": [
+      "TEMPORAL_CHANGE_DESC",
+      "TEMPORAL_CHANGE_VQA",
+      "TEMPORAL_CHANGE_MAP",
       "SINGLE_VQA",
       "SINGLE_CAPTION",
       "SINGLE_GROUND",

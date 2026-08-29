@@ -123,6 +123,7 @@ class Executor:
         query: str,
         prediction: IntentPrediction | None = None,
         on_event: Callable[[str, dict], None] | None = None,
+        config_excluded: str | None = None,
     ) -> Trace:
         """Run the plan. `on_event(name, data)` fires as each stage completes,
         which is what lets the API stream the trace live rather than posting it
@@ -188,6 +189,7 @@ class Executor:
             selected_task=plan.tasks[0],
             classifier=classifier,
             llm_tiebreak_invoked=False,  # Tier-2 tiebreak is Phase 3
+            config_excluded_task=config_excluded,
             capability_matrix_version=plan.matrix_version,
         )
 
@@ -345,6 +347,19 @@ class Executor:
             abstain_reason = f"{decision.reason} - {decision.resolving_input}"
         if abstained:
             final_answer = abstain_reason or final_answer
+        elif config_excluded:
+            # The user asked for something these inputs cannot support. The
+            # plan is legal and the answer is real, but it is not the answer
+            # that was asked for, and saying so is the difference between a
+            # helpful fallback and a silent substitution. This is a prefix
+            # rather than an abstention because the fallback answer is often
+            # still useful - abstaining on every mismatch would trade a large
+            # amount of coverage for a small amount of precision.
+            final_answer = (
+                f"Note: this input configuration ({manifest.config}) cannot "
+                f"support {config_excluded}, which is what the question asks "
+                f"for. Answering with {plan.tasks[0]} instead. "
+            ) + final_answer
 
         return Trace(
             run_id=plan.run_id,

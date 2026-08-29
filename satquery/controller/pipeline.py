@@ -61,7 +61,10 @@ class Controller:
         if tool_params:
             plan = self._apply_tool_params(plan, tool_params)
 
-        return self.executor.execute(plan, manifest, query, prediction=prediction)
+        return self.executor.execute(
+            plan, manifest, query, prediction=prediction,
+            config_excluded=getattr(self.router, "last_config_excluded", None),
+        )
 
     def _apply_tool_params(self, plan: Plan, tool_params: dict) -> Plan:
         """Merge caller-supplied params, then re-validate.

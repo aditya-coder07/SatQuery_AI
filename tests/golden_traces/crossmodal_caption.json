@@ -4,13 +4,16 @@
   "abstain_resolving_input": null,
   "abstain_trigger": null,
   "abstained": false,
-  "answer": "Produced a change mask; see the exported raster artifact.",
+  "answer": "A satellite image showing a fake landscape.",
   "artifacts": [
     "ndvi",
     "ndwi",
     "mndwi",
     "ndbi",
-    "change_mask"
+    "sigma0_vv",
+    "cov",
+    "vh_vv_ratio_db",
+    "landcover_map"
   ],
   "code_version": "0.2.0-phase1",
   "confidence": {
@@ -21,11 +24,11 @@
       "method": "uncalibrated (score is not a calibratable probability)"
     },
     "components": {
-      "agreement": 1.0,
+      "agreement": 0.9,
       "input_quality": 1.0,
-      "model": 0.89
+      "model": 0.8
     },
-    "final": 0.9619
+    "final": 0.8963
   },
   "execution": [
     {
@@ -39,16 +42,29 @@
           "homogeneity": 0.7353
         },
         "index_availability": {
-          "cov": false,
+          "cov": true,
           "glcm_texture": true,
           "mndwi": true,
           "ndbi": true,
           "ndvi": true,
           "ndwi": true,
-          "sigma0": false,
-          "vh_vv_ratio": false
+          "sigma0": true,
+          "vh_vv_ratio": true
         },
         "indices": {
+          "cov": {
+            "stats": {
+              "max": 2.4016,
+              "mean": 0.7668,
+              "min": 0.3941,
+              "p10": 0.6055,
+              "p50": 0.7213,
+              "p90": 0.9986,
+              "std": 0.1839,
+              "valid_fraction": 1.0
+            },
+            "window": 7
+          },
           "mndwi": {
             "fraction_above_threshold": 0.8222,
             "stats": {
@@ -108,6 +124,36 @@
             },
             "threshold": -0.3592,
             "threshold_method": "otsu"
+          },
+          "sigma0_vv": {
+            "fraction_above_threshold": 0.0652,
+            "stats": {
+              "max": 19.3053,
+              "mean": -14.2477,
+              "min": -65.1637,
+              "p10": -25.0405,
+              "p50": -14.3323,
+              "p90": -3.1326,
+              "std": 8.7747,
+              "valid_fraction": 1.0
+            },
+            "threshold": 0.0,
+            "threshold_method": "fixed_prior"
+          },
+          "vh_vv_ratio_db": {
+            "fraction_above_threshold": 0.1566,
+            "stats": {
+              "max": -4.2089,
+              "mean": -6.6475,
+              "min": -10.7019,
+              "p10": -7.6081,
+              "p50": -6.888,
+              "p90": -4.4486,
+              "std": 1.0494,
+              "valid_fraction": 1.0
+            },
+            "threshold": -5.9717,
+            "threshold_method": "otsu"
           }
         },
         "substitutions": [],
@@ -147,61 +193,93 @@
             "n_pixels": 16384,
             "separation": 5.5379,
             "value": -0.2723
+          },
+          {
+            "bimodal": false,
+            "fallback_reason": "no_bimodal_split_found - scene appears to contain a single class",
+            "index": "sigma0_vv",
+            "method": "fixed_prior",
+            "n_pixels": 16384,
+            "separation": 1.1858,
+            "value": 0.0
+          },
+          {
+            "bimodal": true,
+            "fallback_reason": null,
+            "index": "vh_vv_ratio_db",
+            "method": "otsu",
+            "n_pixels": 16384,
+            "separation": 4.8019,
+            "value": -5.9717
           }
         ]
       },
       "params": {},
-      "rationale_tag": "EXPLICIT_CHANGE_LANGUAGE",
+      "rationale_tag": "MASK_CONDITIONED_CAPTION",
       "runtime_ms": "<volatile>",
       "step": "step_1",
       "tool": "index_engine_v1",
       "version": "1.0.0"
     },
     {
-      "confidence": 0.89,
+      "confidence": 0.8,
       "confidence_method": "threshold_rule",
       "outputs": {
-        "changed_pixels": 420
+        "classes": [
+          "forest",
+          "water"
+        ]
       },
-      "params": {
-        "change_threshold": 0.5
-      },
-      "rationale_tag": "EXPLICIT_CHANGE_LANGUAGE",
+      "params": {},
+      "rationale_tag": "MASK_CONDITIONED_CAPTION",
       "runtime_ms": "<volatile>",
       "step": "step_2",
-      "tool": "change_mask_v1",
+      "tool": "landcover_v1",
+      "version": "0.1.0-stub"
+    },
+    {
+      "confidence": 0.9,
+      "confidence_method": "threshold_rule",
+      "outputs": {
+        "caption": "A satellite image showing a fake landscape."
+      },
+      "params": {},
+      "rationale_tag": "MASK_CONDITIONED_CAPTION",
+      "runtime_ms": "<volatile>",
+      "step": "step_3",
+      "tool": "caption_v1",
       "version": "0.1.0-stub"
     }
   ],
   "ingest": {
     "checks": [
       {
-        "message": "t1: CRS EPSG:32643",
+        "message": "optical: CRS EPSG:32643",
         "name": "crs_present",
         "status": "PASS"
       },
       {
-        "message": "t1: 0.0% nodata",
+        "message": "optical: 0.0% nodata",
         "name": "nodata_fraction",
         "status": "PASS"
       },
       {
-        "message": "t1: 128x128",
+        "message": "optical: 128x128",
         "name": "min_dimension",
         "status": "PASS"
       },
       {
-        "message": "t2: CRS EPSG:32643",
+        "message": "sar: CRS EPSG:32643",
         "name": "crs_present",
         "status": "PASS"
       },
       {
-        "message": "t2: 0.0% nodata",
+        "message": "sar: 0.0% nodata",
         "name": "nodata_fraction",
         "status": "PASS"
       },
       {
-        "message": "t2: 128x128",
+        "message": "sar: 128x128",
         "name": "min_dimension",
         "status": "PASS"
       },
@@ -216,12 +294,12 @@
         "status": "PASS"
       },
       {
-        "message": "t1 2026-03-01 precedes t2 2026-06-01",
-        "name": "temporal_order",
+        "message": "one optical and one SAR image present",
+        "name": "crossmodal_pairing",
         "status": "PASS"
       }
     ],
-    "config": "BITEMPORAL_PAIR",
+    "config": "CROSSMODAL_PAIR",
     "images": [
       {
         "bands": [
@@ -239,38 +317,37 @@
         "nodata_pct": 0.0,
         "path": "<volatile>",
         "polarisations": null,
-        "role": "t1",
+        "role": "optical",
         "sensor_guess": "SENTINEL-2"
       },
       {
         "bands": [
-          "BLUE",
-          "GREEN",
-          "RED",
-          "NIR",
-          "SWIR1",
-          "SWIR2"
+          "VV",
+          "VH"
         ],
         "crs": "EPSG:32643",
         "gsd_m": 10.0,
-        "modality": "MSI",
-        "modality_reason": "optical_band_names_present",
+        "modality": "SAR",
+        "modality_reason": "sar_metadata_present_and_no_optical_band_names",
         "nodata_pct": 0.0,
         "path": "<volatile>",
-        "polarisations": null,
-        "role": "t2",
-        "sensor_guess": "SENTINEL-2"
+        "polarisations": [
+          "VV",
+          "VH"
+        ],
+        "role": "sar",
+        "sensor_guess": "EOS-04"
       }
     ],
     "index_availability": {
-      "cov": false,
+      "cov": true,
       "glcm_texture": true,
       "mndwi": true,
       "ndbi": true,
       "ndvi": true,
       "ndwi": true,
-      "sigma0": false,
-      "vh_vv_ratio": false
+      "sigma0": true,
+      "vh_vv_ratio": true
     },
     "mode": "operational",
     "tiling": {
@@ -280,19 +357,17 @@
       "retrieved_tiles": null
     }
   },
-  "query": "Produce a change mask.",
+  "query": "Describe this scene.",
   "routing": {
     "capability_matrix_version": "cm-2026.11.02",
     "classifier": {
-      "margin": 0.996,
+      "margin": 0.9754,
       "name": "tfidf_logreg_v1",
-      "top1": 0.9974
+      "top1": 0.9826
     },
     "config_excluded_task": null,
     "legal_tasks": [
-      "TEMPORAL_CHANGE_DESC",
-      "TEMPORAL_CHANGE_VQA",
-      "TEMPORAL_CHANGE_MAP",
+      "XMODAL_JOINT_EXTRACT",
       "SINGLE_VQA",
       "SINGLE_CAPTION",
       "SINGLE_GROUND",
@@ -300,14 +375,16 @@
       "CLARIFY_OR_ABSTAIN"
     ],
     "llm_tiebreak_invoked": false,
-    "selected_task": "TEMPORAL_CHANGE_MAP"
+    "selected_task": "SINGLE_CAPTION"
   },
   "run_id": "<volatile>",
   "timestamp_utc": "<volatile>",
   "verification": {
     "built_up_path": "ndbi",
     "complementarity": {},
-    "conflicts": [],
+    "conflicts": [
+      "sigma0_vv: no bimodal split found, threshold is a fixed prior rather than data-derived"
+    ],
     "entailment_gate": {
       "action": "none",
       "backend": "deterministic",
@@ -321,7 +398,9 @@
       "mndwi": 1.0,
       "ndbi": 1.0,
       "ndvi": 1.0,
-      "ndwi": 1.0
+      "ndwi": 1.0,
+      "sigma0_vv": 0.4,
+      "vh_vv_ratio_db": 1.0
     }
   },
   "weights_hashes": {}

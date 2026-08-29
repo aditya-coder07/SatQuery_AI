@@ -4,9 +4,9 @@
   "abstain_resolving_input": null,
   "abstain_trigger": null,
   "abstained": false,
-  "answer": "Localised 1 matching region.",
+  "answer": "A satellite image showing a fake landscape.",
   "artifacts": [
-    "grounding_bboxes"
+    "landcover_map"
   ],
   "code_version": "0.2.0-phase1",
   "confidence": {
@@ -19,31 +19,71 @@
     "components": {
       "agreement": 1.0,
       "input_quality": 1.0,
-      "model": 0.95
+      "model": 0.8
     },
-    "final": 0.983
+    "final": 0.9283
   },
   "execution": [
     {
-      "confidence": 0.95,
-      "confidence_method": "threshold_rule",
+      "confidence": 1.0,
+      "confidence_method": "deterministic",
       "outputs": {
-        "bounding_boxes": [
-          {
-            "xmax": 50,
-            "xmin": 10,
-            "ymax": 50,
-            "ymin": 10
-          }
-        ]
+        "glcm": {
+          "contrast": 5.0067,
+          "correlation": 0.9404,
+          "energy": 0.5637,
+          "homogeneity": 0.8249
+        },
+        "index_availability": {
+          "cov": false,
+          "glcm_texture": true,
+          "mndwi": false,
+          "ndbi": false,
+          "ndvi": false,
+          "ndwi": false,
+          "sigma0": false,
+          "vh_vv_ratio": false
+        },
+        "indices": {},
+        "substitutions": [
+          "MNDWI unavailable (no SWIR1); NDWI used as the water index"
+        ],
+        "thresholds": []
       },
-      "params": {
-        "confidence_threshold": 0.5
-      },
-      "rationale_tag": "DETECTED_THEN_COUNTED",
+      "params": {},
+      "rationale_tag": "MASK_CONDITIONED_CAPTION",
       "runtime_ms": "<volatile>",
       "step": "step_1",
-      "tool": "grounding_v1",
+      "tool": "index_engine_v1",
+      "version": "1.0.0"
+    },
+    {
+      "confidence": 0.8,
+      "confidence_method": "threshold_rule",
+      "outputs": {
+        "classes": [
+          "forest",
+          "water"
+        ]
+      },
+      "params": {},
+      "rationale_tag": "MASK_CONDITIONED_CAPTION",
+      "runtime_ms": "<volatile>",
+      "step": "step_2",
+      "tool": "landcover_v1",
+      "version": "0.1.0-stub"
+    },
+    {
+      "confidence": 0.9,
+      "confidence_method": "threshold_rule",
+      "outputs": {
+        "caption": "A satellite image showing a fake landscape."
+      },
+      "params": {},
+      "rationale_tag": "MASK_CONDITIONED_CAPTION",
+      "runtime_ms": "<volatile>",
+      "step": "step_3",
+      "tool": "caption_v1",
       "version": "0.1.0-stub"
     }
   ],
@@ -69,31 +109,26 @@
     "images": [
       {
         "bands": [
-          "BLUE",
-          "GREEN",
-          "RED",
-          "NIR",
-          "SWIR1",
-          "SWIR2"
+          "PAN"
         ],
         "crs": "EPSG:32643",
-        "gsd_m": 10.0,
-        "modality": "MSI",
-        "modality_reason": "optical_band_names_present",
+        "gsd_m": 0.65,
+        "modality": "PAN",
+        "modality_reason": "single_band_defaulted_to_panchromatic",
         "nodata_pct": 0.0,
         "path": "<volatile>",
         "polarisations": null,
         "role": "single",
-        "sensor_guess": "SENTINEL-2"
+        "sensor_guess": "CARTOSAT-2S"
       }
     ],
     "index_availability": {
       "cov": false,
       "glcm_texture": true,
-      "mndwi": true,
-      "ndbi": true,
-      "ndvi": true,
-      "ndwi": true,
+      "mndwi": false,
+      "ndbi": false,
+      "ndvi": false,
+      "ndwi": false,
       "sigma0": false,
       "vh_vv_ratio": false
     },
@@ -105,13 +140,13 @@
       "retrieved_tiles": null
     }
   },
-  "query": "Show me where the roads are.",
+  "query": "Describe this image.",
   "routing": {
     "capability_matrix_version": "cm-2026.11.02",
     "classifier": {
-      "margin": 0.9882,
+      "margin": 0.9901,
       "name": "tfidf_logreg_v1",
-      "top1": 0.9926
+      "top1": 0.9932
     },
     "config_excluded_task": null,
     "legal_tasks": [
@@ -122,14 +157,16 @@
       "CLARIFY_OR_ABSTAIN"
     ],
     "llm_tiebreak_invoked": false,
-    "selected_task": "SINGLE_GROUND"
+    "selected_task": "SINGLE_CAPTION"
   },
   "run_id": "<volatile>",
   "timestamp_utc": "<volatile>",
   "verification": {
     "built_up_path": "not_computed",
     "complementarity": {},
-    "conflicts": [],
+    "conflicts": [
+      "substitution: MNDWI unavailable (no SWIR1); NDWI used as the water index"
+    ],
     "entailment_gate": {
       "action": "none",
       "backend": "deterministic",

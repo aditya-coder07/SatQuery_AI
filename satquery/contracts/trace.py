@@ -20,6 +20,10 @@ class RoutingTrace(BaseModel):
     selected_task: TaskID
     classifier: ClassifierTrace
     llm_tiebreak_invoked: bool
+    # Set when the query's most likely task was removed by config gating -
+    # the user asked for something these inputs cannot support. The plan is
+    # still legal; this records that the answer is not what was asked for.
+    config_excluded_task: str | None = None
     capability_matrix_version: str
 
 class StepExecutionTrace(BaseModel):
