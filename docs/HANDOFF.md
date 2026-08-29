@@ -1,7 +1,7 @@
 # Session handoff — 2026-08-29
 
 State: branch `phase-0-closeout`, **770 tests passing**, working tree clean,
-**23 commits unpushed** to PR #1.
+**25 commits unpushed** to PR #1.
 
 **Update 2026-08-30.** The two items this file listed as highest-value were
 worked. **CDVQA is on disk, verified and measured** - the system scores
@@ -116,7 +116,7 @@ trees" was checked on vegetation only and the water claim never at all.
    0.25 m SAR rather than the optical-only arm that shipped.
 2. **Verification item 10** — SIH deadline and submission format. Needs the team.
 3. **The Cartosat priced-data risk** — for the team lead.
-4. **Push the 23 commits** and merge PR #1.
+4. **Push the 25 commits** and merge PR #1.
 
 ### Known gaps, deliberately left
 
