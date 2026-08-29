@@ -218,14 +218,45 @@ class IndexEngineStub(ToolProtocol):
         return [self.run(m, params) for m in manifests]
 
 
+# index_engine_v1 is the first tool promoted from stub to real (plan task 1.2).
+# Imported here rather than at module top to keep the stub definitions above
+# free of any dependency on the real implementation.
+from satquery.tools.index_engine import IndexEngine  # noqa: E402
+from satquery.tools.change_vqa import ChangeVQATemplate  # noqa: E402
+
+
+def _fusion_tool():
+    """Real triad when a checkpoint is configured, else the stub."""
+    from satquery.tools.optsar_fusion import OptSARFusionTool, is_available
+
+    return OptSARFusionTool() if is_available()[0] else OptSARFusionStub()
+
+
+def _change_mask_tool():
+    """Real detector when a checkpoint is configured, else the stub."""
+    from satquery.tools.change_mask import ChangeMaskTool, is_available
+
+    return ChangeMaskTool() if is_available()[0] else ChangeMaskStub()
+
+# rs_vqa_v1 uses the real QLoRA adapter only when SATQUERY_VQA_BASE and
+# SATQUERY_VQA_ADAPTER are both set and the GPU stack is importable.
+# Otherwise the stub stays, so CI and GPU-less machines keep a green suite
+# rather than half-loading a model and answering badly.
+def _vqa_tool():
+    from satquery.tools.rs_vqa import RSVQATool, is_available
+
+    available, _reason = is_available()
+    return RSVQATool() if available else RSVQAStub()
+
+
 REGISTRY = {
-    "rs_vqa_v1": RSVQAStub(),
+    "rs_vqa_v1": _vqa_tool(),
     "caption_v1": CaptionStub(),
     "grounding_v1": GroundingStub(),
     "landcover_v1": LandcoverStub(),
-    "optsar_fusion_v1": OptSARFusionStub(),
-    "change_mask_v1": ChangeMaskStub(),
+    "optsar_fusion_v1": _fusion_tool(),
+    "change_mask_v1": _change_mask_tool(),
     "change_caption_v1": ChangeCaptionStub(),
-    "change_vqa_v1": ChangeVQAStub(),
-    "index_engine_v1": IndexEngineStub(),
+    "change_vqa_v1": ChangeVQATemplate(),
+    "index_engine_v1": IndexEngine(),
 }

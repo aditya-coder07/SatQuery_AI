@@ -5,3 +5,27 @@ checkpoints/
 checkpoints_backup/
 
 *.egg-info/
+
+# Python packaging / test caches
+build/
+dist/
+.pytest_cache/
+
+# Frontend build output and dependencies
+frontend/node_modules/
+frontend/.next/
+frontend/out/
+
+# Runtime output: index rasters, evidence packs, the SQLite run store
+artifacts/
+*.db
+
+# Local environment / secrets
+.env
+.env.*
+
+# Datasets and downloaded satellite products. Never commit these: they are
+# large binaries, and per docs/03 section 4.3 the Bhoonidhi products are a
+# held-out cross-sensor generalisation set that must never be trained on.
+data/
+models/

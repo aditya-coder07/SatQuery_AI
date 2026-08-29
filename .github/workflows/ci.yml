@@ -15,12 +15,15 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
-          python-version: "3.11"
+          # Must be >= 3.12: rasterio 1.5.1 publishes no wheels below it, so
+          # a 3.11 runner cannot resolve the pinned dependency set.
+          python-version: "3.12"
 
       - name: Install dependencies
-        run: |
-          pip install -e .
-          pip install pytest
+        # The dev extra carries pytest and httpx; httpx is required by
+        # fastapi.testclient, so installing pytest alone makes tests/test_api.py
+        # fail at import.
+        run: pip install -e ".[dev]"
 
       - name: Run capability matrix validation
         run: satquery matrix --validate

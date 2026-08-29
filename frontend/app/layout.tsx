@@ -1,3 +1,5 @@
+import './globals.css';
+
 export const metadata = {
   title: 'SatQuery AI',
   description: 'Interactive Vision-Language Assistant for Remote Sensing',
