@@ -82,6 +82,32 @@ Stated plainly so the trace is not mistaken for more than it is:
 - **Non-VQA metrics** return `metric_status: "not_implemented"` rather than a
   fabricated score.
 
+## Task 2.5 - mask-conditioned change captioning (2026-08-29)
+
+Trained on LEVIR-MCI (6,815 train / 1,929 test pairs, official splits), 0.29M
+parameters, 6 epochs. Conditioned on the change mask from task 2.4, so the
+captioner starts from *where* the change is and spends capacity on describing
+it rather than locating it - and the prose cannot disagree with the mask the
+system already exported.
+
+| Subset | n | BLEU-4 |
+|---|---|---|
+| **changed pairs** | 964 | **0.3063** |
+| unchanged pairs | 965 | 0.9706 |
+| aggregate | 1,929 | 0.5686 |
+
+**Only the changed row is meaningful.** LEVIR-CC is ~50/50 changed against
+unchanged, and the unchanged half is answered correctly by the single string
+"there is no difference". The aggregate is therefore the mean of a trivial
+half and the real task, and quoting it alone overstates change-captioning
+ability by about 85%. The training script now reports the split by
+construction so the aggregate cannot be quoted on its own.
+
+The model has not collapsed - 85 distinct captions across 1,929 pairs,
+including plausible ones such as "some roads and houses are built on
+bareland" - but 51% of its output is the majority string, which is what a
+BLEU aggregate on a balanced set rewards.
+
 ## Task 2.1 - Track A at scale (2026-08-29, later)
 
 30,000 patches (2 of 18 shards, ~11% of BigEarthNet), all 12 bands, 0.94M
