@@ -27,7 +27,7 @@ import os
 
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse
+from fastapi.responses import Response, StreamingResponse
 
 from satquery.controller.pipeline import Controller
 from satquery.api.store import RunStore
@@ -206,6 +206,53 @@ async def stream_run(
         generate(),
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
+
+
+@app.get("/runs/{run_id}/preview/{role}")
+def get_preview(run_id: str, role: str, max_edge: int = 512):
+    """Render one of a run's input images as a PNG.
+
+    Browsers cannot display GeoTIFF, and the bi-temporal swipe and
+    optical-SAR blend comparators (task 2.12) need something they can draw.
+    This reuses the same `to_rgb_preview` the VQA tool feeds the model, so
+    what the user compares is what the model saw - band selection and
+    stretch included, rather than a separately-tuned display rendering that
+    could look better or worse than the actual input.
+    """
+    from satquery.ingest.reader import read_image
+    from satquery.tools.imaging import to_rgb_preview
+
+    record = get_store().get(run_id)
+    if record is None or not record.get("trace"):
+        raise HTTPException(404, f"no such run: {run_id}")
+
+    images = record["trace"]["ingest"]["images"]
+    match = next((i for i in images if i.get("role") == role), None)
+    if match is None:
+        raise HTTPException(
+            404,
+            f"no image with role {role!r}; available: "
+            f"{[i.get('role') for i in images]}",
+        )
+
+    path = Path(match["path"])
+    if not path.exists():
+        raise HTTPException(410, "the source image is no longer on disk")
+
+    try:
+        image, _ = to_rgb_preview(read_image(path), max_edge=max(64, min(max_edge, 2048)))
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(500, _client_safe_error(exc)) from exc
+
+    import io
+
+    buffer = io.BytesIO()
+    image.save(buffer, format="PNG")
+    return Response(
+        content=buffer.getvalue(),
+        media_type="image/png",
+        headers={"Cache-Control": "public, max-age=3600"},
     )
 
 

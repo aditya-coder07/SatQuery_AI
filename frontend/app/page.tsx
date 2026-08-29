@@ -2,6 +2,8 @@
 
 import { useCallback, useRef, useState } from 'react';
 
+import Comparator from './Comparator';
+
 const API = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000';
 
 type TraceEvent = { name: string; data: any };
@@ -62,6 +64,8 @@ export default function Page() {
   const [checks, setChecks] = useState<Check[]>([]);
   const [running, setRunning] = useState(false);
   const [error, setError] = useState<string>('');
+  const [runId, setRunId] = useState<string>('');
+  const [roles, setRoles] = useState<string[]>([]);
   const traceRef = useRef<HTMLDivElement>(null);
 
   const submit = useCallback(
@@ -79,6 +83,8 @@ export default function Page() {
       setTask('');
       setConfidence(null);
       setChecks([]);
+      setRunId('');
+      setRoles([]);
 
       const form = new FormData();
       form.append('query', query);
@@ -93,8 +99,11 @@ export default function Page() {
         for await (const event of parseSSE(res.body)) {
           setEvents((prev) => [...prev, event]);
 
-          if (event.name === 'ingest') {
+          if (event.name === 'run_started') {
+            setRunId(event.data.run_id ?? '');
+          } else if (event.name === 'ingest') {
             setChecks(event.data.checks ?? []);
+            setRoles((event.data.images ?? []).map((i: any) => i.role));
           } else if (event.name === 'routing') {
             setTask(event.data.selected_task ?? '');
           } else if (event.name === 'confidence') {
@@ -205,6 +214,12 @@ export default function Page() {
           )}
         </section>
       </div>
+
+      {runId && roles.length === 2 && (
+        <div style={{ marginTop: 16 }}>
+          <Comparator api={API} runId={runId} roles={roles} />
+        </div>
+      )}
 
       <section className="panel" style={{ marginTop: 16 }}>
         <h2>Live trace ({events.length} events)</h2>

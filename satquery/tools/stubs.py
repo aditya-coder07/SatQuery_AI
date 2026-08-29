@@ -225,6 +225,13 @@ from satquery.tools.index_engine import IndexEngine  # noqa: E402
 from satquery.tools.change_vqa import ChangeVQATemplate  # noqa: E402
 
 
+def _fusion_tool():
+    """Real triad when a checkpoint is configured, else the stub."""
+    from satquery.tools.optsar_fusion import OptSARFusionTool, is_available
+
+    return OptSARFusionTool() if is_available()[0] else OptSARFusionStub()
+
+
 def _change_mask_tool():
     """Real detector when a checkpoint is configured, else the stub."""
     from satquery.tools.change_mask import ChangeMaskTool, is_available
@@ -247,7 +254,7 @@ REGISTRY = {
     "caption_v1": CaptionStub(),
     "grounding_v1": GroundingStub(),
     "landcover_v1": LandcoverStub(),
-    "optsar_fusion_v1": OptSARFusionStub(),
+    "optsar_fusion_v1": _fusion_tool(),
     "change_mask_v1": _change_mask_tool(),
     "change_caption_v1": ChangeCaptionStub(),
     "change_vqa_v1": ChangeVQATemplate(),
