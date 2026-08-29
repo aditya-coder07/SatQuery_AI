@@ -1046,3 +1046,106 @@ averaged away by light ones.
 `make soak` runs the 120-iteration version. `tests/test_soak.py` runs the
 plan's 20 in CI and asserts properties rather than a memory number, because
 RSS on a shared runner is noise.
+
+## Task 3.7 - four ablations (2026-08-29)
+
+`evaluation/ablations.py` was an empty placeholder from Phase 0. Two of the
+four can be measured properly now, one is a negative result measured offline
+in task 2.3, and one is not comparable yet. Each arm reports its own status
+rather than presenting four tables of equal apparent authority.
+
+### 1. Agent vs monolith - the strongest architectural result so far
+
+The monolith is the **same classifier with the guards removed**: it takes its
+unconstrained top-1 task and plans for it, with no config gating and no plan
+validation. Same model, same training, different architecture around it - not
+a strawman.
+
+| arm | plans | impossible plans | rate |
+|---|---|---|---|
+| agent (gated + validated) | 600 | **0** | 0.0% |
+| monolith (classifier alone) | 600 | **148** | **24.7%** |
+
+Ungated, the classifier selects change detection on a single image, fusion
+without SAR, and temporal tasks on a cross-modal pair on nearly a quarter of
+adversarial queries. Gated, none of those reach a plan. **The structure, not
+the model, produces the guarantee** - which is precisely the claim the
+architecture makes, now with a number behind it.
+
+Caveat, stated in the report itself: this measures **legality, not answer
+quality**. It shows the guards prevent impossible plans; it does not show the
+agent answers better, which needs the learned tools and a labelled set.
+
+### 2. Verifier on/off - and what the gate costs
+
+| arm | ms/query | sentences examined | flagged |
+|---|---|---|---|
+| verifier off | 120.2 | 0 | 0 |
+| verifier on (deterministic) | 122.1 | 10 | 0 |
+| verifier on (+ NLI) | **2745.1** | 10 | 0 |
+
+| controlled set (9 known-false sentences) | caught |
+|---|---|
+| deterministic backend | 5 / 9 |
+| deterministic + NLI | **9 / 9** |
+| gate off | 0 / 9 - all nine reach the user |
+
+Two findings, and both matter for demo day:
+
+**The deterministic gate is effectively free** at +1.9 ms/query. There is no
+reason to ever run without it.
+
+**The NLI backend costs +2,624.9 ms/query - 22x the entire unverified
+pipeline.** It is a transformer forward pass per (premise, sentence) pair on
+CPU. That is too slow for an interactive demo and is fine for batch
+verification, which is now a documented operational split rather than a
+surprise on stage.
+
+A first version of this measurement reported the gate costing **+440 ms/query**.
+That was wrong: the first arm was paying every cold-start cost - rasterio
+drivers, the index engine's first pass, the classifier fit - and the ablation
+attributed them to the verifier. Adding a warm-up pass before timing dropped
+it to +1.9 ms. **Same measurement artifact the soak test found at 20
+iterations**, in a completely different experiment, in the same session.
+
+Caveat: the **end-to-end** arm flags nothing, and that is a property of the
+system's current state rather than of the gate - eight of nine tools are stubs
+returning fixed strings, and a fixed string contradicts nothing. The gate's
+value cannot be demonstrated end to end until the learned tools replace the
+stubs. Both arms are reported so the difference is visible rather than glossed.
+
+### 3. Triad - optical / SAR / fused
+
+From the task 2.3 training run (`checkpoints/optsar_fusion/metrics.json`):
+
+| arm | score |
+|---|---|
+| optical only | **0.7778** |
+| SAR only | 0.7410 |
+| fused | 0.7714 |
+| **complementarity gain** | **-0.0064** |
+
+Fusion does **not** beat optical alone. Reported as a negative result, with
+the reason already established in 2.3: WHU-OPT-SAR scene-level multi-label
+classification is too coarse a task - both modalities can independently answer
+"is there water somewhere in this tile", leaving nothing for fusion to add.
+Complementarity is inherently spatial, so demonstrating it needs a per-pixel
+segmentation head.
+
+### 4. Two-track - not comparable, and why
+
+| track | benchmark | metric | value |
+|---|---|---|---|
+| Track A (specialist head) | BigEarthNet-19 official test shard | mAP | 0.2854 |
+| Track B (QLoRA VLM) | VRSBench + RSVQA-LR subset | VQA accuracy | not run |
+
+**This ablation is not answerable from what exists.** The two tracks were
+trained and evaluated on different tasks and different splits, so no
+comparison between the numbers means anything - quoting them side by side
+would be the exact error corrected twice already in this project.
+
+What would make it real, stated so it can be built: **one task both tracks can
+perform, on one split, with one metric.** Land-cover classification is the
+natural choice - ask the VLM "which of these 19 classes are present" on the
+same BigEarthNet test shard the specialist head is scored on. That is a run
+that has not happened, not a number that is missing.

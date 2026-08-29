@@ -1,0 +1,44 @@
+{
+  "ablations": [
+    {
+      "name": "verifier on/off",
+      "question": "What does the entailment gate remove, and what does it cost?",
+      "status": "measured",
+      "arms": {
+        "verifier_off": {
+          "queries": 8,
+          "sentences_examined": 0,
+          "sentences_flagged": 0,
+          "answers_modified": 0,
+          "total_runtime_ms": 961.6,
+          "ms_per_query": 120.2
+        },
+        "verifier_on": {
+          "queries": 8,
+          "sentences_examined": 10,
+          "sentences_flagged": 0,
+          "answers_modified": 0,
+          "total_runtime_ms": 977.0,
+          "ms_per_query": 122.1
+        },
+        "verifier_on_with_nli": {
+          "queries": 8,
+          "sentences_examined": 10,
+          "sentences_flagged": 0,
+          "answers_modified": 0,
+          "total_runtime_ms": 21960.8,
+          "ms_per_query": 2745.1
+        },
+        "controlled_false_sentences": {
+          "false_sentences_presented": 9,
+          "caught_by_deterministic": 5,
+          "caught_by_deterministic+nli": 9,
+          "reached_the_user_if_gate_off": 9
+        }
+      },
+      "verdict": "On the controlled set the best backend catches 9/9 sentences that contradict the measured indices; with the gate off all 9 reach the user. The deterministic backend costs +1.9 ms per query; adding NLI costs +2624.9 ms per query, which is 22x the whole unverified pipeline and is too slow for an interactive demo on CPU.",
+      "caveat": "The END-TO-END arm currently flags almost nothing, and that is a property of the system's current state rather than of the gate: eight of the nine tools are stubs returning fixed strings, and a fixed string does not contradict anything. The gate's value cannot be demonstrated end to end until the learned tools replace the stubs. The controlled arm is what shows the gate works; the end-to-end arm is reported so the difference is visible rather than glossed."
+    }
+  ],
+  "note": "Each arm reports its own status. Two of the four are measured, one is a negative result measured offline in task 2.3, and one is not comparable yet with the reason and the missing run named. Four tables of equal apparent authority would have been the dishonest presentation."
+}
