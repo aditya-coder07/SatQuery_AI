@@ -20,6 +20,11 @@ from satquery.jsonsafe import json_safe
 from satquery.report.pdf_report import export_pdf, raster_preview
 from satquery.report.registry import benchmarks, model_registry
 
+# reportlab is documented as optional, so the tests must behave as if it is:
+# skipping here is what makes that claim true rather than aspirational. It is
+# in the `dev` extra, so CI does run these.
+reportlab = pytest.importorskip("reportlab", reason="reportlab is optional")
+
 
 def pdf_text(path: Path) -> str:
     raw = path.read_bytes().decode("latin-1", "replace")

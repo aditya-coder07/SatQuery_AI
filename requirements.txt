@@ -19,6 +19,11 @@ fastapi==0.128.0
 uvicorn==0.40.0
 python-multipart==0.0.30
 
+# Browser previews (satquery/tools/imaging.py) and PDF image embedding. A
+# direct import that was undeclared, surviving only on scikit-image pulling
+# it in transitively.
+pillow==12.1.0
+
 # PDF report generation (task 3.12). Optional: satquery.report is not on the
 # runtime path, the import is deferred, and the error names this line. A
 # machine that only serves queries does not need a PDF engine.

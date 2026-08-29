@@ -23,10 +23,29 @@ from satquery.verify.entailment import (
 )
 
 NLI_PATH = os.environ.get("SATQUERY_NLI") or "models/nli_deberta_mnli"
-nli_available = pytest.mark.skipif(
-    not Path(NLI_PATH).exists(),
-    reason=f"no MNLI checkpoint at {NLI_PATH}",
-)
+
+
+def _nli_runnable() -> tuple[bool, str]:
+    """The backend needs a checkpoint AND the stack that loads it.
+
+    Gating on the checkpoint alone was wrong: CI passes only because
+    `models/` is gitignored so the path is absent. A machine that HAS the
+    checkpoint but no torch - a broken or partial install - ran these and
+    failed on an import, which is a confusing way to learn the environment is
+    incomplete.
+    """
+    if not Path(NLI_PATH).exists():
+        return False, f"no MNLI checkpoint at {NLI_PATH}"
+    for module in ("torch", "transformers"):
+        try:
+            __import__(module)
+        except ImportError:
+            return False, f"{module} is not installed"
+    return True, ""
+
+
+_runnable, _why = _nli_runnable()
+nli_available = pytest.mark.skipif(not _runnable, reason=_why or "runnable")
 
 
 def payload(**fractions: float) -> dict:

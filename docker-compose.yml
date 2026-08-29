@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   api:
     build:
@@ -15,7 +13,9 @@ services:
     environment:
       - HF_HUB_OFFLINE=1
       - TRANSFORMERS_OFFLINE=1
-      - PROFILE=${PROFILE:-lite}
+      # satquery/controller/profiles.py reads SATQUERY_PROFILE.
+      # This said PROFILE, so choosing lite through compose did nothing.
+      - SATQUERY_PROFILE=${SATQUERY_PROFILE:-lite}
     deploy:
       resources:
         reservations:
@@ -36,7 +36,9 @@ services:
     environment:
       - HF_HUB_OFFLINE=1
       - TRANSFORMERS_OFFLINE=1
-      - PROFILE=${PROFILE:-lite}
+      # satquery/controller/profiles.py reads SATQUERY_PROFILE.
+      # This said PROFILE, so choosing lite through compose did nothing.
+      - SATQUERY_PROFILE=${SATQUERY_PROFILE:-lite}
     deploy:
       resources:
         reservations:
