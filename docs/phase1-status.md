@@ -133,6 +133,56 @@ A test writes 1e4 into every masked-out band and asserts the output is
 unchanged - if that failed the mask would be decorative and 4-band inference
 would be corrupted by whatever sat in the missing channels.
 
+## Cross-sensor test on real Cartosat imagery (2026-08-29)
+
+The simulated ablation masks Sentinel-2 bands, so it shares S2 radiometry and
+GSD. This is the real thing: the encoder run on the held-out Cartosat-2E
+product it was never trained on.
+
+**No labels exist for that scene**, so mAP is impossible. Predictions are
+instead scored against the deterministic index engine on the same pixels
+(Spearman rank correlation) - the verifier relationship the system is built
+around. Because Cartosat has 4 bands and 1.6 m GSD while training was 10 bands
+at 10 m, the scene is evaluated twice: resampled to 10 m to isolate the *band*
+gap, and at native resolution where both gaps apply.
+
+| Agreement with physics | 10 m: dropout | 10 m: control | 1.6 m: dropout | 1.6 m: control |
+|---|---|---|---|---|
+| vegetation vs NDVI | **+0.476** | +0.369 | **-0.135** | +0.028 |
+| water vs NDWI | **+0.689** | +0.598 | +0.672 | +0.653 |
+| built-up vs -NDVI | **+0.726** | +0.676 | +0.745 | +0.627 |
+
+### Finding 1: band dropout helps on the real sensor
+
+Dropout wins on all three metrics at matched GSD. This corroborates the
+simulated ablation using the actual target sensor, which is materially
+stronger evidence than masking S2 bands.
+
+### Finding 2: the GSD gap, not the band gap, is the dominant problem
+
+Vegetation agreement collapses at native resolution for **both** models
+(+0.476 -> -0.135 with dropout; +0.369 -> +0.028 without), while water and
+built-up hold. At 1.6 m a 120x120 patch covers 192 m; training patches
+covered 1200 m. Individual fields and trees resolve instead of aggregating,
+so vegetation texture is unrecognisable - whereas water bodies and built-up
+areas stay recognisable because they are large and homogeneous.
+
+**This is direct evidence for the Stage A2/A3 resolution bridge** (docs/03:
+WHU-OPT-SAR at ~5 m). That was a design assumption; it now has data behind it,
+and the data says resolution adaptation matters more than band adaptation.
+
+### The caveat that limits all of the above
+
+**NDVI and the model are not independent.** Both read the same RED and NIR
+pixels, so positive correlation is partly structural and the absolute values
+should not be read as accuracy. What is meaningful is the *difference between
+conditions* - dropout vs control, 10 m vs native - since the shared-input
+effect is identical across them. A negative correlation is still damning:
+the information is plainly present in bands the model can see, and it fails
+to use it.
+
+Also: one scene, one seed per condition, 100 patches at 10 m.
+
 ## Track B v0 - QLoRA on a 6 GB laptop GPU (2026-08-29)
 
 Ran on an RTX 4050 Laptop (6 GB, compute 8.9, bf16), not a cloud T4.

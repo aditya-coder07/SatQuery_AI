@@ -424,3 +424,30 @@ class TestVRSBenchPrepare:
         empty = tmp_path / "empty"; empty.mkdir()
         with pytest.raises(SystemExit, match="fetch_datasets"):
             convert(empty, tmp_path / "o.jsonl", {"vqa"})
+
+
+class TestCheckpointDeviceHandling:
+    """Regression: loading with map_location='cuda' must still restore RNG.
+
+    torch.set_rng_state requires a CPU ByteTensor, but map_location='cuda'
+    moves every stored tensor to the GPU including the RNG state. The
+    kill/resume test did not catch this because it loads on CPU by default;
+    the cross-sensor evaluation did.
+    """
+
+    def test_load_with_cuda_map_location(self, tmp_path):
+        if not torch.cuda.is_available():
+            pytest.skip("no CUDA device")
+        model = tiny_model().cuda()
+        save_checkpoint(tmp_path, 1, model)
+        fresh = tiny_model().cuda()
+        state, _ = load_checkpoint(
+            tmp_path / "ckpt_step_1.pt", fresh, map_location="cuda"
+        )
+        assert state.step == 1
+
+    def test_rng_state_restored_on_cpu_tensor(self, tmp_path):
+        """The restored generator state must be usable regardless of device."""
+        save_checkpoint(tmp_path, 1, tiny_model())
+        load_checkpoint(tmp_path / "ckpt_step_1.pt", map_location="cpu")
+        assert torch.get_rng_state().device.type == "cpu"

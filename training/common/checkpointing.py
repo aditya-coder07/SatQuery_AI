@@ -60,13 +60,16 @@ def capture_rng_state() -> dict[str, Any]:
 def restore_rng_state(state: dict[str, Any]) -> None:
     random.setstate(state["python"])
     np.random.set_state(state["numpy"])
-    # torch requires a ByteTensor on CPU; a checkpoint moved between machines
-    # can arrive as something else.
-    torch.set_rng_state(torch.as_tensor(state["torch"], dtype=torch.uint8))
+    # torch.set_rng_state requires a ByteTensor **on CPU**. Loading a
+    # checkpoint with map_location="cuda" moves every stored tensor to the
+    # GPU, including this one, so the .cpu() is load-bearing rather than
+    # defensive - without it, restoring on GPU raises
+    # "RNG state must be a torch.ByteTensor".
+    torch.set_rng_state(torch.as_tensor(state["torch"], dtype=torch.uint8).cpu())
     if "cuda" in state and torch.cuda.is_available():
         try:
             torch.cuda.set_rng_state_all(
-                [torch.as_tensor(s, dtype=torch.uint8) for s in state["cuda"]]
+                [torch.as_tensor(s, dtype=torch.uint8).cpu() for s in state["cuda"]]
             )
         except (RuntimeError, ValueError):
             # Resuming on a machine with a different GPU count is legitimate;
