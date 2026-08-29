@@ -1,7 +1,8 @@
 # Session handoff — 2026-08-29
 
 State: branch `phase-0-closeout`, **770 tests passing**, working tree clean,
-**25 commits unpushed** to PR #1.
+**pushed**. PR #1 was already merged; the 25 Phase-3-and-later commits are
+open as **PR #2**.
 
 **Update 2026-08-30.** The two items this file listed as highest-value were
 worked. **CDVQA is on disk, verified and measured** - the system scores
@@ -116,7 +117,8 @@ trees" was checked on vegetation only and the water claim never at all.
    0.25 m SAR rather than the optical-only arm that shipped.
 2. **Verification item 10** — SIH deadline and submission format. Needs the team.
 3. **The Cartosat priced-data risk** — for the team lead.
-4. **Push the 25 commits** and merge PR #1.
+4. **Review and merge [PR #2](https://github.com/aditya-coder07/SatQuery_AI/pull/2)** - PR #1 is already merged; the handoff's
+   instruction to merge it was stale.
 
 ### Known gaps, deliberately left
 
