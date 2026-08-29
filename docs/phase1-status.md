@@ -1654,3 +1654,166 @@ source - attributing OSM for someone else's server would be wrong.
 link to its PDF. The run store already kept every trace and nothing linked to
 one, so a run was reachable only in the tab that submitted it. It is also what
 made the map testable against a run someone else created.
+
+## CDVQA - the prescribed change-VQA benchmark, measured for the first time (2026-08-29)
+
+The PS names CDVQA as *the* benchmark for multitemporal change VQA. Until now
+it was the largest scoring risk in the project: `change_vqa_v1` shipped in
+Phase 2 and had **never been run against the split it will be graded on**. It
+has now been obtained, prepared, verified and measured. The number is bad, and
+the reason it is bad is structural rather than incidental, which is the useful
+part.
+
+### Getting it: annotations are open, imagery is not shipped
+
+The official release (`github.com/YZHJessica/CDVQA`, **Apache-2.0**) is a plain
+git repo - `curl` fetches Train/Val/Test/Test2 questions, answers and image
+indices with no Drive link and no form. That closes the CDVQA half of
+verification item 9.
+
+It has the same shape as VRSBench: **annotations only, zero imagery.** The
+pixels are the SECOND dataset's 512x512 bi-temporal tiles. Imagery came from the
+webdataset mirror `ljx620/CDVQA`, whose per-sample JSON carries the official
+`question_id`, so the mirror can be **checked rather than trusted**:
+`training/prepare/cdvqa.py` drops any sample whose question text, answer or
+question type disagrees with the official annotation for that id. Zero
+mismatches over the shards read, so the mirror is faithful - but a future drift
+shrinks the manifest instead of silently corrupting the benchmark, and
+`tests/test_cdvqa_prepare.py` asserts exactly that.
+
+The mirror stores one copy of the image pair per *question*, so the full test
+split is roughly **32 GB of duplicated pixels for 968 unique pairs**. The
+prepare script deduplicates on the way out and works from a partial download,
+reporting its own coverage so a partial number cannot read as a full-split one.
+
+### The Test split
+
+| question type | n | share |
+|---|---|---|
+| `change_or_not` | 13,882 | 35.0% |
+| `change_ratio_types` | 5,811 | 14.6% |
+| `decrease_or_not` | 4,658 | 11.7% |
+| `increase_or_not` | 4,600 | 11.6% |
+| `change_to_what` | 2,991 | 7.5% |
+| `smallest_change` | 2,904 | 7.3% |
+| `largest_change` | 2,904 | 7.3% |
+| `change_ratio` | 1,936 | 4.9% |
+| **total** | **39,686** over 968 pairs | |
+
+Answers come from a **closed vocabulary**: `yes` / `no`, the six SECOND
+semantic classes (`buildings`, `trees`, `low_vegetation`, `water`,
+`NVG_surface`, `playgrounds`), and ten decile bins (`0_to_10` ... `90_to_100`).
+
+### The measurement
+
+2,900 questions over 72 image pairs - **7.3% of the test questions, 7.4% of the
+scenes** - run through the real controller in `BENCHMARK` mode with every
+learned tool switched on (`change_mask_v1` 1.0.0, `rs_vqa_v1` 1.0.0-qlora;
+`change_caption_v1` stayed on its stub). 1,422 s, `artifacts/cdvqa/test_2900.json`.
+
+| question type | n | exact-match accuracy |
+|---|---|---|
+| `change_or_not` | 1,042 | **0.0000** |
+| `change_ratio_types` | 413 | **0.0000** |
+| `decrease_or_not` | 340 | **0.0000** |
+| `increase_or_not` | 323 | **0.0000** |
+| `change_to_what` | 206 | **0.0000** |
+| `largest_change` | 216 | **0.0000** |
+| `smallest_change` | 216 | **0.0000** |
+| `change_ratio` | 144 | **0.0000** |
+| **overall** | **2,900** | **0.0000** at 34.5% coverage |
+
+**Zero on every type.** A clean zero is exactly the shape a broken measurement
+takes, so it was checked before being believed.
+
+### The zero is real, not a scoring artifact
+
+`evaluation/cdvqa_diagnosis.py` rescores the same predictions under a
+deliberately generous reading: a yes/no type counts as correct if the prose
+merely *starts* with the right word, and `change_ratio` counts as correct if a
+percentage can be pulled out of the prose and lands in the right decile bin
+(handling the "how much has **not** changed" polarity). If exact match were
+hiding right-but-differently-worded answers, this is where they would appear.
+
+**Lenient accuracy: 0.0076 - 22 items of 2,900.** The zero survives.
+
+| shape of the answer | n |
+|---|---|
+| abstained on confidence | 1,900 |
+| `change_mask_v1` scene-change percentage | 541 |
+| `rs_vqa_v1` refusal ("I cannot answer that from this image") | 394 |
+| other prose | 65 |
+
+**3 predictions of 2,900 were one or two tokens long.** All 2,900 ground-truth
+answers are single tokens.
+
+### Three structural reasons, all measured
+
+**1. CDVQA imagery is RGB, so every classical index is unavailable.** The
+ingest trace for a CDVQA pair reports `index_availability` as
+`ndvi: false, ndwi: false, mndwi: false, ndbi: false, glcm_texture: true`.
+`change_vqa_v1`'s deterministic path measures vegetation with NDVI and water
+with MNDWI/NDWI; with no NIR band it **can never fire on this benchmark** and
+correctly defers on all 2,900 items. Axiom 2 said Cartosat's missing SWIR
+costs two of four indices; CDVQA costs all four. Note also that these are
+ungeoreferenced PNGs, so the whole run depends on the `IngestMode.BENCHMARK`
+CRS relaxation landed earlier the same day - `crs_present` records **WARN**
+rather than FAIL. Before that fix the score was not zero, it was unrunnable.
+
+**2. Seven of the eight question types need per-class semantic change.**
+CDVQA asks which of six SECOND classes changed, what it changed *to*, and
+which change was largest. The system has no semantic change head:
+`change_mask_v1` is binary and class-agnostic, and `landcover_v1` classifies
+BigEarthNet's 19 labels on a single date. `largest_change` and
+`smallest_change` abstained on **all 432** items, which is the right behaviour
+for a capability that does not exist.
+
+**3. The one class-agnostic type never reached the number that answers it.**
+`change_ratio` ("how much of the area has changed?") is exactly what
+`change_mask_v1` computes - and of its 144 items, **zero** were answered with a
+measured percentage; they drew refusals and abstentions instead. The plan runs
+`index_engine_v1` -> `change_mask_v1` -> `change_vqa_v1`, and tools receive the
+manifest and their permitted params, not each other's outputs, so the measured
+fraction is available in the trace and not to the tool that would bin it.
+
+### What this does and does not say
+
+It says the system **does not answer CDVQA**, and it says so with the reason
+attached rather than as a bare number. It does **not** say change VQA is
+broken: the deterministic path answers area-delta questions correctly on
+multispectral bi-temporal pairs, which is the input the PS's own operational
+scenario describes, and CDVQA's RGB tiles are not that input.
+
+### What would move it, in cost order
+
+1. **`change_ratio` (4.9% of the split), cheap.** Give the change-ratio
+   question shape access to `change_mask_v1`'s measured fraction and bin it
+   into deciles. The system already computes the exact quantity and discards it
+   on formatting. This needs a plumbing decision - tools currently do not see
+   upstream outputs, and that isolation is deliberate - so it is a design
+   change for the team, not a patch.
+2. **A semantic change head on SECOND's seven classes, expensive.** That is
+   what the other 95% of the split requires. SECOND ships the pixel labels, so
+   the training data exists. This is a Phase-4 item, not a Phase-3 fix.
+3. **Nothing here should be a benchmark-only answer formatter.** Mapping prose
+   onto CDVQA's vocabulary at the eval boundary would raise the number without
+   changing what the system knows, and this project's own record
+   (`TUNED_CASES` vs `CLEAN_CASES`) is the argument against it.
+
+**Reproduce:**
+
+```
+python training/prepare/cdvqa.py --shards data/cdvqa/webdataset/test \
+    --split Test --images data/cdvqa/images --out data/cdvqa/cdvqa_test.json
+python -m satquery eval --benchmark CDVQA --manifest data/cdvqa/cdvqa_test.json \
+    --root data/cdvqa --out artifacts/cdvqa/test_2900.json
+python evaluation/cdvqa_diagnosis.py --predictions artifacts/cdvqa/test_2900.json \
+    --manifest data/cdvqa/cdvqa_test.json --out artifacts/cdvqa/diagnosis.json
+```
+
+**Caveat on coverage.** 7.3% of the test questions, chosen by which mirror
+shards finished downloading rather than by any sampling scheme - so it is
+arbitrary, not random. It is enough to establish a *structural* zero, which is
+type-level and does not vary with the sample; it is **not** enough to quote a
+non-zero per-type accuracy against, should a later change produce one. Extend
+the shard download before publishing any improved number.

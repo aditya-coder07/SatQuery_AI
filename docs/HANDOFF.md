@@ -1,7 +1,14 @@
 # Session handoff — 2026-08-29
 
-State: branch `phase-0-closeout`, **752 tests passing**, working tree clean,
-**20 commits unpushed** to PR #1.
+State: branch `phase-0-closeout`, **770 tests passing**, working tree clean,
+**23 commits unpushed** to PR #1.
+
+**Update 2026-08-30.** The two items this file listed as highest-value were
+worked. **CDVQA is on disk, verified and measured** - the system scores
+**0.0000 exact match** on it, for three structural reasons, all measured; see
+the CDVQA section at the end of `docs/phase1-status.md`. **The SAR sensor
+question is narrowed by elimination** but still needs one sentence from the
+team; see §"Which RISAT" in `docs/verification.md`.
 
 Read `docs/phase1-status.md` first. It carries every measured number with its
 caveats, in dated sections, and later sections correct earlier ones.
@@ -91,8 +98,16 @@ trees" was checked on vegetation only and the water claim never at all.
 
 ## Open — in priority order
 
-1. **Confirm which SAR sensor ISRO/SAC will use.** Now the highest-value
-   question, not a footnote. Verification item 8 is resolved to a *no*:
+1. **Confirm which SAR sensor ISRO/SAC will use.** Still open, but
+   **narrowed by elimination on 2026-08-30** (§"Which RISAT" in
+   `docs/verification.md`): of the four candidates, RISAT-1 was decommissioned
+   in 2017, RISAT-1B/EOS-09 failed at launch in 2025, and RISAT-2B/2BR1 are
+   X-band but carry "data not ordinarily available to the public" and appear
+   nowhere in Bhoonidhi's civil catalogue - leaving **EOS-04 as the only
+   RISAT that is both operational and openly served**. The counter-argument
+   is honest: Cartosat-2S at 0.65-1.6 m pairs better with RISAT-2B's 0.35 m
+   than with EOS-04's 2.5 m, and SAC can reach restricted data. One sentence
+   from the team still decides it. Verification item 8 is resolved to a *no*:
    high-res SAR is freely available and permissively licensed, but Umbra,
    Capella and SpaceNet 6 are all **X-band** (9.69 GHz measured from a real
    product) while EOS-04 is **C-band** (5.40 GHz) — a 1.79× wavelength ratio
@@ -101,7 +116,7 @@ trees" was checked on vegetation only and the water claim never at all.
    0.25 m SAR rather than the optical-only arm that shipped.
 2. **Verification item 10** — SIH deadline and submission format. Needs the team.
 3. **The Cartosat priced-data risk** — for the team lead.
-4. **Push the 20 commits** and merge PR #1.
+4. **Push the 23 commits** and merge PR #1.
 
 ### Known gaps, deliberately left
 
@@ -129,8 +144,9 @@ trees" was checked on vegetation only and the water claim never at all.
 - `gh` is installed but not on the Git Bash PATH: call it as
   `"/c/Program Files/GitHub CLI/gh.exe"`.
 - Gitignored but on disk: BigEarthNet shards, WHU-OPT-SAR, LEVIR-CD/MCI, RSICD,
-  DIOR-RSVG, the Bhoonidhi products, `checkpoints/`, `models/` (including the
-  370 MB MNLI checkpoint for the gate's NLI backend).
+  DIOR-RSVG, the Bhoonidhi products, **CDVQA** (`data/cdvqa/` - annotations,
+  72 extracted image pairs and ~2.4 GB of mirror shards), `checkpoints/`,
+  `models/` (including the 370 MB MNLI checkpoint for the gate's NLI backend).
 - Learned tools are all **opt-in by environment variable** and fall back to
   stubs, which is what keeps CI green: `SATQUERY_CAPTION`, `SATQUERY_GROUNDING`,
   `SATQUERY_CHANGE_CAPTION`, `SATQUERY_LANDCOVER`, `SATQUERY_CHANGE_MASK`,
@@ -165,11 +181,19 @@ work will be scored.
 
 ## Gaps against the PS — ordered by evaluation risk
 
-1. **CDVQA is not on disk and never evaluated.** The PS names it as *the*
-   benchmark for multitemporal change VQA. `training/prepare/cdvqa.py` exists;
-   the data does not. Change-VQA is implemented and unmeasured against the
-   prescribed split. **This is the largest scoring risk** and closes
-   verification item 9's remaining half.
+1. ~~**CDVQA is not on disk and never evaluated.**~~ **Resolved 2026-08-30 -
+   and the answer is a zero.** The official annotations are Apache-2.0 and
+   `curl`-able; imagery came from a webdataset mirror that
+   `training/prepare/cdvqa.py` verifies against them sample by sample. First
+   measurement: **0.0000 exact match on all eight question types**, 2,900
+   questions, 34.5% coverage. Checked for a scoring artifact and it is not one
+   - a deliberately lenient rescoring gives 0.0076. The causes are structural:
+   CDVQA imagery is **RGB, so all four classical indices are unavailable**;
+   seven of eight question types need a **semantic change head that does not
+   exist**; and the one class-agnostic type never reaches the change mask's
+   measured percentage because tools do not see each other's outputs. Full
+   write-up, including what would move it and what should not, at the end of
+   `docs/phase1-status.md`.
 2. **BigEarthNet.txt (the image–text corpus) was never used.** The PS Background
    calls it "the primary dataset for adapting image–text representations". We
    adapted on BigEarthNet *imagery + 19 labels* instead. The Mandatory Scope
