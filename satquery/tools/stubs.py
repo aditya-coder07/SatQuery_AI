@@ -249,14 +249,35 @@ def _vqa_tool():
     return RSVQATool() if available else RSVQAStub()
 
 
+def _caption_tool():
+    """Real captioner when SATQUERY_CAPTION is set, else the stub (task 2.8)."""
+    from satquery.tools.caption import CaptionTool, is_available
+
+    return CaptionTool() if is_available()[0] else CaptionStub()
+
+
+def _grounding_tool():
+    """Real grounder when SATQUERY_GROUNDING is set, else the stub (2.7)."""
+    from satquery.tools.grounding import GroundingTool, is_available
+
+    return GroundingTool() if is_available()[0] else GroundingStub()
+
+
+def _change_caption_tool():
+    """Real change captioner when SATQUERY_CHANGE_CAPTION is set (task 2.5)."""
+    from satquery.tools.change_caption import ChangeCaptionTool, is_available
+
+    return ChangeCaptionTool() if is_available()[0] else ChangeCaptionStub()
+
+
 REGISTRY = {
     "rs_vqa_v1": _vqa_tool(),
-    "caption_v1": CaptionStub(),
-    "grounding_v1": GroundingStub(),
+    "caption_v1": _caption_tool(),
+    "grounding_v1": _grounding_tool(),
     "landcover_v1": LandcoverStub(),
     "optsar_fusion_v1": _fusion_tool(),
     "change_mask_v1": _change_mask_tool(),
-    "change_caption_v1": ChangeCaptionStub(),
+    "change_caption_v1": _change_caption_tool(),
     "change_vqa_v1": ChangeVQATemplate(),
     "index_engine_v1": IndexEngine(),
 }

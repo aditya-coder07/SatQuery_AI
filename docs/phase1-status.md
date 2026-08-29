@@ -68,19 +68,114 @@ plans directly, so the guarantee is tested from both sides.
 
 ## What is deliberately not real yet
 
-Stated plainly so the trace is not mistaken for more than it is:
+> **This section was a Phase 1 snapshot and had gone stale — it still claimed
+> the entailment gate did not exist and that calibration was unfitted, both of
+> which Phase 3 changed. Rewritten 2026-08-29 against the code, and every line
+> below was checked by running it rather than by reading the previous
+> version.** The dated task sections further down are the history; this is
+> current state.
 
-- **All nine tools except `index_engine_v1` are still stubs** returning fixed
-  payloads. The spine is real; the models are not (that is 1.7/1.10 and Phase 2).
-- **Entailment gate** reports `sentences=0, retained=0, flagged=0` — it does not
-  exist yet (task 3.5). Zeros make that visible rather than implying a check passed.
-- **Calibration** is `method="uncalibrated", T=1.0, ece_after=-1.0`, where -1.0
-  is a documented "not measured" sentinel (task 3.3).
-- **Complementarity** is `{}` — optical-SAR complementarity scoring is task 2.3.
-- **Tiling** reports when a scene exceeds the trigger size but does not retrieve
-  tiles; coarse-to-fine retrieval is task 2.10.
-- **Non-VQA metrics** return `metric_status: "not_implemented"` rather than a
-  fabricated score.
+### Tools: 5 of 9 can run a trained model, 4 cannot
+
+| tool | state |
+|---|---|
+| `index_engine_v1` | **real, always on** - deterministic, no model |
+| `change_vqa_v1` | **real, always on** - deterministic template path |
+| `rs_vqa_v1` | real, opt-in via `SATQUERY_VQA_BASE` + `SATQUERY_VQA_ADAPTER` |
+| `change_mask_v1` | real, opt-in via `SATQUERY_CHANGE_MASK` |
+| `optsar_fusion_v1` | real, opt-in via `SATQUERY_FUSION` |
+| `caption_v1` | real, opt-in via `SATQUERY_CAPTION` |
+| `grounding_v1` | real, opt-in via `SATQUERY_GROUNDING` |
+| `change_caption_v1` | real, opt-in via `SATQUERY_CHANGE_CAPTION` |
+| `landcover_v1` | **stub** - answered by the narrative synthesiser from measured indices |
+
+The last three were wired on 2026-08-29 and are the subject of the section
+below. With no environment variables set every learned tool falls back to its
+stub, which is what keeps CI green on a machine with no GPU.
+
+### Still genuinely not real
+
+- **`landcover_v1` is a stub.** Track A is trained and measured, but no tool
+  loads it; land-cover answers come from `synth/narrative.py` over measured
+  indices. Task 3.6 also found the head is worse than trivial at any fixed
+  threshold, so wiring it needs the selective-prediction path, not a naive
+  argmax.
+- **`complementarity` is `{}` in every trace.** Task 2.3 computes a real
+  triad offline (gain -0.0064) but the executor still emits an empty dict.
+- **Nothing is calibrated at runtime.** Task 3.3 fitted and shipped
+  transforms for two heads, but no tool reports a probability of correctness,
+  so `CALIBRATABLE_CONFIDENCE_METHODS` is empty by design.
+- **The Tier-2 LLM tiebreak is not built.** `llm_tiebreak_invoked` is always
+  `false`.
+
+### Corrected since Phase 1
+
+- ~~Entailment gate reports zeros~~ - **built (task 3.5)**, three outcomes,
+  two backends.
+- ~~Calibration is `uncalibrated, T=1.0, ece_after=-1.0`~~ - **fitted (3.3)**
+  for land-cover and change-mask; the sentinel now appears only where a fit
+  was measured and rejected.
+- ~~Tiling reports but does not retrieve~~ - `select_tiles` implements
+  coarse-to-fine retrieval (task 2.10).
+- ~~Non-VQA metrics return `not_implemented`~~ - caption, grounding and
+  land-cover metrics exist (task 2.14).
+
+## Wiring the trained models into tools (2026-08-29)
+
+Phase 2 tasks 2.5, 2.7 and 2.8 specify that `change_caption_v1`,
+`grounding_v1` and `caption_v1` should be **real tools**. The models were
+trained and their metrics published in this document — and no tool module
+existed. The registry held stubs, so **the pipeline could not reach any of
+them**. Three checkpoint directories with reported BLEU and mIoU scores were
+unreachable from a query.
+
+They are now wired, opt-in by environment variable like every other learned
+tool, and verified end to end against the real checkpoints.
+
+### What wiring them immediately exposed
+
+**A defect in the task 2.9 verifier.** `extract_claims` built presence claims
+using `subject_of`, which returns only the **first** subject in a sentence. A
+sentence asserting several classes was therefore verified on exactly one of
+them. The captioner surfaced it on its first run: *"a bridge is over a river
+with some green trees on both sides"* produced a single **vegetation** claim,
+and the water assertion was never checked at all. On a scene with 1% NDWI that
+sentence is now correctly **flagged**; before the fix it was retained.
+
+The entailment bench is unchanged by the fix (clean-suite hybrid still 96%) —
+because **every sentence in both suites names exactly one subject.** The
+suites cannot exercise the case the real captioner produces on its first
+attempt. That is a gap in the bench, recorded rather than closed: adding
+multi-subject cases to the clean suite now would burn it as an evaluation set.
+
+**The captioner's confidence is a live illustration of why `logprob` is not
+calibratable.** On a synthetic scene containing neither, it emitted "a bridge
+is over a river with some green trees on both sides" at confidence **0.819** —
+fluent, certain, and about the wrong scene. Exactly the failure task 2.8
+measured (13.4% unique captions), now reproducible through the pipeline.
+
+**The gate is sentence-level.** That caption bundles a checkable claim
+(vegetation present, which is true) with uncheckable content (a bridge), and
+one supported claim marks the whole sentence retained. Sub-sentence granularity
+is not built.
+
+### Tool-specific notes
+
+- `caption_v1` routes the image through `to_rgb_preview`, the same function the
+  VQA tool and the browser preview use, so the model sees what the user is
+  shown. Image size is imported from the training module rather than restated,
+  so the tool cannot drift from the size the weights were fitted at.
+- `grounding_v1` converts the normalised box to pixels against the **actual**
+  image size, not the 224 px model input — otherwise every box on a
+  non-square scene is wrong. It has no objectness head, so rather than
+  fabricate a per-prediction score it reports its measured Acc@0.5 of 0.0762
+  under `confidence_method="threshold_rule"`, and attaches a warning naming
+  that ceiling to every result.
+- `change_caption_v1` is mask-conditioned, so it obtains a mask from
+  `change_mask_v1` when configured and **falls back to zeros with an explicit
+  warning** otherwise. Running a mask-conditioned model on zeros is outside
+  its training distribution; substituting them silently would produce fluent
+  text with no stated reason to distrust it.
 
 ## Tasks 2.7 and 2.8 - grounding and scene captioning (2026-08-29)
 
