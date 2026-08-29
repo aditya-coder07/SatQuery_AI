@@ -35,9 +35,29 @@ def _fail(name: str, message: str, value=None, threshold=None) -> CheckResult:
     )
 
 
-def check_crs_present(img: ImageMeta) -> CheckResult:
+def check_crs_present(img: ImageMeta, benchmark: bool = False) -> CheckResult:
+    """Georeferencing check, relaxed for benchmark inputs.
+
+    The problem statement admits PNG and JPEG "only for the prescribed public
+    benchmark datasets", and those are ungeoreferenced by construction - RSVQA
+    and VRSBench ship plain rasters with no CRS. Failing them blocked every
+    prescribed benchmark image from entering the pipeline at all, which is a
+    mandatory-scope gap, not a strictness setting.
+
+    In benchmark mode a missing CRS is a WARN: the answer is still valid, but
+    nothing downstream can georeference an output or co-register a pair, and
+    the trace has to say so rather than let a reader assume the mask is
+    placeable. In operational mode it stays a hard failure.
+    """
     if img.crs and img.crs != "UNKNOWN":
         return _pass("crs_present", f"{img.role}: CRS {img.crs}", img.crs)
+    if benchmark:
+        return _warn(
+            "crs_present",
+            f"{img.role}: no CRS - accepted because this is a benchmark input, "
+            "but outputs cannot be georeferenced or co-registered",
+            img.crs,
+        )
     return _fail(
         "crs_present",
         f"{img.role}: no CRS - cannot georeference outputs or co-register",
@@ -157,14 +177,16 @@ def check_geocoding(img: ImageMeta) -> CheckResult | None:
     )
 
 
-def run_checks(images: list[ImageMeta], config: str) -> list[CheckResult]:
+def run_checks(
+    images: list[ImageMeta], config: str, benchmark: bool = False
+) -> list[CheckResult]:
     """Run every check applicable to this input configuration."""
     results: list[CheckResult] = []
     for img in images:
         geocoding = check_geocoding(img)
         if geocoding is not None:
             results.append(geocoding)
-        results.append(check_crs_present(img))
+        results.append(check_crs_present(img, benchmark=benchmark))
         results.append(check_nodata(img))
         results.append(check_dimensions(img))
 

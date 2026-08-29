@@ -194,7 +194,10 @@ def ingest(
     config = infer_config(images)
     images = assign_roles(images, config)
 
-    checks = run_checks(images, config)
+    # Benchmark inputs (RSVQA, VRSBench) are ungeoreferenced PNG/JPEG by
+    # construction; the problem statement admits them for exactly those
+    # datasets, so the CRS check relaxes to a WARN in this mode.
+    checks = run_checks(images, config, benchmark=mode == IngestMode.BENCHMARK)
     failures = blocking_failures(checks)
 
     coreg = None

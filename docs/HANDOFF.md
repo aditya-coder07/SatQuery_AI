@@ -139,3 +139,64 @@ trees" was checked on vegetation only and the water claim never at all.
 - **CI has no torch.** Verify with the block-import simulation before claiming a
   green CI — it caught a module-scope import that made the whole package
   unimportable, which the normal suite could not.
+
+---
+
+# Problem-statement traceability (checked 2026-08-29)
+
+The PS text was re-read against the code. Mandatory scope is covered; the gaps
+are in the **prescribed evaluation datasets**, which is how the PS says the
+work will be scored.
+
+## Mandatory functional scope — covered
+
+| PS requirement | status |
+|---|---|
+| RS adaptation of a visual/VL component | Track A on BigEarthNet imagery, Track B QLoRA on the instruct mix |
+| Single-image VQA (mandatory) | `rs_vqa_v1` + deterministic `change_vqa_v1` |
+| **Plus** captioning **or** grounding | **both** wired (`caption_v1`, `grounding_v1`) |
+| Change description **or** change VQA (mandatory) | both (`change_caption_v1`, `change_vqa_v1`) |
+| Spatial change map (optional) | `change_mask_v1`, georeferenced COG |
+| Cross-modal optical–SAR extraction | `optsar_fusion_v1`, triad mode, complementarity now in the trace |
+| Agentic orchestration | router + capability matrix + validated plans; **0/600 illegal plans** |
+| GUI / web app | Next.js: run view, comparators, map, `/models`, `/benchmarks`, `/runs/{id}` |
+| Visual evidence, confidence, execution summary, downloadable report | map + evidence pack, three-component confidence, full trace, PDF |
+| GeoTIFF/TIFF, **PNG/JPEG for benchmarks** | fixed 2026-08-29 — see below |
+
+## Gaps against the PS — ordered by evaluation risk
+
+1. **CDVQA is not on disk and never evaluated.** The PS names it as *the*
+   benchmark for multitemporal change VQA. `training/prepare/cdvqa.py` exists;
+   the data does not. Change-VQA is implemented and unmeasured against the
+   prescribed split. **This is the largest scoring risk** and closes
+   verification item 9's remaining half.
+2. **BigEarthNet.txt (the image–text corpus) was never used.** The PS Background
+   calls it "the primary dataset for adapting image–text representations". We
+   adapted on BigEarthNet *imagery + 19 labels* instead. The Mandatory Scope
+   says "BigEarthNet.txt **or any open source training data**", so this is
+   defensible — but it is a stated expectation, and a judge may ask. Decide
+   whether to run an adaptation pass on it or to justify the substitution in
+   the report.
+3. **VRSBench evaluation is partial.** Item 9: it ships annotations only, with
+   imagery in DOTA and DIOR. DIOR is on disk, DOTA is not.
+4. **`landcover_v1` asserts on ~0.25% of decisions.** Fine for honesty, thin for
+   a demo. The narrative synthesiser carries land-cover answers.
+
+## Fixed while checking
+
+**PNG/JPEG benchmark inputs were rejected outright.** The PS admits them "only
+for the prescribed public benchmark datasets", and those are ungeoreferenced by
+construction — RSVQA and VRSBench ship plain rasters. `check_crs_present`
+FAILed them in every mode, so **no prescribed benchmark image could enter the
+pipeline at all**. In `IngestMode.BENCHMARK` a missing CRS is now a WARN: the
+answer is valid, nothing downstream can georeference or co-register, and the
+trace says so. Operational mode still refuses. Verified end to end on a
+PNG (`SINGLE_VQA`, no abstention, WARN recorded).
+
+## Evaluation-set note
+
+The ISRO/SAC set is **pre-georeferenced, co-registered Cartosat-2S + RISAT
+pairs**. Two measured facts bear on it: EOS-04 is C-band at 5.40 GHz (item 5),
+and the cross-sensor test found vegetation agreement collapsing from +0.476 at
+10 m to **-0.135 at native 1.6 m** — resolution, not bands, is the dominant
+gap, which is why Stage A2/A3 exist.

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from satquery.contracts.input_manifest import InputManifest
+from satquery.contracts.input_manifest import IngestMode, InputManifest
 from satquery.ingest import (
     harmonise_bands,
     index_availability,
@@ -234,3 +234,54 @@ class TestManifestShape:
     def test_small_scene_not_flagged_for_tiling(self, msi_6band):
         assert ingest([msi_6band]).tiling.applied is False
         assert ingest([msi_6band]).tiling.level1_tiles is None
+
+
+class TestBenchmarkFormats:
+    """PNG/JPEG for the prescribed benchmarks (problem statement, input scope).
+
+    The PS admits PNG and JPEG "only for the prescribed public benchmark
+    datasets". Those are ungeoreferenced by construction - RSVQA and VRSBench
+    ship plain rasters - and the CRS check failed them in every mode, so no
+    prescribed benchmark image could enter the pipeline at all.
+    """
+
+    def _png(self, tmp_path):
+        import numpy as np
+        import rasterio
+
+        path = tmp_path / "benchmark.png"
+        array = (np.random.default_rng(3).random((3, 128, 128)) * 255).astype("uint8")
+        with rasterio.open(
+            path, "w", driver="PNG", height=128, width=128, count=3, dtype="uint8"
+        ) as dst:
+            dst.write(array)
+        return path
+
+    def test_benchmark_mode_accepts_an_ungeoreferenced_png(self, tmp_path):
+        manifest = ingest([self._png(tmp_path)], mode=IngestMode.BENCHMARK)
+        assert manifest.blocking_failures == []
+
+    def test_the_limitation_is_recorded_not_hidden(self, tmp_path):
+        """Accepting it must not imply the outputs are placeable."""
+        manifest = ingest([self._png(tmp_path)], mode=IngestMode.BENCHMARK)
+        crs = next(c for c in manifest.checks if c.name == "crs_present")
+        assert crs.status == "WARN"
+        assert "cannot be georeferenced" in crs.message
+
+    def test_operational_mode_still_refuses(self, tmp_path):
+        """A real query about real imagery still needs a CRS."""
+        manifest = ingest([self._png(tmp_path)], mode=IngestMode.OPERATIONAL)
+        assert "crs_present" in manifest.blocking_failures
+
+    def test_a_benchmark_png_answers_end_to_end(self, tmp_path):
+        from satquery.controller.pipeline import Controller
+
+        trace = Controller().run(
+            [self._png(tmp_path)],
+            "How many buildings are visible?",
+            mode=IngestMode.BENCHMARK,
+            benchmark="rsvqa_lr",
+        )
+        assert trace.abstained is False
+        assert trace.routing.selected_task == "SINGLE_VQA"
+        assert trace.answer
