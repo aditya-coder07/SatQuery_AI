@@ -82,6 +82,54 @@ Stated plainly so the trace is not mistaken for more than it is:
 - **Non-VQA metrics** return `metric_status: "not_implemented"` rather than a
   fabricated score.
 
+## Task 2.1 - Track A at scale (2026-08-29, later)
+
+30,000 patches (2 of 18 shards, ~11% of BigEarthNet), all 12 bands, 0.94M
+parameters, 3 epochs, evaluated on the **official** test shard (5,867
+patches).
+
+| Condition | 12-band mAP | Cartosat 4-band | Retention |
+|---|---|---|---|
+| baseline (GSD input constant) | **0.2854** | 0.2573 | 90.2% |
+| + multi-resolution augmentation | 0.2764 | 0.2491 | 90.1% |
+
+### These numbers are NOT comparable to Track A v0's 0.4171
+
+Different test sets. v0 evaluated on 3,248 patches drawn from the curated
+14k subset; this evaluates on the official BigEarthNet test shard. A drop
+from 0.417 to 0.285 across those two sets says nothing about whether
+scaling up helped - the harder, uncurated official split is the more likely
+explanation. Quoting it as a regression would be wrong.
+
+### GSD conditioning did not help
+
+Multi-resolution augmentation is slightly *worse* on both metrics
+(-0.0090 mAP, -0.0082 at 4 bands). Two readings, and the honest answer is
+that this experiment cannot separate them:
+
+* The augmentation asks the model to handle four resolutions with the same
+  0.94M parameters, so some loss on the native resolution is expected. The
+  test set is all 10 m, so it only ever measures the native case - the
+  condition the augmentation trades away.
+* GSD conditioning may simply not help.
+
+**The test set cannot answer this**, because it contains no coarse-resolution
+imagery. A fair evaluation needs a multi-resolution test split, which is not
+built. The one relevant signal is the Cartosat cross-sensor run, and it is
+not yet re-run against these checkpoints.
+
+### What is solid
+
+**Band-dropout retention is ~90% in both conditions**, and this is a valid
+within-run comparison on a single test set: 90.2% and 90.1%, closely
+matching v0's 90.2% at 10 bands. The band-agnostic mechanism holds up at 12
+bands and at 4x the data. That is the one claim from this run that survives
+scrutiny.
+
+Absolute mAP of 0.285 is far below published BigEarthNet results
+(~0.65-0.85). Expected for 0.94M parameters over 3 epochs on 11% of the
+data, and not a reportable figure.
+
 ## Track A v0 - band-agnostic encoder (2026-08-29)
 
 Trained on the official BigEarthNet v2 splits (7,180 train / 3,248 test), a

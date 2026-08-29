@@ -225,9 +225,14 @@ def main() -> int:
     p.add_argument("--data", type=Path, required=True)
     p.add_argument("--ckpt-dir", type=Path, default=Path("checkpoints/track_a_full"))
     p.add_argument("--epochs", type=int, default=3)
-    p.add_argument("--batch-size", type=int, default=128)
+    # MEMORY: the per-band stem reshapes to (batch * bands, 1, H, W), so
+    # activation memory scales with batch x bands, not batch alone. At 12
+    # bands a batch of 128 becomes 1,536 images through the stem - about
+    # 8.5 GiB at dim=96, which OOMs a 6 GB card. Keep batch * bands * dim
+    # within roughly 25,000 on 6 GB.
+    p.add_argument("--batch-size", type=int, default=32)
     p.add_argument("--lr", type=float, default=1e-3)
-    p.add_argument("--dim", type=int, default=96)
+    p.add_argument("--dim", type=int, default=64)
     p.add_argument("--band-dropout", type=float, default=0.3)
     p.add_argument("--no-gsd", action="store_true", help="disable GSD conditioning")
     p.add_argument(
@@ -268,6 +273,16 @@ def main() -> int:
 
     model = build_model(dim=args.dim, gsd_conditioning=not args.no_gsd).to(device)
     print(f"parameters: {sum(q.numel() for q in model.parameters())/1e6:.2f}M")
+
+    budget = args.batch_size * len(BAND_NAMES_12) * args.dim
+    print(f"stem load: batch {args.batch_size} x 12 bands x dim {args.dim} = {budget}")
+    if device == "cuda":
+        total_gb = torch.cuda.get_device_properties(0).total_memory / 1024**3
+        if total_gb < 8 and budget > 30000:
+            print(
+                f"WARNING: {total_gb:.1f} GiB GPU with stem load {budget}; "
+                "reduce --batch-size or --dim if this OOMs"
+            )
 
     optimizer = torch.optim.AdamW(model.parameters(), lr=args.lr)
     criterion = nn.BCEWithLogitsLoss()
