@@ -102,3 +102,37 @@ class TestBandMasking:
         partial = model(x, mask, torch.full((2,), 10.0))
         ratio = partial.abs().mean() / full.abs().mean()
         assert 0.2 < ratio < 5.0
+
+
+class TestMultiResolutionAugmentation:
+    """BigEarthNet is uniformly 10 m, so without augmentation the GSD input is
+    constant and the conditioning has nothing to learn from."""
+
+    def test_factor_one_is_identity(self):
+        from training.track_a_full import degrade_resolution
+
+        x = np.random.default_rng(1).random((2, 3, 12, 12)).astype("float32")
+        assert np.array_equal(degrade_resolution(x, 1), x)
+
+    def test_shape_preserved(self):
+        from training.track_a_full import degrade_resolution
+
+        x = np.random.default_rng(2).random((2, 3, 120, 120)).astype("float32")
+        for f in (2, 3, 4):
+            assert degrade_resolution(x, f).shape == x.shape
+
+    def test_coarser_factor_removes_more_detail(self):
+        """Monotonic smoothing is the property; if it were not monotonic the
+        'effective GSD' label would not match the actual degradation."""
+        from training.track_a_full import degrade_resolution
+
+        x = np.random.default_rng(3).random((2, 3, 120, 120)).astype("float32")
+        stds = [degrade_resolution(x, f).std() for f in (1, 2, 3, 4)]
+        assert stds == sorted(stds, reverse=True)
+
+    def test_mean_roughly_preserved(self):
+        """Block averaging must not shift the radiometry, only the detail."""
+        from training.track_a_full import degrade_resolution
+
+        x = np.random.default_rng(4).random((2, 3, 120, 120)).astype("float32")
+        assert degrade_resolution(x, 4).mean() == pytest.approx(x.mean(), rel=0.05)

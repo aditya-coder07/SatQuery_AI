@@ -166,6 +166,31 @@ def build_model(n_bands: int = 12, dim: int = 96, gsd_conditioning: bool = True)
     return BandAgnosticGSD()
 
 
+# Resolutions simulated by downsampling. BigEarthNet is uniformly 10 m, so
+# without this the GSD input is constant during training and the conditioning
+# has nothing to learn from - it would be present in the architecture and
+# inert in practice. Downsampling by k and upsampling back produces a patch
+# whose *effective* resolution is 10*k m at unchanged tensor shape, which is
+# what the Cartosat path will actually present.
+MULTIRES_FACTORS = (1, 2, 3, 4)
+
+
+def degrade_resolution(images: np.ndarray, factor: int) -> np.ndarray:
+    """Blur to a coarser effective GSD, keeping the array shape."""
+    if factor <= 1:
+        return images
+    n, c, h, w = images.shape
+    small_h, small_w = max(1, h // factor), max(1, w // factor)
+    # Block-average down, then repeat back up. Cheap, and it removes exactly
+    # the high-frequency detail a coarser sensor would not have resolved.
+    trimmed = images[:, :, : small_h * factor, : small_w * factor]
+    down = trimmed.reshape(n, c, small_h, factor, small_w, factor).mean(axis=(3, 5))
+    up = np.repeat(np.repeat(down, factor, axis=2), factor, axis=3)
+    out = np.zeros_like(images)
+    out[:, :, : up.shape[2], : up.shape[3]] = up[:, :, :h, :w]
+    return out
+
+
 def batches(dataset, size, rng, shuffle=True):
     order = rng.permutation(len(dataset)) if shuffle else np.arange(len(dataset))
     for start in range(0, len(order), size):
@@ -205,6 +230,11 @@ def main() -> int:
     p.add_argument("--dim", type=int, default=96)
     p.add_argument("--band-dropout", type=float, default=0.3)
     p.add_argument("--no-gsd", action="store_true", help="disable GSD conditioning")
+    p.add_argument(
+        "--multires", action="store_true",
+        help="augment with simulated coarser resolutions so GSD conditioning "
+             "has a varying signal to learn from",
+    )
     p.add_argument("--limit-eval", type=int)
     p.add_argument("--seed", type=int, default=42)
     p.add_argument("--save-every", type=int, default=200)
@@ -247,7 +277,8 @@ def main() -> int:
         "task": "track_a_full", "bands": BAND_NAMES_12,
         "n_train": len(train_ds), "epochs": args.epochs, "lr": args.lr,
         "dim": args.dim, "band_dropout": args.band_dropout,
-        "gsd_conditioning": not args.no_gsd, "seed": args.seed,
+        "gsd_conditioning": not args.no_gsd, "multires_augmentation": args.multires,
+        "seed": args.seed,
     })
 
     rng = np.random.default_rng(args.seed)
@@ -259,10 +290,17 @@ def main() -> int:
         running, seen = 0.0, 0
         for x, y in batches(train_ds, args.batch_size, rng):
             mask = band_dropout_mask(x.shape[0], x.shape[1], args.band_dropout, rng)
+
+            gsd_value = BEN_GSD_M
+            if args.multires:
+                factor = int(rng.choice(MULTIRES_FACTORS))
+                x = degrade_resolution(x, factor)
+                gsd_value = BEN_GSD_M * factor
+
             out = model(
                 torch.from_numpy(x).to(device),
                 torch.from_numpy(mask).to(device),
-                torch.full((x.shape[0],), BEN_GSD_M, device=device),
+                torch.full((x.shape[0],), gsd_value, device=device),
             )
             loss = criterion(out, torch.from_numpy(y).to(device))
             optimizer.zero_grad(set_to_none=True)
