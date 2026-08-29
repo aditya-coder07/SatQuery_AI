@@ -10,10 +10,13 @@ Designed for a free-tier T4 (16 GB), which drives every default here:
 4-bit NF4 quantisation, gradient checkpointing, batch size 1 with accumulation,
 and frequent checkpoints because the session can be killed at any moment.
 
-This script CANNOT run in the development environment (no GPU, and
-bitsandbytes requires CUDA). It is written to run on Kaggle/Colab. Everything
-that does not need a GPU - argument handling, dataset construction, prompt
-formatting, checkpoint/resume - is importable and unit tested; see
+Originally written for Kaggle/Colab because the development machine had no
+GPU. That is no longer true - it runs locally on an RTX 4050 with CUDA,
+bitsandbytes, peft and accelerate installed - but every constraint above is
+kept, because 6 GB of VRAM is tighter than a T4's 16 GB, not looser.
+
+Everything that does not need a GPU - argument handling, dataset construction,
+prompt formatting, checkpoint/resume - stays importable and unit tested; see
 tests/test_training.py.
 
 Usage on a GPU box:

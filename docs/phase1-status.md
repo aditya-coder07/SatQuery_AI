@@ -1304,3 +1304,117 @@ Three bugs found and fixed while building them:
    duplicated into a second copy that would eventually disagree.
 3. **Integer counts rendered as `1093.0000`** - spurious precision on a sample
    count.
+
+## Tasks 3.1 and 3.2 - Track B instruction mix and Stage A3 (2026-08-29)
+
+### 3.2 Stage A3 - high-resolution transfer, optical only
+
+Stage A2 bridged the encoder from BigEarthNet's 10 m to WHU-OPT-SAR's ~5 m.
+A3 is the last leg: ~5 m to sub-metre, using DIOR (800x800, 0.5-30 m GSD) via
+the DIOR-RSVG mirror already on disk. The Bhoonidhi products were **not** used
+- they are the held-out cross-sensor set per docs/03 section 4.3, and training
+on them would destroy the only honest out-of-distribution measurement the
+project has.
+
+| arm | test mAP |
+|---|---|
+| frozen probe (Stage A2 encoder, head only) | 0.1151 |
+| fine-tuned encoder | **0.2880** |
+| **adaptation gain** | **+0.1729** |
+
+The gain is the result, not the absolute numbers. WHU labels are land-cover
+classes and DIOR labels are object categories, so A3 changes resolution **and**
+label semantics at once, and neither mAP is comparable to A2's 0.7759 in any
+direction. The frozen-probe versus fine-tuned comparison is internally
+controlled - same data, same head, same split - so the semantic change cancels
+out of the difference. Fine-tuning more than doubles mAP, which says the 5 m
+features genuinely did not already cover sub-metre detail and the adaptation is
+doing real work.
+
+**The limitation is the headline, not a footnote.** Task 3.2 offered
+"SpaceNet 6 / Umbra, or optical-only with the limitation documented". This is
+the optical-only arm:
+
+> A3 adapts the encoder to fine spatial *detail*. It does **not** adapt it to
+> high-resolution **SAR**. The Cartosat path is optical, so the optical half of
+> the bridge is complete; the EOS-04 / RISAT path still has no high-resolution
+> SAR training data at any stage, and no number here is evidence about it.
+
+Verification item 8 (SpaceNet 6 / Umbra / Capella accessible and licensed)
+**remains open** and this run does not close it.
+
+### 3.1 Track B - the full instruction mix
+
+v0 trained on RSVQA-LR alone: 2,000 optical VQA pairs, every one of which has
+an answer. The new mix is **5,340 examples**:
+
+| | count |
+|---|---|
+| total | 5,340 |
+| answerable | 5,096 |
+| refusals | 244 (**4.57%**) |
+| SAR examples | **1,654** |
+| optical examples | 3,686 |
+
+Refusal reasons: `not_in_image` 134, `sensor_cannot_measure` 44,
+`single_image_temporal` 44, `out_of_scope` 22.
+
+**Why the refusals had to be designed rather than generated.** The obvious way
+to make 5% refusals is to pair random images with random unanswerable
+questions. That teaches a *lexical* rule - "questions phrased like this get
+refused" - and a model that learns it will refuse an answerable question in the
+same register while answering an unanswerable one phrased normally.
+
+These refusals are built so **the image is the reason**:
+
+- `not_in_image` uses the **same question wording** as answerable examples and
+  differs only in which tile it is asked about. "Is there water visible in this
+  image?" is answered for a tile whose label mask contains water and refused for
+  one that does not.
+- `sensor_cannot_measure` asks for SWIR-dependent quantities of a 4-band VNIR
+  image - the exact failure verification item 6 confirmed Cartosat-2E MX will
+  produce.
+- `single_image_temporal` asks a change question of one image, which the router
+  already blocks structurally (3.8), so the two layers agree rather than the
+  model fighting the gate.
+- `out_of_scope` is the one genuinely lexical category and is **capped at half**
+  the per-category count for that reason.
+
+### Measuring "declines appropriately" - three numbers, and recall is the weakest
+
+`evaluation/refusal.py`. Refusal recall alone is close to useless: a model that
+refuses *everything* scores 100%. The degenerate baselines make that concrete:
+
+| model | refusal recall | false-refusal rate | matched-pair probe |
+|---|---|---|---|
+| always refuse | **1.0000** | 1.0000 | **0.0000** |
+| never refuse | 0.0000 | 0.0000 | 0.0000 |
+| an ideal model | 1.0000 | 0.0000 | 1.0000 |
+
+The **matched-pair probe** is the number to read first. It scores only the
+pairs whose question wording is byte-identical and where only the image
+differs, so a model answering from the text alone cannot get both halves right
+and lands near chance - while its refusal recall still looks excellent. Without
+it, "declines appropriately" can be satisfied by a model that learned nothing
+about images at all.
+
+The val split yields only **12 matched pairs**, which is too few for a stable
+figure; the probe should be run over the full mix when the adapter is scored.
+
+### Status: training is running, metrics are not in
+
+The retrain is **launched and converging** on the local RTX 4050 - 4-bit NF4,
+LoRA on the language tower (37.2M trainable, 0.98% of 3.79B), loss 15.87 at
+step 5 down to 6.93 at step 35 - and needs roughly two more hours for 300 steps.
+
+**Task 3.1 is therefore not complete.** The data mix, the refusal design and
+the evaluation harness are done and tested; the acceptance criterion
+("improved metrics across VQA/caption; model declines appropriately") needs the
+finished adapter and has no numbers behind it yet. Nothing in this section
+should be read as a result for the retrained model.
+
+One correction while here: `track_b_vlm_qlora.py`'s docstring said the script
+"CANNOT run in the development environment (no GPU, and bitsandbytes requires
+CUDA)". That was true when written and is now stale - this machine has CUDA,
+bitsandbytes 0.50.2, peft 0.20.0 and accelerate 1.14.0, and the script runs
+here.
