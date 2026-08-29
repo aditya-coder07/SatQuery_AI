@@ -101,6 +101,40 @@ Sources: [WMO OSCAR RISAT-2B](https://space.oscar.wmo.int/satellites/view/risat_
 [Gunter's Space Page, RISAT-1/1A/1B](https://space.skyrocket.de/doc_sdat/risat-1.htm),
 [Bhoonidhi](https://bhoonidhi.nrsc.gov.in/bhoonidhi/home.html).
 
+## NEW RISK — SECOND states no licence at all (discovered 2026-08-30)
+
+Closing the CDVQA zero needs a semantic change head, and the only labels for
+CDVQA's six change classes are the **SECOND** dataset's pixel annotations.
+SECOND is freely downloadable — [captain-whu.github.io/SCD](https://captain-whu.github.io/SCD/)
+serves a 2.4 GB `SECOND_train_set.rar` from Google Drive with no form and no
+registration — but **the project page, the paper (arXiv 2010.05687) and the
+archive state no licence, no terms of use and no citation requirement.** Not
+a restrictive licence: *no* licence.
+
+Why this matters here and not for every dataset: **the PS lists model weights
+as a deliverable.** That is the same reason item 8 flagged SpaceNet 6's
+share-alike. Weights trained on unlicensed data inherit an unresolved
+question, and "everyone does it" is not an answer we should put in front of an
+ISRO reviewer without having noticed it.
+
+Why it is not blocking, and the work proceeds:
+
+- **The PS itself prescribes CDVQA as an evaluation benchmark, and CDVQA is
+  built on SECOND imagery.** Entrants cannot be expected to score on CDVQA
+  without touching SECOND, so its use is implicitly sanctioned by the problem
+  statement.
+- CDVQA's own annotations — the questions, answers and splits — are
+  **Apache-2.0**, and those are what we are graded against.
+- Academic use of SECOND is universal in this literature; the risk is to
+  redistribution of derived weights, not to evaluating on it.
+
+Action: one email to the authors (`kunpingyang@whu.edu.cn`,
+`guisong.xia@whu.edu.cn`) asking for explicit terms, sent alongside the team
+questions. Until an answer arrives, **train on it and say so in the report**,
+and keep the option of publishing the head's code and metrics without the
+weights if the answer is restrictive. Flag to the team lead with the Cartosat
+pricing risk below.
+
 ## NEW RISK (discovered 2026-08-29, not in the original 12 items)
 
 **Cartosat-2S full-scene data is priced, not open, for our likely user class.**
