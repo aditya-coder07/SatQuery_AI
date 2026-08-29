@@ -70,6 +70,17 @@ VEGETATION_CLASSES = [
 WATER_CLASSES = ["Inland waters", "Marine waters", "Coastal wetlands", "Inland wetlands"]
 BUILT_CLASSES = ["Urban fabric", "Industrial or commercial units"]
 
+# Stage A2 retrains the head on WHU-OPT-SAR's 8-class vocabulary, so the same
+# semantic groups have different names. Keeping both lets one evaluator
+# compare a BigEarthNet-head model against an A2-adapted one directly.
+WHU_CLASSES = ["background", "farmland", "city", "village", "water", "forest",
+               "road", "others"]
+WHU_GROUPS = {
+    "vegetation": ["farmland", "forest"],
+    "water": ["water"],
+    "built_up": ["city", "village", "road"],
+}
+
 
 def read_bands(product: Path, target_gsd: float | None) -> tuple[dict, float]:
     """Read the Cartosat bands, optionally resampled to `target_gsd` metres."""
@@ -109,7 +120,7 @@ def standardise(arr: np.ndarray) -> np.ndarray:
     return np.where(np.isfinite(out), out, 0.0)
 
 
-def build_patches(bands: dict) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+def build_patches(bands: dict, normalise: str = "scene") -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """Tile the scene into (N, 10, 120, 120) with a 4-band presence mask.
 
     Cartosat's bands are placed in their canonical slots so the learned band
@@ -121,7 +132,17 @@ def build_patches(bands: dict) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     if rows == 0 or cols == 0:
         raise SystemExit(f"scene {width}x{height} is smaller than one {PATCH}px patch")
 
-    standardised = {name: standardise(arr) for name, arr in bands.items()}
+    # Normalisation must match how the checkpoint was trained. Track A used
+    # dataset-level band statistics over whole 120px patches; Stage A2
+    # standardises each tile independently. Feeding a per-scene distribution
+    # to a per-tile-trained model is a distribution shift of our own making,
+    # and it produced a spuriously strong negative correlation before this
+    # was made explicit.
+    scene_standardised = (
+        {name: standardise(arr) for name, arr in bands.items()}
+        if normalise == "scene" else bands
+    )
+    standardised = scene_standardised
 
     patches, coords = [], []
     for r in range(rows):
@@ -132,7 +153,8 @@ def build_patches(bands: dict) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
             for name, slot in zip(CARTOSAT_ORDER, CARTOSAT_INDICES, strict=True):
                 if name not in standardised:
                     continue
-                cube[slot] = standardised[name][y : y + PATCH, x : x + PATCH]
+                window = standardised[name][y : y + PATCH, x : x + PATCH]
+                cube[slot] = standardise(window) if normalise == "patch" else window
                 raw[name] = bands[name][y : y + PATCH, x : x + PATCH]
             patches.append(cube)
             coords.append((r, c, raw))
@@ -172,10 +194,15 @@ def spearman(a: np.ndarray, b: np.ndarray) -> float:
     return float((ra * rb).sum() / denom) if denom else float("nan")
 
 
-def load_trained(checkpoint: Path, torch, device):
+def load_trained(checkpoint: Path, torch, device, n_classes: int = N_CLASSES):
     from training.common.checkpointing import find_latest_checkpoint, load_checkpoint
 
-    model = build_model(n_bands=len(BAND_NAMES), dim=64).to(device)
+    import torch.nn as nn
+
+    model = build_model(n_bands=len(BAND_NAMES), dim=64)
+    if n_classes != N_CLASSES:
+        model.head = nn.Linear(model.head.in_features, n_classes)
+    model = model.to(device).to(device)
     latest = find_latest_checkpoint(checkpoint)
     if latest is None:
         raise SystemExit(f"no checkpoint found in {checkpoint}")
@@ -184,15 +211,24 @@ def load_trained(checkpoint: Path, torch, device):
     return model, latest
 
 
-def run(product: Path, checkpoint: Path, index_path: Path, target_gsd: float | None):
+def run(product: Path, checkpoint: Path, index_path: Path, target_gsd: float | None,
+        class_set: str = "bigearthnet", normalise: str = "scene"):
     import torch
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
-    classes = load_index(index_path)["classes"]
-    model, latest = load_trained(checkpoint, torch, device)
+    if class_set == "whu":
+        classes, groups = WHU_CLASSES, WHU_GROUPS
+    else:
+        classes = load_index(index_path)["classes"]
+        groups = {
+            "vegetation": VEGETATION_CLASSES,
+            "water": WATER_CLASSES,
+            "built_up": BUILT_CLASSES,
+        }
+    model, latest = load_trained(checkpoint, torch, device, len(classes))
 
     bands, effective_gsd = read_bands(product, target_gsd)
-    patches, mask, coords = build_patches(bands)
+    patches, mask, coords = build_patches(bands, normalise)
     physics = physics_reference(coords)
 
     scores = []
@@ -208,12 +244,13 @@ def run(product: Path, checkpoint: Path, index_path: Path, target_gsd: float | N
         return scores[:, idx].max(axis=1)
 
     veg_score, water_score, built_score = (
-        group(VEGETATION_CLASSES), group(WATER_CLASSES), group(BUILT_CLASSES)
+        group(groups["vegetation"]), group(groups["water"]), group(groups["built_up"])
     )
 
     return {
         "checkpoint": str(latest),
         "effective_gsd_m": round(effective_gsd, 3),
+        "normalisation": normalise,
         "n_patches": int(len(patches)),
         "bands_present": CARTOSAT_ORDER,
         "agreement": {
@@ -243,12 +280,18 @@ def main() -> int:
     p.add_argument("--checkpoint", type=Path, required=True)
     p.add_argument("--index", type=Path, required=True)
     p.add_argument("--out", type=Path)
+    p.add_argument("--class-set", choices=["bigearthnet", "whu"], default="bigearthnet")
+    p.add_argument(
+        "--normalise", choices=["scene", "patch"], default="scene",
+        help="must match how the checkpoint was trained (A2 uses per-patch)",
+    )
     args = p.parse_args()
 
     results = {}
     for label, gsd in (("resampled_to_10m", BEN_GSD), ("native_resolution", None)):
         print(f"\n=== {label} ===")
-        r = run(args.product, args.checkpoint, args.index, gsd)
+        r = run(args.product, args.checkpoint, args.index, gsd, args.class_set,
+                args.normalise)
         results[label] = r
         print(f"  effective GSD : {r['effective_gsd_m']} m   patches: {r['n_patches']}")
         print("  agreement with the deterministic index engine (Spearman):")

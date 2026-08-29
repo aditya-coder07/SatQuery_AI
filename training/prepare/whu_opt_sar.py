@@ -20,7 +20,9 @@ from __future__ import annotations
 
 import argparse
 import json
+import pathlib
 import random
+import re
 import sys
 from pathlib import Path
 
@@ -35,6 +37,99 @@ SAR_HINTS = ("sar",)
 LABEL_HINTS = ("lbl", "label", "mask", "gt", "annotation")
 
 IMAGE_SUFFIXES = {".tif", ".tiff", ".png", ".jpg"}
+
+TILE_PX = 512
+# WHU-OPT-SAR label rasters encode the 8 classes as multiples of ten
+# (0, 10, ... 70), not 0..7. Dividing is required; using the raw value would
+# put every class outside the head's index range.
+LABEL_STRIDE = 10
+_TILE_RE = re.compile(r"^(.+)_(\d+)_(\d+)$")
+
+
+def extract_from_archives(
+    tile_zip, label_zip, dest, limit=None,
+):
+    """Build paired optical/SAR/label tiles from the two published archives.
+
+    The 512px partition mirror ships optical and SAR but no labels; the
+    full-scene mirror ships labels but not the partition. Tile names encode
+    their position (SCENE_ROW_COL), so each label tile is cropped from the
+    full-scene mask at row*512, col*512. Verified against scene
+    NH50E007004: a 5555x3704 label yields exactly the 11x8 tile grid the
+    partition uses.
+    """
+    import zipfile
+
+    import numpy as np
+    import rasterio
+    dest = pathlib.Path(dest)
+    for kind in ("opt", "sar", "lbl"):
+        (dest / kind).mkdir(parents=True, exist_ok=True)
+
+    tz = zipfile.ZipFile(tile_zip)
+    lz = zipfile.ZipFile(label_zip)
+    label_members = {
+        pathlib.Path(n).stem: n for n in lz.namelist() if n.endswith(".tif")
+    }
+
+    tiles = sorted(
+        n for n in tz.namelist()
+        if n.startswith("opt/") and n.endswith(".tif") and "__MACOSX" not in n
+    )
+    if limit:
+        tiles = tiles[:limit]
+
+    written, skipped = 0, 0
+    label_cache: dict[str, "np.ndarray"] = {}
+
+    for member in tiles:
+        stem = pathlib.Path(member).stem
+        match = _TILE_RE.match(stem)
+        if not match:
+            skipped += 1
+            continue
+        scene, row, col = match.group(1), int(match.group(2)), int(match.group(3))
+        if scene not in label_members:
+            skipped += 1
+            continue
+
+        if scene not in label_cache:
+            lz.extract(label_members[scene], dest / "_labels")
+            with rasterio.open(dest / "_labels" / label_members[scene]) as src:
+                label_cache[scene] = src.read(1)
+
+        full = label_cache[scene]
+        y, x = row * TILE_PX, col * TILE_PX
+        crop = full[y : y + TILE_PX, x : x + TILE_PX]
+        if crop.shape != (TILE_PX, TILE_PX):
+            # Edge tile: the partition drops these, so the label has no
+            # matching full window. Skipping keeps pairs exact.
+            skipped += 1
+            continue
+
+        tz.extract(member, dest / "_tiles")
+        (dest / "opt" / f"{stem}.tif").write_bytes(
+            (dest / "_tiles" / member).read_bytes()
+        )
+        sar_member = member.replace("opt/", "sar/")
+        if sar_member in tz.namelist():
+            tz.extract(sar_member, dest / "_tiles")
+            (dest / "sar" / f"{stem}.tif").write_bytes(
+                (dest / "_tiles" / sar_member).read_bytes()
+            )
+
+        classes = (crop // LABEL_STRIDE).astype("uint8")
+        with rasterio.open(
+            dest / "lbl" / f"{stem}.tif", "w", driver="GTiff",
+            height=TILE_PX, width=TILE_PX, count=1, dtype="uint8",
+        ) as dst:
+            dst.write(classes, 1)
+        written += 1
+
+    import shutil
+    shutil.rmtree(dest / "_tiles", ignore_errors=True)
+    shutil.rmtree(dest / "_labels", ignore_errors=True)
+    return written, skipped
 
 
 def _classify_dir(path: Path) -> str | None:
@@ -109,7 +204,16 @@ def main() -> int:
     p.add_argument("--out", type=Path, required=True)
     p.add_argument("--val-fraction", type=float, default=0.2)
     p.add_argument("--seed", type=int, default=42)
+    p.add_argument("--tile-zip", type=Path, help="512px partition archive")
+    p.add_argument("--label-zip", type=Path, help="full-scene label archive")
+    p.add_argument("--limit", type=int, help="cap tiles when extracting")
     args = p.parse_args()
+
+    if args.tile_zip and args.label_zip:
+        written, skipped = extract_from_archives(
+            args.tile_zip, args.label_zip, args.src, args.limit
+        )
+        print(f"extracted {written} paired tiles ({skipped} skipped)")
 
     if not args.src.is_dir():
         print(f"source not found: {args.src}", file=sys.stderr)
