@@ -321,6 +321,120 @@ def get_preview(run_id: str, role: str, max_edge: int = 512):
     )
 
 
+@app.get("/runs/{run_id}/overlay/{key}")
+def get_overlay(run_id: str, key: str, max_edge: int = 1024):
+    """A run artifact as a web-map overlay (plan task 1.6).
+
+    Returns a PNG **already reprojected to EPSG:3857** together with its
+    extent in the `X-Extent` header. Reprojecting server-side is what lets the
+    frontend place the layer exactly without carrying proj4 and a projection
+    registry for every UTM zone an Indian scene might land in - the Cartosat
+    sample alone is zone 45N.
+
+    The alpha channel encodes nodata, so a mask overlays the basemap instead
+    of covering it with a black rectangle.
+    """
+    import io
+
+    import numpy as np
+    import rasterio
+    from PIL import Image
+    from rasterio.warp import transform_bounds
+    from rasterio.vrt import WarpedVRT
+
+    record = get_store().get(run_id)
+    if record is None or not record.get("trace"):
+        raise HTTPException(404, f"no such run: {run_id}")
+
+    trace = record["trace"]
+    paths = trace.get("artifact_paths") or {}
+    if key not in paths:
+        raise HTTPException(
+            404, f"no artifact {key!r}; available: {sorted(paths)}"
+        )
+    path = Path(paths[key])
+    if not path.exists():
+        raise HTTPException(410, "the artifact is no longer on disk")
+
+    try:
+        with rasterio.open(path) as src:
+            if src.crs is None:
+                raise HTTPException(
+                    422, f"{key} has no CRS and cannot be placed on a map"
+                )
+            with WarpedVRT(src, crs="EPSG:3857") as vrt:
+                scale = min(1.0, max_edge / max(vrt.width, vrt.height))
+                width = max(1, int(vrt.width * scale))
+                height = max(1, int(vrt.height * scale))
+                count = min(vrt.count, 3)
+                data = vrt.read(
+                    list(range(1, count + 1)),
+                    out_shape=(count, height, width),
+                    masked=True,
+                ).astype("float32")
+                bounds = transform_bounds(
+                    src.crs, "EPSG:3857", *src.bounds, densify_pts=21
+                )
+    except HTTPException:
+        raise
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(500, _client_safe_error(exc)) from exc
+
+    valid = np.ma.getmaskarray(data)
+    finite = data.compressed() if hasattr(data, "compressed") else data.ravel()
+    finite = finite[np.isfinite(finite)]
+    if finite.size == 0:
+        raise HTTPException(422, f"{key} contains no valid pixels")
+    # Percentile stretch, matching the preview endpoint: a single hot pixel or
+    # a nodata sentinel would otherwise flatten the image to black.
+    low, high = np.percentile(finite, [2, 98])
+    if high <= low:
+        high = low + 1.0
+    scaled = np.clip((np.asarray(data.filled(low)) - low) / (high - low), 0, 1)
+    scaled = (scaled * 255).astype("uint8")
+
+    if scaled.shape[0] == 1:
+        rgb = np.repeat(scaled, 3, axis=0)
+    else:
+        rgb = np.zeros((3, height, width), dtype="uint8")
+        rgb[: scaled.shape[0]] = scaled[:3]
+    alpha = (~valid[0] * 255).astype("uint8")
+    rgba = np.concatenate([rgb, alpha[None, ...]], axis=0)
+    image = Image.fromarray(np.transpose(rgba, (1, 2, 0)), mode="RGBA")
+
+    buffer = io.BytesIO()
+    image.save(buffer, format="PNG")
+    return Response(
+        content=buffer.getvalue(),
+        media_type="image/png",
+        headers={
+            # minx,miny,maxx,maxy in EPSG:3857, which is what ol needs to
+            # place a Static image source.
+            "X-Extent": ",".join(f"{v:.3f}" for v in bounds),
+            "X-Projection": "EPSG:3857",
+            "Access-Control-Expose-Headers": "X-Extent,X-Projection",
+            "Cache-Control": "public, max-age=3600",
+        },
+    )
+
+
+@app.get("/runs/{run_id}/overlays")
+def list_overlays(run_id: str):
+    """Which artifacts of a run can be drawn on a map."""
+    record = get_store().get(run_id)
+    if record is None or not record.get("trace"):
+        raise HTTPException(404, f"no such run: {run_id}")
+    paths = (record["trace"].get("artifact_paths") or {})
+    return {
+        "run_id": run_id,
+        "overlays": [
+            {"key": k, "available": Path(v).exists()}
+            for k, v in sorted(paths.items())
+            if Path(v).suffix.lower() in {".tif", ".tiff"}
+        ],
+    }
+
+
 @app.get("/models")
 def get_model_registry():
     """Model registry page data (task 3.12).

@@ -160,3 +160,91 @@ class TestStreamedAndSyncPathsAgree:
         trace = self._stream_trace(client, no_crs_raster, "Describe this image.")
         assert trace["abstained"]
         assert trace["abstain_resolving_input"]
+
+
+class TestMapOverlays:
+    """Georeferenced overlays for the map viewer (plan task 1.6).
+
+    The server reprojects to EPSG:3857 and returns the extent in a header, so
+    the client places the image without carrying proj4 and a registry entry
+    for every UTM zone an Indian scene can land in.
+    """
+
+    def _run(self, client, image, query="Classify the land cover."):
+        with image.open("rb") as fh:
+            response = client.post(
+                "/runs",
+                data={"query": query},
+                files={"images": ("m.tif", fh, "image/tiff")},
+            )
+        assert response.status_code == 200
+        return response.json()["run_id"]
+
+    def test_overlays_are_listed_with_availability(self, client, msi_6band):
+        run_id = self._run(client, msi_6band)
+        body = client.get(f"/runs/{run_id}/overlays").json()
+        assert body["overlays"]
+        assert all("key" in o and "available" in o for o in body["overlays"])
+
+    def test_an_overlay_is_png_with_a_projected_extent(self, client, msi_6band):
+        run_id = self._run(client, msi_6band)
+        overlays = client.get(f"/runs/{run_id}/overlays").json()["overlays"]
+        key = next(o["key"] for o in overlays if o["available"])
+
+        response = client.get(f"/runs/{run_id}/overlay/{key}")
+        assert response.status_code == 200
+        assert response.headers["content-type"] == "image/png"
+        assert response.headers["X-Projection"] == "EPSG:3857"
+
+        extent = [float(v) for v in response.headers["X-Extent"].split(",")]
+        assert len(extent) == 4
+        minx, miny, maxx, maxy = extent
+        assert minx < maxx and miny < maxy
+        # Web Mercator is bounded; a wild extent means the reprojection failed
+        # silently and the layer would land in the ocean.
+        assert all(abs(v) < 2.01e7 for v in extent)
+
+    def test_the_overlay_carries_an_alpha_channel(self, client, msi_6band):
+        """Nodata must be transparent, or a mask covers the basemap with a
+        black rectangle instead of overlaying it."""
+        import io
+
+        from PIL import Image
+
+        run_id = self._run(client, msi_6band)
+        overlays = client.get(f"/runs/{run_id}/overlays").json()["overlays"]
+        key = next(o["key"] for o in overlays if o["available"])
+        response = client.get(f"/runs/{run_id}/overlay/{key}")
+        assert Image.open(io.BytesIO(response.content)).mode == "RGBA"
+
+    def test_the_extent_header_is_exposed_to_the_browser(self, client, msi_6band):
+        """A cross-origin fetch cannot read it without this, and the frontend
+        is served from a different port."""
+        run_id = self._run(client, msi_6band)
+        overlays = client.get(f"/runs/{run_id}/overlays").json()["overlays"]
+        key = next(o["key"] for o in overlays if o["available"])
+        exposed = client.get(
+            f"/runs/{run_id}/overlay/{key}"
+        ).headers["Access-Control-Expose-Headers"]
+        assert "X-Extent" in exposed
+
+    def test_an_unknown_key_is_404_and_lists_what_exists(self, client, msi_6band):
+        run_id = self._run(client, msi_6band)
+        response = client.get(f"/runs/{run_id}/overlay/not_a_layer")
+        assert response.status_code == 404
+        assert "available" in response.text
+
+    def test_an_unknown_run_is_404(self, client):
+        assert client.get("/runs/run_nope/overlays").status_code == 404
+
+    def test_a_stub_artifact_path_is_410_not_a_crash(self, client, msi_6band):
+        """The stubs report fake paths; asking for one must degrade, and 410
+        (gone) is the honest status rather than 404 or 500."""
+        run_id = self._run(client, msi_6band)
+        overlays = client.get(f"/runs/{run_id}/overlays").json()["overlays"]
+        missing = [o["key"] for o in overlays if not o["available"]]
+        if not missing:
+            pytest.skip("no unavailable artifact in this run")
+        assert client.get(
+            f"/runs/{run_id}/overlay/{missing[0]}"
+        ).status_code == 410

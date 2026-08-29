@@ -13,7 +13,7 @@ numbers, including where they are weak.
 | 1.3 | Controller: config gating, Tier-1 classifier, planner, validation, VRAM manager | **Done** | `satquery/controller/`, 29 tests; **illegal-plan rate 0 / 153 plans** |
 | 1.4 | Synthetic query bank + Tier-1 training and evaluation | **Done** | `satquery/synth/query_bank.py` (3,600 examples), metrics below |
 | 1.5 | FastAPI + SSE trace streaming + SQLite run store | **Done** | `satquery/api/`, 18 tests; verified live over HTTP and from a browser |
-| 1.6 | Frontend shell: upload, live trace panel, confidence card, answer view | **Partial** | `frontend/app/page.tsx`; builds, type-checks, verified end to end in a browser. **No OpenLayers map viewer yet** |
+| 1.6 | Frontend shell: upload, live trace panel, confidence card, answer view | **Done** (map viewer added 2026-08-29) | `frontend/app/page.tsx` + `MapView.tsx`; builds, type-checks, verified end to end in a browser including both basemap modes |
 | 1.7 | Track B v0: QLoRA on VRSBench + RSVQA subset | **Done** - trains, resumes, and answers through the real pipeline on a local RTX 4050 | See "Track B v0" below |
 | 1.8 | `satquery eval` CLI + `--dry-run` + prediction schemas for all four annotation types | **Done** | `satquery/cli/evaluate.py`, `evaluation/schemas.py`, 28 tests |
 | 1.9 | Eval harness v1 with VQA metrics | **Done** | `evaluation/harness.py`, `evaluation/metrics/vqa.py` |
@@ -1597,3 +1597,60 @@ held-out example per stratum: val goes to 23 refusals with all four reasons
 present. It applies to **future runs only** - v1 trained against the
 unstratified partition, so re-splitting now would put training examples on the
 val side.
+
+
+## Task 1.6 - the map viewer, and the hybrid basemap (2026-08-29)
+
+The OpenLayers viewer was the last Phase 1 gap. It was left open partly for
+effort and partly because of a genuine conflict: **a map wants tiles from the
+internet, and task 3.9 requires the system to boot and answer with none.** The
+team's decision is hybrid - live basemap when the internet is reachable, local
+rendering when it is not - and that is what is built.
+
+### `navigator.onLine` cannot implement this
+
+It reports whether the machine has *a* network interface, not whether the tile
+server is reachable. It is `true` on venue wifi that captive-portals every
+request, which is exactly the demo-day failure. The basemap mode is therefore
+decided by **actually fetching one tile** with a 2.5 s timeout and checking it
+decodes - a captive portal answers, but not with an image. A definite
+`onLine === false` is trusted as a fast negative; a `true` is not trusted at
+all.
+
+### The overlay never depends on the outcome
+
+`GET /runs/{id}/overlay/{key}` returns the artifact as a PNG **already
+reprojected to EPSG:3857**, with the extent in an `X-Extent` header and an
+alpha channel so nodata is transparent rather than a black rectangle over the
+basemap. Reprojecting server-side is what lets the client place the layer with
+no proj4 and no projection registry - an Indian scene can land in several UTM
+zones and the Cartosat sample alone is 45N.
+
+So the scene, the mask and every index render identically in both modes. Only
+the backdrop changes: OSM tiles online, a labelled graticule offline, with a
+badge naming the active mode. A blank offline map with no explanation reads as
+broken; naming it is the difference between a degraded feature and an apparent
+failure.
+
+### Verified in both modes, not reasoned about
+
+| mode | badge | OSM tile requests | overlay |
+|---|---|---|---|
+| online | "live basemap" (green) | **9** at zoom 15 | renders |
+| offline | "offline - local rendering" (amber) | **0** | renders identically |
+
+The offline branch is reachable without unplugging anything, because the
+basemap is configurable: `NEXT_PUBLIC_BASEMAP_URL` takes an XYZ template and an
+empty string forces the offline path. That is not only a test hook - **a venue
+with no internet can still run a LOCAL tile server**, and pointing this at it
+gives a real basemap with no external network, which is the strongest form of
+the team's hybrid decision. `NEXT_PUBLIC_BASEMAP_ATTRIBUTION` travels with it,
+and the OSM attribution is rendered only when OSM tiles are actually the
+source - attributing OSM for someone else's server would be wrong.
+
+### A run permalink came with it
+
+`/runs/{runId}` renders a stored run's answer, confidence breakdown, map and a
+link to its PDF. The run store already kept every trace and nothing linked to
+one, so a run was reachable only in the tab that submitted it. It is also what
+made the map testable against a run someone else created.

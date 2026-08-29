@@ -3,6 +3,7 @@
 import { useCallback, useRef, useState } from 'react';
 
 import Comparator from './Comparator';
+import MapView from './MapView';
 
 const API = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000';
 
@@ -220,6 +221,11 @@ export default function Page() {
           <Comparator api={API} runId={runId} roles={roles} />
         </div>
       )}
+
+      {/* Task 1.6. Mounted for ANY completed run, not just pairs: a single
+          image still produces georeferenced index rasters worth putting on a
+          map, and the comparator above only applies to two-image inputs. */}
+      {runId && <MapView runId={runId} />}
 
       <section className="panel" style={{ marginTop: 16 }}>
         <h2>Live trace ({events.length} events)</h2>
