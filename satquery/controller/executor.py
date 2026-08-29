@@ -5,9 +5,9 @@ from something that actually happened: ingest from the manifest, routing from
 the classifier's own probabilities, verification from the deterministic index
 engine, and confidence from the three-component combiner.
 
-Where a Phase 1 component genuinely does not exist yet (the NLI entailment
-gate is task 3.5), the trace says so explicitly rather than reporting a
-fabricated number.
+Where a component genuinely does not exist yet the trace says so explicitly
+rather than reporting a fabricated number - `complementarity` is still `{}`
+for that reason.
 """
 
 from __future__ import annotations
@@ -23,6 +23,7 @@ from satquery.contracts.trace import (
     ClassifierTrace,
     ConfidenceTrace,
     EntailmentGateTrace,
+    FlaggedSentenceTrace,
     IngestTrace,
     RoutingTrace,
     StepExecutionTrace,
@@ -33,6 +34,7 @@ from satquery.controller.calibration import CALIBRATABLE_CONFIDENCE_METHODS
 from satquery.controller.confidence import compute_confidence
 from satquery.controller.intent import CLASSIFIER_NAME, IntentPrediction
 from satquery.synth.narrative import synthesise_answer
+from satquery.verify.entailment import run_gate
 from satquery.verify.verifier import verify as verify_claims
 from satquery.tools.stubs import REGISTRY
 
@@ -97,6 +99,13 @@ def built_up_path(payload: dict) -> str:
 
 class Executor:
     """Runs plan steps and assembles the trace."""
+
+    def __init__(self, verifier_enabled: bool = True):
+        # The off arm of the verifier ablation (task 3.7). Disabling it skips
+        # the entailment gate entirely rather than running it and ignoring the
+        # result, so the ablation measures the gate's real cost as well as its
+        # effect.
+        self.verifier_enabled = verifier_enabled
 
     def execute(
         self,
@@ -251,18 +260,39 @@ class Executor:
         else:
             built_up = built_up_path(index_payload)
 
+        # Task 3.5: gate every sentence of the answer against the payload.
+        # This runs AFTER verify_claims because it reuses those verdicts, and
+        # it can rewrite `final_answer` - a sentence that contradicts the
+        # measured indices is removed rather than shown. The original text is
+        # kept verbatim in the trace, so nothing is hidden.
+        gate = run_gate(final_answer, index_payload, enabled=self.verifier_enabled)
+        final_answer = gate.answer
+        conflicts.extend(
+            f"entailment gate removed: {v.reason}"
+            for v in gate.verdicts
+            if v.status == "flagged"
+        )
+
         verification = VerificationTrace(
             physics_agreement=agreements,
             built_up_path=built_up,
             complementarity={},  # optical-SAR complementarity is task 2.3
             conflicts=conflicts,
             entailment_gate=EntailmentGateTrace(
-                # The NLI gate is task 3.5. Reporting zeros makes it obvious
-                # that no sentences were gated, rather than implying they
-                # passed a check that does not exist yet.
-                sentences=0,
-                retained=0,
-                flagged=0,
+                sentences=gate.sentences,
+                retained=gate.retained,
+                flagged=gate.flagged,
+                unverifiable=gate.unverifiable,
+                backend=gate.backend,
+                action=gate.action,
+                flagged_detail=[
+                    FlaggedSentenceTrace(
+                        sentence=v.sentence, reason=v.reason,
+                        backend=v.backend, score=v.score,
+                    )
+                    for v in gate.verdicts
+                    if v.status == "flagged"
+                ],
             ),
         )
 

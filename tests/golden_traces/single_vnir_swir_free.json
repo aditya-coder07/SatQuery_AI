@@ -238,9 +238,13 @@
       "substitution: NDBI unavailable (no SWIR1); built-up estimated from low_ndvi + texture"
     ],
     "entailment_gate": {
+      "action": "none",
+      "backend": "deterministic",
       "flagged": 0,
-      "retained": 0,
-      "sentences": 0
+      "flagged_detail": [],
+      "retained": 1,
+      "sentences": 2,
+      "unverifiable": 1
     },
     "physics_agreement": {
       "built_up:fraction": 0.7,

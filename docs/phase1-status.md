@@ -645,3 +645,104 @@ multi-resolution split in `evaluation/splits/multires.py` exists to test.
 Recalibrating per effective GSD is open work. Every registry entry carries a
 `split_note` recording exactly this, and a test refuses to ship an entry
 without one.
+
+## Task 3.5 - entailment gate (2026-08-29)
+
+`EntailmentGateTrace` has reported `sentences=0, retained=0, flagged=0` since
+task 1.3. It now reports real counts, and the design changed one thing the
+plan did not specify.
+
+### Three outcomes, not two
+
+A retained/flagged gate has to put "we checked this and it holds" and
+"nothing in the payload speaks to this" in the same bucket, so `retained`
+silently comes to mean "not caught". A 95% retention rate would read as 95%
+verified when most of it was never examined. Every sentence therefore lands in
+exactly one of **retained**, **flagged**, or **unverifiable**, the three sum to
+`sentences`, and all four numbers are in the trace. A caption sentence like
+"the playground is next to the road" is *unverifiable* - no index measures
+playgrounds.
+
+### Two backends, and why the hybrid is not redundant
+
+- **deterministic** - always available, no model, no network. Reuses the 2.9
+  verifier, so its premises are measurements.
+- **nli** - `MoritzLaurer/DeBERTa-v3-base-mnli-fever-anli` (370 MB, MIT,
+  `trust_remote_code=False`), activated only when `SATQUERY_NLI` points at a
+  local checkpoint - the same opt-in pattern as `rs_vqa_v1`. CI and the
+  offline profile run deterministic-only.
+
+Scored on 25 hand-written cases per suite:
+
+| suite | backend | accuracy | dangerous (false → retained) | destructive (true → flagged) |
+|---|---|---|---|---|
+| tuned | deterministic | 76.0% | 6 | 0 |
+| tuned | nli | 92.0% | 0 | 0 |
+| tuned | **deterministic+nli** | **96.0%** | 1 | 0 |
+| **clean** | deterministic | 80.0% | 4 | 1 |
+| **clean** | nli | 80.0% | 0 | 1 |
+| **clean** | **deterministic+nli** | **96.0%** | **0** | 1 |
+
+On the clean suite the hybrid catches **all 9** contradictions where either
+backend alone catches at most 8, and it is 16 points above either. Full
+confusion matrices in `docs/assets/entailment/bench.json`.
+
+### The measurement that changed the design
+
+The first hybrid scored **identically to deterministic alone** - the NLI model
+was never consulted on any case that mattered. The precedence rule was "a
+measurement beats a neural score", which sounds right and was wrong: all six
+deterministic misses were *presence* claims, where the check only asks "is
+this class present at all" and cannot address magnitude or negation. "The
+scene is almost entirely covered by water" against a measured 5% NDWI parses
+as a presence claim about water, water is present, and the gate returned
+`retained` for a plainly false sentence.
+
+Verdicts now carry a **strength**. A verdict resting on a measured quantity -
+a claimed percentage against a measured fraction, either way it lands - is
+`strong` and final. A retain derived from a presence check is `weak` and may
+be overturned by a later backend, but only by *flagging*: NLI can never
+upgrade a weak retain to a certified one. That single change took the hybrid
+from 76% to 92% on the tuned suite.
+
+A second bug surfaced the same way: "most of this scene is under water",
+entailed at 0.95 by a 71% NDWI premise, was flagged at 0.88 against an 8%
+NDVI premise, because the model reasoned that little vegetation excludes
+mostly-water. The indices are thresholded independently and overlap, so the
+premises never licensed that inference - they now say so explicitly, and a
+directly measured entailment outranks another index's inferred contradiction.
+
+### Provenance, because two of those fixes came from the bench
+
+The 25 `TUNED_CASES` were written before either backend was scored, but the
+gate was then **changed twice in response to them**. That makes 96% on the
+tuned suite optimistic in exactly the way `TUNED_HOLDOUT` is, so 25
+`CLEAN_CASES` were written afterwards, over different scenes and phrasings,
+and have never been used to change a line of code. The clean 96% is the
+honest number. Both suites are small (n=25) and single-author, which is the
+setup that flatters a system - direction is informative, absolute values are
+soft. `CONTRADICTION_THRESHOLD` and `ENTAILMENT_THRESHOLD` were never tuned
+against either suite.
+
+### Known limitation, deliberately not fixed
+
+One clean-suite error, and the mechanism is named: **"This is a dry area with
+very little vegetation"** is flagged against a 3% NDVI. The presence check
+reads the sentence as *asserting* vegetation, finds 3% is below the 5%
+presence floor, and flags it - when the sentence asserts near-absence and is
+true. The flag is `strong`, so NLI never gets to correct it.
+
+The candidate fix is negation and minimiser detection before a sentence is
+treated as a presence assertion. It is **not applied**, because fixing it
+against the clean suite would burn that suite exactly as the tuned one was
+burnt. If it is fixed, it must be validated on a third set.
+
+### Effect on answers
+
+A flagged sentence is **removed** from the answer by default; the original
+text is preserved verbatim in the trace along with the reason, so nothing is
+hidden. If every sentence is flagged the gate says so rather than returning an
+empty string - abstention (3.6) is the right mechanism for that case.
+`verifier_enabled=False` on the `Controller` skips the gate entirely and
+reports `backend="disabled"`, so the off arm of the 3.7 ablation can never be
+mistaken for a gate that ran and found nothing.

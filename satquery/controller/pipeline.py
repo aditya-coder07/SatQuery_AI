@@ -26,10 +26,14 @@ class Controller:
         matrix: CapabilityMatrix | None = None,
         matrix_path: str | Path = DEFAULT_MATRIX_PATH,
         vram_budget_mb: int | None = None,
+        verifier_enabled: bool = True,
     ):
         self.matrix = matrix or load_matrix(matrix_path)
         self.router = Router(self.matrix, vram_budget_mb=vram_budget_mb)
-        self.executor = Executor()
+        # `verifier_enabled=False` is the off arm of the verifier ablation
+        # (task 3.7), plumbed from here so the ablation runs the real
+        # controller rather than a reimplementation of it.
+        self.executor = Executor(verifier_enabled=verifier_enabled)
 
     def run(
         self,

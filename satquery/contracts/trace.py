@@ -33,10 +33,25 @@ class StepExecutionTrace(BaseModel):
     confidence_method: str
     runtime_ms: int
 
+class FlaggedSentenceTrace(BaseModel):
+    sentence: str
+    reason: str
+    backend: str
+    score: float | None = None
+
 class EntailmentGateTrace(BaseModel):
     sentences: int
     retained: int
     flagged: int
+    # `retained` alone would be read as "verified". It is not: a sentence
+    # nothing in the payload can speak to is neither supported nor
+    # contradicted, and lumping it in with the supported ones turns "we did
+    # not check this" into "this passed". The three counts sum to
+    # `sentences` so the split is always visible.
+    unverifiable: int = 0
+    backend: str = "not_run"
+    action: str = "none"
+    flagged_detail: list[FlaggedSentenceTrace] = []
 
 class VerificationTrace(BaseModel):
     physics_agreement: dict[str, float]
