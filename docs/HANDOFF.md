@@ -1,0 +1,141 @@
+# Session handoff — 2026-08-29
+
+State: branch `phase-0-closeout`, **752 tests passing**, working tree clean,
+**20 commits unpushed** to PR #1.
+
+Read `docs/phase1-status.md` first. It carries every measured number with its
+caveats, in dated sections, and later sections correct earlier ones.
+`docs/verification.md` tracks the 12-item gate (**6 resolved**).
+
+---
+
+## What happened this session
+
+Phase 3 was built end to end (all 14 tasks addressed, 13 complete), then
+audited for correctness, security, packaging and completeness. The audit found
+more than the build did.
+
+### Phase 3 headline results
+
+| result | number |
+|---|---|
+| agent vs monolith — impossible plans | **148/600 (24.7%) ungated, 0/600 gated** |
+| land-cover head at threshold 0.5 | **worse than always predicting negative** (0.2064 vs 0.1834) |
+| E-AURC: router vs land-cover | 0.0405 vs 0.0966 (raw AURC makes them look equal) |
+| entailment gate, clean suite, hybrid | **96%**, all 9 contradictions caught |
+| deterministic gate cost | **+1.9 ms/query**; NLI **+2,625 ms** (22× the pipeline) |
+| change-mask calibration | ECE 0.0668 → **0.0034** (affine, not temperature) |
+
+### Task 3.1 is the one incomplete task
+
+Track B retrained on a 5,340-example mix (1,654 SAR, 4.57% refusals).
+**VQA improved with no regression** — `rsvqa_lr` exact match 0.4510 → 0.6373 on
+the distribution both models trained on.
+
+**Refusal is a negative result.** Recall 0.4118 decomposes into **5/5 (100%)
+on lexical refusals** and **2/12 (16.7%) on the image-conditional one**. The
+model learned to refuse when the *question* is impossible on its face and did
+not learn to refuse when the *image* is the reason. That is the harder half.
+Loss plateaued from step ~45 over ~half an epoch; refusal fraction, epoch count
+and learning rate are three candidate causes and this run separates none.
+
+---
+
+## The habit that mattered
+
+Four measurement artifacts were caught **in my own work**, and they are the
+reason to trust the rest:
+
+1. The first hybrid entailment gate scored **identically** to deterministic
+   alone — the precedence rule meant NLI was never consulted on the six cases
+   that mattered.
+2. The verifier ablation first reported **+440 ms/query** for the gate. That was
+   cold-start cost attributed to the verifier. With warm-up: +1.9 ms.
+3. The soak test at the plan's **20 iterations** reports +0.2445 MB/query; at
+   120 with warm-up excluded it is +0.0239. The plan's own number would have
+   produced a false leak alarm.
+4. A confidence stressor wrote zeros without setting the raster's nodata value,
+   so it moved the wrong component — a bug in the *measurement* that read as a
+   failure of the *system*.
+
+Where a suite was used to change the design, it is marked burnt and a fresh one
+written (`TUNED_CASES` vs `CLEAN_CASES` in `evaluation/entailment_bench.py`).
+**Before concluding a model failed, check the split can answer the question.**
+
+---
+
+## Audit findings (all fixed)
+
+**Security** — four defects reachable by an unauthenticated caller: unbounded
+uploads; temp directories never deleted; the blanket handler converting a
+deliberate 413 into a 500; and the **SSE path reaching past the controller**,
+which had drifted so streamed answers silently lost the task-3.8 exclusion
+notice — the path the frontend uses.
+
+**Packaging** — both Docker images **could not build** (`python:3.11-slim` while
+rasterio 1.5.1 declares `requires_python >=3.12`, verified against PyPI).
+Compose set `PROFILE` where the loader reads `SATQUERY_PROFILE`. Pillow was
+undeclared despite being a direct runtime import. `reportlab` was missing from
+pyproject, which CI installs from. Added a `train` extra — the whole GPU stack
+was undeclared.
+
+**Completeness** — Phase 2 tasks 2.5, 2.7, 2.8 were incomplete: the models were
+trained and their metrics published, and **no tool module existed**, so three
+checkpoint directories were unreachable from a query. Now wired.
+
+Wiring them exposed a **verifier defect**: `extract_claims` returned only the
+*first* subject in a sentence, so "a bridge is over a river with some green
+trees" was checked on vegetation only and the water claim never at all.
+
+---
+
+## Open — in priority order
+
+1. **Confirm which SAR sensor ISRO/SAC will use.** Now the highest-value
+   question, not a footnote. Verification item 8 is resolved to a *no*:
+   high-res SAR is freely available and permissively licensed, but Umbra,
+   Capella and SpaceNet 6 are all **X-band** (9.69 GHz measured from a real
+   product) while EOS-04 is **C-band** (5.40 GHz) — a 1.79× wavelength ratio
+   against the 0.09% Sentinel-1 match. **If the sensor is RISAT-2B/2BR1 instead,
+   those are X-band and this inverts** — Stage A3 should then be redone against
+   0.25 m SAR rather than the optical-only arm that shipped.
+2. **Verification item 10** — SIH deadline and submission format. Needs the team.
+3. **The Cartosat priced-data risk** — for the team lead.
+4. **Push the 20 commits** and merge PR #1.
+
+### Known gaps, deliberately left
+
+- **A flake I could not explain.** `test_swir_free_path_exercised_on_real_cartosat`
+  failed once under the CI simulation and passed on three subsequent full runs.
+  One in four is not "fine"; it is unresolved.
+- **Tier-2 LLM tiebreak unbuilt** — `llm_tiebreak_invoked` is always `false`.
+  Not one of the 14 tasks; an unbuilt feature with an honest flag.
+- **`landcover_v1` asserts on ~0.25% of decisions** at 91% precision. Correct
+  behaviour for a head with mAP 0.285, stated in `configs/thresholds.yaml`.
+- **The entailment bench has no multi-subject sentences**, so it cannot exercise
+  the case the real captioner produces immediately. Adding them to the clean
+  suite would burn it.
+- **`artifacts/run_*/` grows unbounded** (gitignored runtime output; the temp
+  uploads *are* bounded).
+- **3.1's refusal half** — see above.
+
+---
+
+## Environment
+
+- Local RTX 4050 with CUDA, torch 2.13+cu126, bitsandbytes, peft, accelerate.
+  `training/track_b_vlm_qlora.py`'s "cannot run here" docstring was stale and is
+  corrected — it runs locally.
+- `gh` is installed but not on the Git Bash PATH: call it as
+  `"/c/Program Files/GitHub CLI/gh.exe"`.
+- Gitignored but on disk: BigEarthNet shards, WHU-OPT-SAR, LEVIR-CD/MCI, RSICD,
+  DIOR-RSVG, the Bhoonidhi products, `checkpoints/`, `models/` (including the
+  370 MB MNLI checkpoint for the gate's NLI backend).
+- Learned tools are all **opt-in by environment variable** and fall back to
+  stubs, which is what keeps CI green: `SATQUERY_CAPTION`, `SATQUERY_GROUNDING`,
+  `SATQUERY_CHANGE_CAPTION`, `SATQUERY_LANDCOVER`, `SATQUERY_CHANGE_MASK`,
+  `SATQUERY_FUSION`, `SATQUERY_NLI`, `SATQUERY_VQA_BASE`/`_ADAPTER`.
+- `make report` regenerates every evaluation artifact under `docs/assets/`.
+- **CI has no torch.** Verify with the block-import simulation before claiming a
+  green CI — it caught a module-scope import that made the whole package
+  unimportable, which the normal suite could not.
