@@ -161,6 +161,15 @@ def score(adapter: Adapter, examples: list[dict], root: Path) -> dict:
         by_group[f"kind:{example.get('kind', 'vqa')}"].append(
             (example, predictions[i])
         )
+        # Per-reason, because aggregate refusal recall hides the only
+        # distinction that matters. On the v1 run it was 0.4118 overall,
+        # which decomposes into 5/5 on the lexical categories and 2/12 on
+        # the image-conditional one - two completely different verdicts
+        # averaged into one uninformative number.
+        if example.get("refusal_reason"):
+            by_group[f"reason:{example['refusal_reason']}"].append(
+                (example, predictions[i])
+            )
 
     groups = {}
     for name, rows in sorted(by_group.items()):

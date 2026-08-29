@@ -1418,3 +1418,87 @@ One correction while here: `track_b_vlm_qlora.py`'s docstring said the script
 CUDA)". That was true when written and is now stale - this machine has CUDA,
 bitsandbytes 0.50.2, peft 0.20.0 and accelerate 1.14.0, and the script runs
 here.
+
+## Task 3.1 - Track B retrain: RESULTS (2026-08-29, later)
+
+Training finished: 300/300 steps, ~88 min on the local RTX 4050, adapter at
+`checkpoints/track_b_v1/adapter_final`. Loss fell fast to step ~45 (15.87 ->
+6.62) and then **plateaued at 6.5-6.9 for the remaining 255 steps**. At
+effective batch 8 that is ~2,400 examples, roughly **half an epoch** over the
+4,806-example mix.
+
+Both adapters scored on the **identical** held-out split.
+
+### VQA: improved, and the regression risk did not materialise
+
+n = 250 (v0 vs v1) and n = 534 (v1, full val):
+
+| group | n | v0 exact | v1 exact | v0 F1 | v1 F1 |
+|---|---|---|---|---|---|
+| **`rsvqa_lr`** - both trained on it, the fair comparison | 102 | 0.4510 | **0.6373** | 0.4510 | **0.6373** |
+| `whu_opt_sar` - v1 saw it, v0 did not | 148 | 0.0000 | 0.2113 | 0.0908 | 0.8848 |
+| overall | 250 | 0.1885 | **0.3893** | 0.2413 | **0.7813** |
+
+On the full 534-example val split v1 holds up: overall exact 0.3810, F1 0.7913;
+`rsvqa_lr` exact **0.6425** (n=207); `whu_opt_sar` exact 0.2065, F1 0.8906.
+
+**The `rsvqa_lr` row is the one that mattered.** Adding SAR and refusals to the
+mix could have cost accuracy on the distribution both models trained on. It
+gained **+18.6 points** of exact match instead. The `whu_opt_sar` row is
+favourable by construction and only shows the new data taught something.
+
+### Refusal: the aggregate hides the finding, and the decomposition is the finding
+
+| metric | v0 | v1 (n=534) |
+|---|---|---|
+| refusal recall | 0.0000 | **0.4118** (7/17) |
+| false-refusal rate | 0.0000 | **0.0077** (4/517) |
+| matched-pair probe | 0.0000 | **0.1667** (2/12) |
+
+0.4118 on its own is uninformative. It decomposes exactly, from the group
+counts, into two opposite verdicts:
+
+| refusal category | recall | what it needs |
+|---|---|---|
+| `sensor_cannot_measure`, `single_image_temporal`, `out_of_scope` | **5/5 = 100%** | recognising the *question* |
+| `not_in_image` | **2/12 = 16.7%** | recognising the *image* |
+
+**The model learned every lexical refusal perfectly and almost none of the
+image-conditional one.** The matched-pair probe agrees exactly (2/12), which is
+what it was built to detect: those pairs use byte-identical wording and differ
+only in which tile they ask about.
+
+This is precisely the failure the mix was designed to expose, and the design
+worked. Had the refusals been generated the easy way - random images paired
+with unanswerable questions - every category would have been lexical, refusal
+recall would have read ~100%, and the report would have claimed a capability
+the model does not have.
+
+The false-refusal rate of 0.0077 is worth noting alongside: v1 is not
+over-refusing to buy recall.
+
+### Verdict: half met, and the half that failed is the interesting half
+
+- *"Improved metrics across VQA/caption"* - **met**, with no regression on the
+  shared distribution.
+- *"Model declines appropriately"* - **not met**. It declines when the question
+  is impossible on its face and does not decline when the image is the reason,
+  which is the harder and more useful half.
+
+What these numbers do **not** separate is why: ~5% refusals, half an epoch, and
+a learning rate that plateaued by step 45 are three candidate explanations and
+this run distinguishes none of them. The plateau makes "too few steps" the
+weakest of the three, which points at the mix fraction or the LR - but that is
+a hypothesis for the next run, not a result.
+
+### A flaw in the split, found while measuring this
+
+The val split held only **17 refusals**, and `sensor_cannot_measure` had
+**zero** - the 90/10 split was random, not stratified by kind. One of four
+refusal reasons was unmeasurable and each item moved recall by 5.9 points.
+
+`stratified_split` now partitions by `(kind, refusal_reason)` with at least one
+held-out example per stratum: val goes to 23 refusals with all four reasons
+present. It applies to **future runs only** - v1 trained against the
+unstratified partition, so re-splitting now would put training examples on the
+val side.
