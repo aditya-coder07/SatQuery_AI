@@ -299,8 +299,12 @@ class ToolResult(BaseModel):
     version: str
     payload: dict                 # STRUCTURED FACTS ONLY - never free prose
     artifacts: list[Artifact]
-    confidence: float             # calibrated [0,1]
-    confidence_method: Literal["logprob","softmax_temp_scaled","threshold_rule","deterministic"]
+    confidence: float             # [0,1]; see confidence_method for what it IS
+    # What the number actually measures. Only `logprob` and
+    # `mean_asserted_probability` are probabilities at all, and neither is
+    # P(correct) - so none of these is calibratable today. See
+    # CALIBRATABLE_CONFIDENCE_METHODS in satquery/controller/calibration.py.
+    confidence_method: Literal["logprob","sharpness","mean_asserted_probability","threshold_rule","deterministic"]
     model_card: str               # name, weights sha256, training data summary
     runtime_ms: int
     warnings: list[str]
@@ -458,7 +462,7 @@ The PS requires "an auditable execution summary containing the selected task, mo
     {"step":"s2","tool":"optsar_fusion_v1","version":"0.9.1",
      "params":{"fusion_mode":"cross_attn","target_gsd_m":1.6,"classes":["built_up","water"],"mode":"triad"},
      "outputs":{"mask_optical":"art/lc_opt.tif","mask_sar":"art/lc_sar.tif","mask_fused":"art/lc_fused.tif"},
-     "confidence":0.78,"confidence_method":"softmax_temp_scaled","runtime_ms":2140},
+     "confidence":0.78,"confidence_method":"mean_asserted_probability","runtime_ms":2140},
     {"step":"s3","tool":"rs_vqa_v1","version":"0.8.0",
      "params":{"max_new_tokens":128,"adapter":"caption_lora_v4"},
      "confidence":0.71,"confidence_method":"logprob","runtime_ms":1890}

@@ -10,6 +10,17 @@ machines keep a green suite instead of half-loading a model.
 The mask is written in the *reference image's* CRS and transform, so it opens
 aligned in QGIS. Emitting an ungeoreferenced PNG would make the headline
 deliverable of a change-detection system unusable in a GIS.
+
+Confidence is `mean(|p - 0.5|) * 2` over the per-pixel change probabilities:
+0 when every pixel sits at the undecided midpoint, 1 when every pixel is
+saturated. That is **sharpness** - how decisive the detector was - and it is
+reported under `confidence_method="sharpness"` for exactly that reason. It is
+NOT a probability of correctness: a detector can be uniformly saturated and
+uniformly wrong, and this number would read 1.0. It therefore feeds the
+three-part confidence combiner as one weak signal and is excluded from
+calibration, which is only defined on a probability. Until Phase 3 this was
+labelled `softmax_temp_scaled`, which was wrong twice over - nothing was
+temperature-scaled, and the value was never a softmax probability.
 """
 
 from __future__ import annotations
@@ -181,7 +192,7 @@ class ChangeMaskTool(ToolProtocol):
             tool=TOOL_NAME, version=TOOL_VERSION, payload=payload,
             artifacts=artifacts,
             confidence=float(np.abs(probability - 0.5).mean() * 2),
-            confidence_method="softmax_temp_scaled",
+            confidence_method="sharpness",
             model_card=f"tiny siamese change detector ({Path(handle.path).name})",
             runtime_ms=int((time.perf_counter() - started) * 1000),
             warnings=warnings,

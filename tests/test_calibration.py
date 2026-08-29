@@ -15,9 +15,12 @@ rule exists to reject.
 from __future__ import annotations
 
 import json
+from typing import get_args
 
 import numpy as np
 import pytest
+
+from satquery.contracts.tool_result import ToolResult
 
 from evaluation.calibration import (
     apply_affine,
@@ -268,10 +271,41 @@ class TestRuntimeRegistry:
         for p in (0.0, 1.0):
             assert 0.0 <= entry.apply(p) <= 1.0
 
-    def test_stub_and_sharpness_confidences_are_not_calibratable(self):
-        """The gate that keeps a fitted transform off a non-probability."""
-        for method in ("threshold_rule", "deterministic", "softmax_temp_scaled"):
-            assert method not in CALIBRATABLE_CONFIDENCE_METHODS
+    def test_no_current_confidence_method_is_calibratable(self):
+        """The gate that keeps a fitted transform off a non-probability.
+
+        Every value the contract allows is checked, so adding a new
+        `confidence_method` to `ToolResult` without deciding whether it is a
+        P(correct) fails here rather than silently defaulting either way.
+        """
+        allowed = get_args(ToolResult.model_fields["confidence_method"].annotation)
+        assert set(allowed) == {
+            "logprob", "sharpness", "mean_asserted_probability",
+            "threshold_rule", "deterministic",
+        }
+        for method in allowed:
+            assert method not in CALIBRATABLE_CONFIDENCE_METHODS, method
+
+    def test_the_retired_softmax_temp_scaled_label_is_gone(self):
+        """It claimed a temperature scaling that never happened."""
+        allowed = get_args(ToolResult.model_fields["confidence_method"].annotation)
+        assert "softmax_temp_scaled" not in allowed
+
+    def test_a_calibratable_method_would_actually_reach_the_registry(self):
+        """The gate is closed today, but it must not be closed by accident.
+
+        With the set empty the executor never passes a head, so nothing else
+        in this file would notice if `lookup` stopped working. This asserts
+        the wiring behind the gate is live.
+        """
+        entry = CalibrationEntry(
+            head="SINGLE_LANDCOVER", method="affine", T=2.87, a=0.35, b=-0.85,
+            ece_before=0.064, ece_after=0.047, n_fit=2934, n_eval=2933,
+            dataset="BigEarthNet-19", split_note="official test shard",
+        )
+        registry = runtime.Registry({"SINGLE_LANDCOVER": entry}, "test", "loaded")
+        assert registry.lookup("SINGLE_LANDCOVER") is entry
+        assert method_label(entry, registry) == "affine:SINGLE_LANDCOVER"
 
     def test_shipped_registry_is_loadable_and_self_consistent(self):
         """The committed registry must parse and must not ship a rejected fit."""

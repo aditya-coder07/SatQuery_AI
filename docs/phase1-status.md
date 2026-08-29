@@ -598,27 +598,37 @@ which answer is given. There is a test asserting the ranking is preserved.
 ### What is calibrated at runtime today: nothing, on purpose
 
 The registry is fitted, the runtime path is wired and tested, and it is
-currently inactive - because no tool reports a quantity the registry is
-defined on:
+currently inactive - because **no tool reports a probability of correctness**.
+`CALIBRATABLE_CONFIDENCE_METHODS` in `satquery/controller/calibration.py` is
+therefore empty, and every value the `ToolResult` contract allows is excluded
+for a stated reason:
 
-- stub tools return hardcoded constants (`threshold_rule`). A constant has no
-  reliability curve, and recalibrating one produces a number that looks
-  measured and is not.
-- `index_engine_v1` is `deterministic`. There is no probability to fit.
-- **`change_mask_v1` and `optsar_fusion` declare
-  `confidence_method="softmax_temp_scaled"`, which has been inaccurate since
-  Phase 2.** They compute `mean(|p - 0.5|) * 2`, a *sharpness* statistic, not
-  P(correct), and nothing was temperature-scaled. Feeding it through a fitted
-  probability calibration would be a category error. The label should be
-  corrected; the calibration gate does not depend on the name being fixed,
-  because the value is excluded explicitly.
+| `confidence_method` | tool | what the number is | why it is not calibratable |
+|---|---|---|---|
+| `deterministic` | `index_engine_v1`, `change_vqa` | arithmetic on measured indices | there is no probability to fit |
+| `threshold_rule` | the nine stubs | a hardcoded constant | a constant has no reliability curve; recalibrating one produces a number that looks measured and is not |
+| `sharpness` | `change_mask_v1` | `mean(\|p - 0.5\|) * 2` | measures how *decisive* the detector was, not whether it was right - uniformly saturated and uniformly wrong scores 1.0 |
+| `mean_asserted_probability` | `optsar_fusion` | mean fused probability over classes above `PRESENCE_THRESHOLD` | genuinely a probability, but an aggregate over a threshold-selected subset; a fitted transform is nonlinear, so calibrating a mean of probabilities is not calibrating each class and averaging |
+| `logprob` | `rs_vqa_v1` | mean probability of the tokens a greedy decode chose | fluency, not correctness - a model can be certain of every token in a confidently wrong answer |
 
-`CALIBRATABLE_CONFIDENCE_METHODS` in `satquery/controller/calibration.py`
-holds the opt-in list, and the path activates by itself the moment a tool
-reports a genuine per-head probability. The alternative - putting the
-land-cover transform on a stub's hardcoded 0.8, which turns a demo trace from
-HIGH into a "calibrated" MEDIUM - would have been a fabricated number in
-front of a judge.
+Two corrections are folded into that table.
+
+**`softmax_temp_scaled` is retired.** `change_mask_v1` and `optsar_fusion`
+both claimed it since Phase 2, and it was wrong twice over: nothing was ever
+temperature-scaled, and neither value was a softmax probability. The name is
+gone from the `ToolResult` contract as well as from the tools, so it cannot
+be reached for again.
+
+**`logprob` was wrongly listed as calibratable when task 3.3 first shipped.**
+`rs_vqa_v1`'s own docstring had always said the value "feeds the confidence
+combiner rather than being reported as a probability of correctness", and the
+gate contradicted it. Removing it changes no observable behaviour - there is
+no accepted fit for the VQA head either - but a gate should mean what it says.
+
+The path activates by itself the moment a tool reports a genuine per-head
+P(correct). The alternative - putting the land-cover transform on a stub's
+hardcoded 0.8, which turns a demo trace from HIGH into a "calibrated" MEDIUM -
+would have been a fabricated number in front of a judge.
 
 The trace now distinguishes four states instead of one word: calibrated
 (`affine:SINGLE_LANDCOVER`), score-is-not-a-probability, registry

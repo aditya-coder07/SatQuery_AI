@@ -86,26 +86,35 @@ class Registry:
 # calibration is even defined on.
 #
 # Calibration maps a probability of correctness to a better probability of
-# correctness. Most tools do not report one:
+# correctness. **No tool currently reports one**, so this set is empty:
 #
-# * `deterministic`  - the index engine. Arithmetic, no probability to fit.
+# * `deterministic` - the index engine. Arithmetic, no probability to fit.
 # * `threshold_rule` - stub tools returning a fixed constant. A constant has
-#                      no reliability curve; recalibrating it would produce a
-#                      number that looks measured and is not.
-# * `softmax_temp_scaled` - as used by `change_mask_v1` and `optsar_fusion`
-#                      this is `mean(|p - 0.5|) * 2`, a SHARPNESS statistic,
-#                      not P(correct). Passing it through a fitted transform
-#                      would be a category error, and the name has been
-#                      misleading since Phase 2 - see docs/phase1-status.md.
+#   no reliability curve; recalibrating it would produce a number that looks
+#   measured and is not.
+# * `sharpness` - `change_mask_v1`. `mean(|p - 0.5|) * 2` measures how
+#   decisive the detector was, not whether it was right. A detector that is
+#   uniformly saturated and uniformly wrong scores 1.0.
+# * `mean_asserted_probability` - `optsar_fusion`. Genuinely a probability,
+#   but an aggregate over a threshold-selected subset. A fitted calibration
+#   is nonlinear, so transforming a mean of probabilities is not the same as
+#   calibrating each class and averaging. Calibrating this head means
+#   transforming `p_fused` per class inside the tool.
+# * `logprob` - `rs_vqa_v1`. The mean probability of the tokens a greedy
+#   decode chose. That is fluency, not correctness: a model can be certain of
+#   every token in a confidently wrong answer. The tool's own docstring has
+#   always said this value "feeds the confidence combiner rather than being
+#   reported as a probability of correctness"; task 3.3 nonetheless listed it
+#   here, which was wrong. Removing it changes no observable behaviour - there
+#   is no accepted fit for the VQA head either - but the gate should mean what
+#   it says.
 #
-# The consequence is that no tool currently in the registry qualifies, so the
-# runtime stays uncalibrated today. That is the correct state, not a gap: the
-# fitted parameters and their ECE tables are the deliverable of task 3.3, and
-# this path activates by itself the moment a tool reports a real per-head
-# probability. The alternative - calibrating a stub's hardcoded 0.8 with the
-# land-cover head's transform - would put a fabricated "calibrated" number in
-# front of a judge.
-CALIBRATABLE_CONFIDENCE_METHODS = frozenset({"logprob"})
+# An empty set is the correct state, not a gap. The fitted parameters and
+# their ECE tables are the deliverable of task 3.3; this path activates by
+# itself the moment a tool reports a real per-head P(correct). The
+# alternative - calibrating a stub's hardcoded 0.8 with the land-cover head's
+# transform - would put a fabricated "calibrated" number in front of a judge.
+CALIBRATABLE_CONFIDENCE_METHODS: frozenset[str] = frozenset()
 
 _EMPTY_REASONS = {
     "missing": "no calibration registry on disk",
