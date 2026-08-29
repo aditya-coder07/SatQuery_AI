@@ -7,7 +7,10 @@ name = "satquery"
 version = "0.1.0"
 description = "SatQuery AI"
 readme = "README.md"
-requires-python = ">=3.11"
+# rasterio 1.5.1 requires >=3.12; the rest of the pins are fine on
+# 3.11, but declaring 3.11 while depending on rasterio 1.5.1 is a
+# claim the dependency set cannot honour.
+requires-python = ">=3.12"
 dependencies = [
     "pydantic==2.12.5",
     "pyyaml==6.0.3",
