@@ -19,7 +19,12 @@ from evaluation.refusal import (
     matched_pairs,
     never_refuse,
 )
-from training.prepare.instruction_mix import REFUSALS, build_mix
+from training.prepare.instruction_mix import (
+    REFUSALS,
+    Example,
+    build_mix,
+    stratified_split,
+)
 
 MIX_DIR = Path("data/instruct_mix")
 
@@ -98,6 +103,63 @@ class TestDegenerateBaselines:
         result = evaluate(ideal, examples, matched_pairs(examples))
         assert result["lexical_shortcut_probe"] == 1.0
         assert result["false_refusal_rate"] == 0.0
+
+
+class TestStratifiedSplit:
+    """The split must not let a refusal reason vanish from the held-out set.
+
+    A plain random split did exactly that: of 244 refusals, val received 17
+    and `sensor_cannot_measure` received ZERO, so one of four reasons was
+    unmeasurable and refusal recall moved 5.9 points per item.
+    """
+
+    @pytest.fixture
+    def examples(self):
+        rows = []
+        for i in range(200):
+            rows.append(Example(f"{i}.tif", "q", "a", "src", "vqa"))
+        for reason, count in (
+            ("not_in_image", 20), ("sensor_cannot_measure", 6),
+            ("single_temporal", 6), ("out_of_scope", 3),
+        ):
+            for i in range(count):
+                rows.append(
+                    Example(f"{reason}_{i}.tif", "q", REFUSALS["not_in_image"],
+                            "src", "refusal", refusal_reason=reason)
+                )
+        return rows
+
+    def test_every_refusal_reason_reaches_the_val_side(self, examples):
+        _, val = stratified_split(examples, 0.1, seed=0)
+        reasons = {e.refusal_reason for e in val if e.refusal_reason}
+        assert reasons == {
+            "not_in_image", "sensor_cannot_measure", "single_temporal",
+            "out_of_scope",
+        }
+
+    def test_nothing_is_lost_or_duplicated(self, examples):
+        train, val = stratified_split(examples, 0.1, seed=0)
+        assert len(train) + len(val) == len(examples)
+        assert not {id(e) for e in train} & {id(e) for e in val}
+
+    def test_the_val_fraction_is_approximately_honoured(self, examples):
+        _, val = stratified_split(examples, 0.1, seed=0)
+        assert 0.08 <= len(val) / len(examples) <= 0.16
+
+    def test_it_is_deterministic_for_a_seed(self, examples):
+        a = stratified_split(examples, 0.1, seed=7)[1]
+        b = stratified_split(examples, 0.1, seed=7)[1]
+        assert [e.image for e in a] == [e.image for e in b]
+
+    def test_a_singleton_stratum_stays_in_train(self, examples):
+        """One example cannot be both trained on and held out."""
+        rows = examples + [
+            Example("only.tif", "q", "a", "src", "refusal",
+                    refusal_reason="unique_reason")
+        ]
+        train, val = stratified_split(rows, 0.1, seed=0)
+        assert "only.tif" in {e.image for e in train}
+        assert "only.tif" not in {e.image for e in val}
 
 
 @pytest.mark.skipif(

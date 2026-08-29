@@ -317,6 +317,43 @@ def build_mix(
     return examples, stats
 
 
+def stratified_split(
+    examples: list[Example], val_fraction: float, seed: int
+) -> tuple[list[Example], list[Example]]:
+    """Split holding the proportion of every refusal reason.
+
+    A plain random split does NOT do this, and the first version of this file
+    used one. The consequence was measured rather than theorised: of 244
+    refusals, the val side received 17, and `sensor_cannot_measure` received
+    ZERO - so one of the four refusal reasons could not be evaluated at all,
+    and refusal recall moved 5.9 points per item.
+
+    Stratifying by (kind, refusal_reason) puts a proportional share of every
+    category on both sides. It does not manufacture data - 5% of a small
+    corpus is still a small number of refusals - but it stops a whole
+    category vanishing from the held-out set by chance.
+    """
+    rng = random.Random(seed)
+    strata: dict[tuple[str, str | None], list[Example]] = {}
+    for example in examples:
+        strata.setdefault((example.kind, example.refusal_reason), []).append(example)
+
+    train: list[Example] = []
+    val: list[Example] = []
+    for group in strata.values():
+        rng.shuffle(group)
+        # At least one item per stratum on the val side whenever the stratum
+        # has more than one member: a category with zero held-out examples is
+        # unmeasurable, which is the failure this function exists to prevent.
+        n_val = max(1, round(len(group) * val_fraction)) if len(group) > 1 else 0
+        val.extend(group[:n_val])
+        train.extend(group[n_val:])
+
+    rng.shuffle(train)
+    rng.shuffle(val)
+    return train, val
+
+
 def main() -> int:
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--data-root", type=Path, default=Path("data"))
@@ -344,8 +381,8 @@ def main() -> int:
             Path(example.image).resolve(), args.out.resolve()
         ).replace(os.sep, "/")
 
-    cut = int(len(examples) * (1 - args.val_fraction))
-    for name, subset in (("instruct", examples[:cut]), ("val", examples[cut:])):
+    train, val = stratified_split(examples, args.val_fraction, args.seed)
+    for name, subset in (("instruct", train), ("val", val)):
         path = args.out / f"{name}.jsonl"
         path.write_text(
             "\n".join(e.to_json() for e in subset) + "\n", encoding="utf-8"
