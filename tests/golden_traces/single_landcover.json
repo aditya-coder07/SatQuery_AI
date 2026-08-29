@@ -1,5 +1,8 @@
 {
+  "abstain_limiting_component": null,
   "abstain_reason": null,
+  "abstain_resolving_input": null,
+  "abstain_trigger": null,
   "abstained": false,
   "answer": "Index thresholds indicate 18% vegetation, 82% water and 82% built-up land. These classes are measured independently and may overlap.",
   "artifacts": [

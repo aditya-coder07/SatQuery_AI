@@ -1,7 +1,10 @@
 {
-  "abstain_reason": "input validation failed (crs_present) - resolve the input before a reliable answer is possible",
+  "abstain_limiting_component": "input_quality",
+  "abstain_reason": "input validation failed (crs_present) - no reliable answer is possible from these inputs - supply inputs that pass those checks; each check's own message is in the trace under ingest.checks",
+  "abstain_resolving_input": "supply inputs that pass those checks; each check's own message is in the trace under ingest.checks",
+  "abstain_trigger": "input_validation",
   "abstained": true,
-  "answer": "input validation failed (crs_present) - resolve the input before a reliable answer is possible",
+  "answer": "input validation failed (crs_present) - no reliable answer is possible from these inputs - supply inputs that pass those checks; each check's own message is in the trace under ingest.checks",
   "artifacts": [],
   "code_version": "0.2.0-phase1",
   "confidence": {

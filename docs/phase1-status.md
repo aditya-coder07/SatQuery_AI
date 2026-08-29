@@ -746,3 +746,113 @@ empty string - abstention (3.6) is the right mechanism for that case.
 `verifier_enabled=False` on the `Controller` skips the gate entirely and
 reports `backend="disabled"`, so the off arm of the 3.7 ablation can never be
 mistaken for a gate that ran and found nothing.
+
+## Task 3.6 - abstention, risk-coverage and AURC (2026-08-29)
+
+### The policy
+
+Phase 1 abstained on one condition - the router picked `CLARIFY_OR_ABSTAIN` -
+and emitted one of two fixed sentences. That is a routing outcome, not a
+policy: a confidently-routed plan whose answer the physics contradicted still
+came back as an answer.
+
+`satquery/controller/abstention.py` adds four triggers, checked in order of
+how actionable the cause is, under one rule:
+
+> **Every abstention names the input that would resolve it.**
+
+| trigger | fires when | what the user is told to change |
+|---|---|---|
+| `input_validation` | a blocking ingest check failed | the failing check names, and where to read each one's message |
+| `routing` | the query could not be mapped to a legal task | rephrase, with two concrete example phrasings |
+| `no_supported_content` | the entailment gate flagged **every** sentence | a cleaner or higher-resolution input - not a rephrasing |
+| `low_confidence` | combined confidence or input quality is below threshold | the resolution for the **limiting component** |
+
+The last row is the point. "Confidence too low" is a dead end. The combined
+score is a geometric mean and says nothing about which of the three components
+collapsed, so the policy finds the smallest one and reports the resolution for
+*that*: failing check names for `input_quality`, the disagreeing index for
+`agreement`, a better scene or a more specific question for `model`. The trace
+now carries `abstain_trigger`, `abstain_limiting_component` and
+`abstain_resolving_input` alongside the message, and a parametrised test
+asserts that no trigger can produce an abstention without a resolving input.
+
+Thresholds live in `configs/thresholds.yaml`, which was empty for all of
+Phase 1 and 2. They are deliberately permissive, and the file says why: a
+policy tuned to look good on a demo set converts silent errors into silent
+refusals, and a system that abstains on everything has a perfect
+risk-coverage curve and zero utility.
+
+### Risk-coverage and why AURC alone is misleading
+
+Sort predictions by confidence, answer the most confident fraction (coverage),
+abstain on the rest, and plot the error among those answered (risk).
+
+**AURC mostly measures accuracy, not confidence.** A model with 30% error has
+a high AURC even with a perfect confidence ranking, simply because it is wrong
+a lot. **E-AURC = AURC - AURC_optimal**, where the optimum is the area a
+perfect ranking achieves *at the same accuracy*, is zero for a perfect ranking
+regardless of accuracy. It is the number that answers "is this confidence
+signal worth anything", and it is what should be compared.
+
+| signal | n | base error | AURC | optimal | **E-AURC** |
+|---|---|---|---|---|---|
+| Tier-1 router (CLEAN_HOLDOUT) | 29 | 0.3793 | 0.1302 | 0.0897 | **0.0405** |
+| Track A land-cover (BEN test) | 111,473 | 0.2064 | 0.1195 | 0.0229 | **0.0966** |
+
+Note what raw AURC would have told you: the two look comparable (0.130 vs
+0.120). E-AURC says the router's confidence ranking is more than twice as good
+as the land-cover head's, despite the router being far less accurate.
+
+Operationally useful readings, which is what the curve is for:
+
+| signal | coverage at risk<=0.05 | <=0.10 | <=0.20 |
+|---|---|---|---|
+| Tier-1 router | 27.6% | 58.6% | 72.4% |
+| Track A land-cover | 0.3% | 55.3% | 97.8% |
+
+Answering the most confident 59% of router queries holds error under 10%,
+which is direct evidence that the existing `LOW_CONFIDENCE_TOP1` gate is
+gating on something real. The router row rests on **n=29** and the curve is
+visibly stepped - one item moves it - so treat it as a shape, not a number.
+
+Curves in `docs/assets/abstention/`, full data in `selective.json`.
+
+### The land-cover head is worse than trivial at any fixed threshold
+
+This came out of the risk-coverage work and is the most consequential
+measurement in Phase 3 so far.
+
+Per (patch, class) decision on the official BigEarthNet test shard:
+
+| decision rule | error |
+|---|---|
+| always predict negative | **0.1834** |
+| the head at threshold 0.5 | **0.2064** |
+| the head at its best fixed threshold (0.95) | 0.1826 |
+
+**At threshold 0.5 the head is worse than always saying "no",** and the best
+fixed threshold it admits is 0.95 - which is *almost* always saying no, for a
+0.0008 improvement. Only 18.3% of class-instances are positive, so the trivial
+baseline is strong, and a briefly-trained 0.94M-parameter model does not beat
+it on hard calls.
+
+This does not make the head worthless, and the distinction matters. mAP is
+threshold-free and measures *ranking*; at 0.285 the ranking carries real
+signal, and the multi-resolution result in task 2.1 was measured the same way.
+What the table shows is that **this head must not be used to make hard yes/no
+calls**, which is exactly what selective prediction is for: rank, cover the
+confident fraction, abstain on the rest. It also explains the E-AURC gap
+above.
+
+It is recorded here because a report quoting mAP 0.285 without it would leave
+a reader assuming the thresholded classifier works.
+
+### What this does not measure
+
+Both signals are *head-level*. Neither is the system's own abstention rate,
+because no tool currently feeds a probability of correctness into the
+confidence combiner - the same gap recorded under task 3.3. A system-level
+AURC needs a labelled set of end-to-end runs with a correctness judgement per
+answer, which does not exist yet. Reporting either number as "the system's
+AURC" would be wrong.

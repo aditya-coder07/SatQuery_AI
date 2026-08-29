@@ -30,6 +30,7 @@ from satquery.contracts.trace import (
     Trace,
     VerificationTrace,
 )
+from satquery.controller.abstention import AbstentionPolicy, decide
 from satquery.controller.calibration import CALIBRATABLE_CONFIDENCE_METHODS
 from satquery.controller.confidence import compute_confidence
 from satquery.controller.intent import CLASSIFIER_NAME, IntentPrediction
@@ -100,12 +101,20 @@ def built_up_path(payload: dict) -> str:
 class Executor:
     """Runs plan steps and assembles the trace."""
 
-    def __init__(self, verifier_enabled: bool = True):
+    def __init__(
+        self,
+        verifier_enabled: bool = True,
+        abstention_policy: AbstentionPolicy | None = None,
+    ):
         # The off arm of the verifier ablation (task 3.7). Disabling it skips
         # the entailment gate entirely rather than running it and ignoring the
         # result, so the ablation measures the gate's real cost as well as its
         # effect.
         self.verifier_enabled = verifier_enabled
+        # Loaded once per executor rather than per query: the thresholds are
+        # configuration, and re-reading the file mid-run would let a demo
+        # change behaviour between two queries in the same session.
+        self.abstention_policy = abstention_policy or AbstentionPolicy.load()
 
     def execute(
         self,
@@ -311,21 +320,31 @@ class Executor:
 
         emit("confidence", confidence.model_dump())
 
-        abstained = plan.tasks[0] == "CLARIFY_OR_ABSTAIN"
-        abstain_reason = None
+        # Task 3.6: abstention is a policy over the whole run, not just a
+        # routing outcome. A confidently-routed plan whose answer the physics
+        # contradicts must also be able to decline.
+        decision = decide(
+            policy=self.abstention_policy,
+            routed_to_abstain=plan.tasks[0] == "CLARIFY_OR_ABSTAIN",
+            blocking_failures=list(manifest.blocking_failures),
+            final_confidence=confidence.final,
+            components=confidence.components.model_dump(),
+            failing_checks=[
+                c.name for c in manifest.checks if c.status in ("FAIL", "WARN")
+            ],
+            conflicts=conflicts,
+            gate_sentences=gate.sentences,
+            gate_flagged=gate.flagged,
+        )
+        abstained = decision.abstained
+        abstain_reason = decision.reason
+        if abstained and decision.resolving_input:
+            # The resolving input is part of the message the user sees, not
+            # only trace metadata: an abstention nobody can act on is just a
+            # refusal.
+            abstain_reason = f"{decision.reason} - {decision.resolving_input}"
         if abstained:
-            if manifest.blocking_failures:
-                failed = ", ".join(manifest.blocking_failures)
-                abstain_reason = (
-                    f"input validation failed ({failed}) - resolve the input "
-                    "before a reliable answer is possible"
-                )
-            else:
-                abstain_reason = (
-                    "the query could not be mapped to a supported task with "
-                    "sufficient confidence - please rephrase or be more specific"
-                )
-            final_answer = final_answer or abstain_reason
+            final_answer = abstain_reason or final_answer
 
         return Trace(
             run_id=plan.run_id,
@@ -341,5 +360,8 @@ class Executor:
             artifacts=artifacts,
             abstained=abstained,
             abstain_reason=abstain_reason,
+            abstain_trigger=decision.trigger,
+            abstain_resolving_input=decision.resolving_input,
+            abstain_limiting_component=decision.limiting_component,
             weights_hashes={},  # populated when real checkpoints load (1.7/1.10)
         )

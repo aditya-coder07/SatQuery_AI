@@ -90,4 +90,10 @@ class Trace(BaseModel):
     artifacts: list[str]
     abstained: bool
     abstain_reason: str | None = None
+    # Task 3.6. `abstain_reason` says what went wrong; these say which rule
+    # fired and what the user can change. An abstention that does not name a
+    # resolving input is a dead end for whoever receives it.
+    abstain_trigger: str | None = None
+    abstain_resolving_input: str | None = None
+    abstain_limiting_component: str | None = None
     weights_hashes: dict[str, str]

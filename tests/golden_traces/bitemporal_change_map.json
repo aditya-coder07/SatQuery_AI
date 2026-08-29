@@ -1,5 +1,8 @@
 {
+  "abstain_limiting_component": null,
   "abstain_reason": null,
+  "abstain_resolving_input": null,
+  "abstain_trigger": null,
   "abstained": false,
   "answer": "Produced a change mask; see the exported raster artifact.",
   "artifacts": [

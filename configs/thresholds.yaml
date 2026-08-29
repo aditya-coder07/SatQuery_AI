@@ -1,0 +1,24 @@
+# Abstention thresholds (plan task 3.6).
+#
+# Read by satquery/controller/abstention.py. Absent or malformed keys fall
+# back to the defaults in AbstentionPolicy, so this file can be edited or
+# deleted without taking the system down.
+#
+# These are DELIBERATELY PERMISSIVE. A policy tuned to look good on a demo
+# set converts silent errors into silent refusals, and a system that abstains
+# on everything has a perfect risk-coverage curve and zero utility. Set them
+# from a real labelled run - `python evaluation/selective.py` reports the
+# coverage that holds risk under a target - not by eye.
+abstention:
+  # Below this combined confidence the system declines and names the
+  # limiting component rather than answering.
+  min_final_confidence: 0.25
+
+  # Input quality can abstain on its own even when the geometric mean
+  # survives: a bad input makes every downstream number suspect regardless
+  # of how confident the model was about it.
+  min_input_quality: 0.50
+
+  # If the entailment gate removed every sentence, decline rather than show
+  # a corrected-to-nothing answer.
+  abstain_when_all_sentences_flagged: true
