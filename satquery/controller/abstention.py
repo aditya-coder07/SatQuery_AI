@@ -35,6 +35,8 @@ ENV_THRESHOLDS = "SATQUERY_THRESHOLDS"
 Trigger = Literal[
     "input_validation",
     "routing",
+    "tool_failure",
+    "profile_degraded",
     "low_confidence",
     "no_supported_content",
 ]
@@ -130,6 +132,8 @@ def decide(
     conflicts: list[str],
     gate_sentences: int,
     gate_flagged: int,
+    tool_failure: str | None = None,
+    profile_degraded: str | None = None,
 ) -> AbstentionDecision:
     """Decide whether to answer, and if not, say what would change it.
 
@@ -150,6 +154,32 @@ def decide(
             "supply inputs that pass those checks; each check's own message "
             "is in the trace under ingest.checks",
             "input_quality",
+        )
+
+    if profile_degraded:
+        # The tool did not fail - it was never loaded, because the active
+        # profile's resource budget excluded it. Telling the user to retry
+        # would be wrong: the same profile will do the same thing.
+        return AbstentionDecision(
+            True, "profile_degraded",
+            f"the active profile cannot answer this task: {profile_degraded}",
+            "run the full profile on a machine with a GPU, or ask a question "
+            "the deterministic index engine can answer - land cover, "
+            "vegetation, water and built-up extent are all available here",
+            "model",
+        )
+
+    if tool_failure:
+        # A tool that could not run is a system fault, not a user error, and
+        # the message says so: telling someone to rephrase when the model
+        # failed to load would send them chasing the wrong problem.
+        return AbstentionDecision(
+            True, "tool_failure",
+            f"a required tool did not complete: {tool_failure}",
+            "this is a system-side failure, not a problem with the query or "
+            "the inputs; the trace's warnings list carries the error, and "
+            "retrying with the same inputs is reasonable",
+            "model",
         )
 
     if routed_to_abstain:

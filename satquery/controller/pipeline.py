@@ -14,6 +14,7 @@ from satquery.contracts.plan import Plan
 from satquery.contracts.trace import Trace
 from satquery.controller.executor import Executor
 from satquery.controller.matrix_loader import CapabilityMatrix, load_matrix
+from satquery.controller.profiles import Profile, load_profile
 from satquery.controller.router import Router
 from satquery.ingest import ingest
 
@@ -26,14 +27,32 @@ class Controller:
         matrix: CapabilityMatrix | None = None,
         matrix_path: str | Path = DEFAULT_MATRIX_PATH,
         vram_budget_mb: int | None = None,
-        verifier_enabled: bool = True,
+        verifier_enabled: bool | None = None,
+        profile: str | Profile | None = None,
     ):
+        # A profile supplies defaults; explicit arguments still win, so a
+        # caller can run the lite profile with the verifier forced on (or
+        # off, for the 3.7 ablation) without editing a YAML file.
+        self.profile = (
+            profile if isinstance(profile, Profile) else load_profile(profile)
+        )
+        budget = (
+            vram_budget_mb
+            if vram_budget_mb is not None
+            else self.profile.vram_budget_mb
+        )
         self.matrix = matrix or load_matrix(matrix_path)
-        self.router = Router(self.matrix, vram_budget_mb=vram_budget_mb)
+        self.router = Router(self.matrix, vram_budget_mb=budget)
         # `verifier_enabled=False` is the off arm of the verifier ablation
         # (task 3.7), plumbed from here so the ablation runs the real
         # controller rather than a reimplementation of it.
-        self.executor = Executor(verifier_enabled=verifier_enabled)
+        self.executor = Executor(
+            verifier_enabled=(
+                self.profile.verifier_enabled
+                if verifier_enabled is None
+                else verifier_enabled
+            )
+        )
 
     def run(
         self,

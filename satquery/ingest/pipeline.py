@@ -12,6 +12,7 @@ import uuid
 from pathlib import Path
 
 from satquery.contracts.input_manifest import (
+    CheckResult,
     ImageMeta,
     IngestMode,
     InputManifest,
@@ -20,7 +21,7 @@ from satquery.contracts.input_manifest import (
 
 from .checks import blocking_failures, run_checks
 from .coreg import coregister
-from .modality import index_availability
+from .modality import CANONICAL_BANDS, index_availability
 from .tiling import DEFAULT_TILE_PX, needs_tiling, plan_tiles
 from .reader import read_image
 
@@ -107,21 +108,89 @@ def merged_index_availability(images: list[ImageMeta]) -> dict[str, bool]:
     return index_availability(merged, modalities, pols)
 
 
+def _unreadable_manifest(
+    run_id: str,
+    mode: IngestMode,
+    benchmark: str | None,
+    failure: CheckResult,
+) -> InputManifest:
+    """A manifest carrying nothing but the reason it is empty.
+
+    `config="SINGLE"` is a placeholder with no images behind it; the router
+    short-circuits to CLARIFY_OR_ABSTAIN on `blocking_failures` before the
+    configuration is used for anything, so it never selects a task.
+    """
+    return InputManifest(
+        run_id=run_id,
+        ingest_mode=mode,
+        benchmark=benchmark,
+        images=[],
+        config="SINGLE",
+        checks=[failure],
+        coreg=None,
+        tiling=None,
+        artifacts={},
+        blocking_failures=[failure.name],
+        # No bands were read, so nothing is computable. Built from the
+        # canonical band list rather than an empty one so this stays correct
+        # if a band is ever added.
+        index_availability=index_availability(
+            [False] * len(CANONICAL_BANDS), [], []
+        ),
+    )
+
+
 def ingest(
     paths: list[str | Path],
     mode: IngestMode = IngestMode.OPERATIONAL,
     benchmark: str | None = None,
     run_id: str | None = None,
 ) -> InputManifest:
-    """Build an `InputManifest` from one or two raster paths."""
-    if not paths:
-        raise ValueError("at least one image path is required")
+    """Build an `InputManifest` from one or two raster paths.
+
+    Unreadable inputs and an empty input list are reported as *blocking check
+    failures*, not exceptions (task 3.13). Ingest is the first thing a user's
+    file touches, so it is where a corrupt upload, a zero-byte file or a
+    text file arrives - and raising there put a `RasterioIOError` traceback
+    in front of whoever called the API. A manifest that says "this file could
+    not be opened" flows through the same abstention path as every other bad
+    input, which is the behaviour the rest of the system already handles.
+    """
     if len(paths) > 2:
         raise ValueError(f"at most two images are supported, got {len(paths)}")
 
     run_id = run_id or f"run_{uuid.uuid4().hex[:12]}"
 
-    images = [read_image(p) for p in paths]
+    if not paths:
+        return _unreadable_manifest(
+            run_id, mode, benchmark,
+            CheckResult(
+                name="inputs_present", status="FAIL", value=0,
+                message="no input images were supplied",
+            ),
+        )
+
+    images = []
+    for path in paths:
+        try:
+            images.append(read_image(path))
+        except Exception as exc:  # noqa: BLE001 - degradation, not a crash
+            # The exception type is part of the message because "not
+            # recognized as being in a supported file format" and "failed to
+            # read directory at offset N" point at different problems: the
+            # wrong kind of file versus a truncated upload.
+            return _unreadable_manifest(
+                run_id, mode, benchmark,
+                CheckResult(
+                    name="file_readable", status="FAIL", value=str(path),
+                    message=(
+                        f"{Path(path).name} could not be opened as a raster "
+                        f"({type(exc).__name__}); it may be corrupt, "
+                        f"truncated, or not an image file"
+                    ),
+                ),
+            )
+
     config = infer_config(images)
     images = assign_roles(images, config)
 

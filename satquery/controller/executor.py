@@ -172,6 +172,12 @@ class Executor:
         confidence_method: str | None = None
         index_payload: dict = {}
         warnings: list[str] = []
+        # Set when a step with on_failure="abort" raised. The run stops and
+        # becomes a named abstention rather than a traceback (task 3.13).
+        tool_failure: str | None = None
+        # Set when no tool could answer because the profile shed them all
+        # (task 3.10). Distinct from tool_failure: nothing broke.
+        profile_degraded: str | None = None
 
         if prediction is not None:
             classifier = ClassifierTrace(
@@ -209,7 +215,19 @@ class Executor:
                 result = tool.run(manifest, runtime_params)
             except Exception as exc:  # noqa: BLE001 - degradation, not a crash
                 if step.on_failure == "abort":
-                    raise
+                    # Task 3.13: an aborting tool used to re-raise, which put
+                    # a Python traceback in front of whoever called the API.
+                    # A crash is not a graceful degradation, and "zero stack
+                    # traces surfaced to the user" is the requirement. The
+                    # run stops here and becomes an abstention that names the
+                    # tool and the error; the traceback belongs in the logs,
+                    # not the answer.
+                    tool_failure = (
+                        f"{step.tool} failed and the plan cannot continue "
+                        f"without it ({type(exc).__name__}: {exc})"
+                    )
+                    warnings.append(tool_failure)
+                    break
                 warnings.append(f"{step.tool} failed ({exc}); continuing degraded")
                 continue
 
@@ -254,7 +272,41 @@ class Executor:
                 plan.tasks[0],
                 [t.outputs for t in execution_traces],
                 index_payload,
+                artifacts=artifacts,
             )
+
+        # `model_confidence == 0.0` means a learned tool ran and explicitly
+        # reported that it could not measure anything - change_vqa_v1's
+        # documented "cannot measure" path. That is a deliberate decline, not
+        # a fault, so it is left to the low-confidence rule, which produces
+        # the right message. Overriding it with "the tool failed, retrying is
+        # reasonable" would send the user to repeat something that already
+        # worked as designed.
+        tool_declined = model_confidence <= 0.0
+
+        if not final_answer.strip() and not tool_failure and not tool_declined:
+            # Nothing produced a sentence and nothing raised. This is the
+            # degraded-profile case (task 3.10): the learned tool that would
+            # have answered was shed by the VRAM budget. An empty answer is a
+            # silent failure, so it becomes a named one.
+            learned_ran = any(
+                t.tool != "index_engine_v1" for t in execution_traces
+            )
+            if learned_ran:
+                # A learned tool ran and returned nothing usable. That is a
+                # tool problem, not a profile problem, and saying "run the
+                # full profile" would send the user somewhere that will do
+                # exactly the same thing.
+                tool_failure = (
+                    f"the tool for {plan.tasks[0]} ran but produced no "
+                    f"answer for these inputs"
+                )
+            else:
+                profile_degraded = (
+                    f"{plan.tasks[0]} needs a learned tool, and none was "
+                    f"available under this profile's resource budget; the "
+                    f"task has no deterministic fallback"
+                )
 
         agreements, conflicts = physics_agreement_from_indices(index_payload)
         for sub in index_payload.get("substitutions", []):
@@ -337,6 +389,8 @@ class Executor:
             conflicts=conflicts,
             gate_sentences=gate.sentences,
             gate_flagged=gate.flagged,
+            tool_failure=tool_failure,
+            profile_degraded=profile_degraded,
         )
         abstained = decision.abstained
         abstain_reason = decision.reason

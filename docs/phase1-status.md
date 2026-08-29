@@ -929,3 +929,120 @@ injection use the same definitions rather than importing from the test tree.
 The seeds and parameters are unchanged - the goldens are byte-compared against
 traces derived from these exact scenes, so changing a seed would silently
 invalidate all 31.
+
+## Tasks 3.9, 3.10, 3.11, 3.13 - hardening (2026-08-29)
+
+### 3.13 fault injection - three real gaps, now closed
+
+The requirement is "graceful degradation everywhere; zero stack traces
+surfaced to the user". Writing the tests found three places where that was
+false:
+
+1. **A tool with `on_failure="abort"` re-raised straight through the
+   controller**, putting a Python traceback in front of whoever called the
+   API. It now stops the run and becomes an abstention that names the tool
+   and the error, with `abstain_trigger="tool_failure"` and a resolving input
+   that says *system-side*, because telling someone to rephrase when the GPU
+   died sends them chasing the wrong problem.
+2. **Unreadable inputs raised `RasterioIOError` out of ingest** - a truncated
+   upload, a zero-byte file, a `.txt`. Ingest is the first thing a user's
+   file touches; it now returns a manifest whose `file_readable` check has
+   FAILed, which flows through the same abstention path every other bad input
+   takes.
+3. **An empty input list raised `ValueError`.** Same treatment, as
+   `inputs_present`. (`>2 images` still raises: the API rejects that with a
+   400 first, so reaching it means a caller ignored the contract.)
+
+Every test asserts a `Trace` came back, its answer is non-empty, and the
+answer contains no traceback markers. Faults covered: a tool raising
+mid-plan, every tool in the registry raising at once, truncated and zero-byte
+files, an all-nodata raster, CRS and GSD mismatches on a pair, a 1-band PNG,
+a text file, no inputs, an unreadable calibration registry, and an unreadable
+thresholds file.
+
+### 3.9 offline hardening
+
+`make offline-test` set `HF_HUB_OFFLINE=1` and `TRANSFORMERS_OFFLINE=1`, which
+is necessary and not sufficient - those variables only stop the huggingface
+libraries. `tests/test_offline.py` blocks the **socket layer itself**, so any
+connection attempt raises and names the address.
+
+Loopback is blocked too, with one scoped exception: on Windows asyncio's
+`ProactorEventLoop` builds its self-pipe from a loopback TCP socket, so the
+strict fixture kills the event loop before any application code runs. The API
+test therefore uses a loopback-permitting fixture that still blocks everything
+external, and the controller path - where a hidden download would actually
+live - stays under the strict one. The weakening is confined to one test and
+documented at the fixture.
+
+Covered offline: controller construction (the intent classifier fits on
+construction), all three input configurations end to end, the abstention path,
+the calibration registry, the abstention thresholds, the capability matrix,
+the entailment gate's deterministic backend, and the API serving a run. A
+separate test asserts no network client (`requests`, `httpx`, `aiohttp`) is on
+the import path of the runtime packages.
+
+### 3.10 the lite profile
+
+`configs/profiles/full.yaml` and `lite.yaml` had existed since Phase 0 and
+were **both empty**, so "the lite profile" was a name with nothing behind it.
+
+Degradation is a budget, not a switch. Lite sets `vram_budget_mb: 0`, so the
+router sheds every step whose estimated peak VRAM exceeds it - today all
+learned tools - and keeps `index_engine_v1`, which is pure numpy at 0 MB. The
+answer then comes from `synth/narrative.py`, built from measured indices. That
+is why lite is a real fallback rather than an error path: **the physics half
+of this system never needed a GPU.** What lite loses is open-ended language.
+
+Zero is a deliberate floor rather than a small positive number. A 900 MB
+budget would admit the land-cover head onto a CPU where it runs but takes
+minutes, and a demo that appears to hang is worse than one that says it
+degraded.
+
+Running every task under lite found two honesty bugs that "never failing"
+alone would have hidden:
+
+- `TEMPORAL_CHANGE_MAP` asserted *"Produced a change mask; see the exported
+  raster artifact"* whether or not one existed. The guard was `if artifacts:`,
+  and the index engine writes its own COGs, so it was true in lite with no
+  change raster anywhere. It now checks for a change artifact specifically.
+- `XMODAL_JOINT_EXTRACT` returned an **empty string**, which reached the user
+  as a blank answer.
+
+Both are now regression tests. Tasks that genuinely cannot be answered without
+a learned model abstain with a new `profile_degraded` trigger whose resolving
+input says *run the full profile* - distinct from `tool_failure`, because
+nothing broke and "retry" would be wrong advice.
+
+A profile governs **resources, never legality**. A test asserts the legal task
+set is identical under both profiles: letting a profile widen it would put a
+second, quieter authority in front of the guarantee task 3.8 measures.
+
+### 3.11 soak - and why 20 queries is the wrong number
+
+The plan asks for 20 consecutive mixed queries with a flat memory profile. Run
+as specified, RSS grows **+0.2445 MB/iteration**, which looks like a leak.
+
+It is not. Over 120 iterations with a 20-iteration warm-up excluded, the slope
+is **+0.0239 MB/iteration** - a 10x drop:
+
+| run | warm-up excluded | RSS slope (MB/iter) | Python heap slope |
+|---|---|---|---|
+| 20 iterations | 3 | **+0.2445** | +0.0280 |
+| 120 iterations | 20 | **+0.0239** | +0.0159 |
+
+A real leak keeps its slope as the run lengthens; allocator arenas settling do
+not. **20 queries is too short to distinguish warm-up from a leak**, and the
+plan's own number would have produced a false alarm. Total steady-state growth
+over 100 iterations was 2.26 MB, with 0 failures and a median runtime of
+118.8 ms.
+
+The measurement is reported as a *slope over a steady-state window*, not an
+endpoint, because RSS does not fall when Python frees objects - the allocator
+keeps the arenas - so flat-or-slightly-rising is the healthy shape. Per-task
+peak RSS is reported separately so a leak confined to one heavy path cannot be
+averaged away by light ones.
+
+`make soak` runs the 120-iteration version. `tests/test_soak.py` runs the
+plan's 20 in CI and asserts properties rather than a memory number, because
+RSS on a shared runner is noise.

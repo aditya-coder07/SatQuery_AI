@@ -138,9 +138,22 @@ class TestConfigInference:
         with pytest.raises(ValueError, match="at most two"):
             ingest([msi_6band, msi_6band, msi_6band])
 
-    def test_empty_rejected(self):
-        with pytest.raises(ValueError, match="at least one"):
-            ingest([])
+    def test_empty_input_becomes_a_blocking_failure_not_an_exception(self):
+        """Changed in task 3.13, deliberately.
+
+        This used to raise `ValueError("at least one image path is required")`,
+        which reached the caller as a traceback. An empty or unreadable input
+        is a user-facing condition, so it now returns a manifest whose single
+        check has FAILed - the same path every other bad input takes, which
+        the router and the abstention policy already handle.
+
+        `>2 images` still raises: the API rejects that with a 400 before
+        ingest is reached, so hitting it means a caller ignored the contract.
+        """
+        manifest = ingest([])
+        assert manifest.blocking_failures == ["inputs_present"]
+        assert manifest.images == []
+        assert "no input images" in manifest.checks[0].message
 
 
 class TestChecks:

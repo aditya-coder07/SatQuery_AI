@@ -80,12 +80,18 @@ def describe_labels(labels: list[str]) -> str:
 
 
 def synthesise_answer(
-    task: str, step_outputs: list[dict], index_payload: dict
+    task: str,
+    step_outputs: list[dict],
+    index_payload: dict,
+    artifacts: list[str] | None = None,
 ) -> str:
     """Build an answer for tasks whose tools return structure, not prose.
 
-    Returns an empty string when there is nothing defensible to say, so the
-    caller can fall back rather than emitting a fabricated sentence.
+    `artifacts` is the list of files the run actually produced. It is a
+    parameter rather than an assumption because the lite profile (task 3.10)
+    sheds the learned tools, and this function previously asserted "see the
+    exported raster artifact" for `TEMPORAL_CHANGE_MAP` whether or not a
+    raster existed. In lite, none did.
     """
     labels: list[str] = []
     boxes: list = []
@@ -107,7 +113,26 @@ def synthesise_answer(
         return describe_indices(index_payload)
 
     if task == "TEMPORAL_CHANGE_MAP":
-        return "Produced a change mask; see the exported raster artifact."
+        # `artifacts` also carries the index engine's own COGs, so a bare
+        # truthiness check passed in lite even though no change raster
+        # existed. The claim has to be about the change mask specifically.
+        if any("change" in str(a).lower() for a in artifacts or []):
+            return "Produced a change mask; see the exported raster artifact."
+        return (
+            "No change raster was produced - the change tool did not run in "
+            "this profile. " + describe_indices(index_payload)
+        ).strip()
 
-    # VQA-style tasks are answered by the model itself, not synthesised here.
+    if task == "XMODAL_JOINT_EXTRACT":
+        # Previously fell through to "", which reached the user as an empty
+        # answer in lite. The indices are computed from whichever modality
+        # supplied the bands, so there is always something measured to say.
+        return (
+            "Optical-SAR fusion did not run in this profile, so this "
+            "describes the optical bands alone. " + describe_indices(index_payload)
+        ).strip()
+
+    # VQA-style tasks are answered by the model itself. An empty string here
+    # is a signal to the caller, not an answer - the executor turns it into a
+    # named abstention rather than showing it.
     return ""
