@@ -14,13 +14,16 @@ numbers, including where they are weak.
 | 1.4 | Synthetic query bank + Tier-1 training and evaluation | **Done** | `satquery/synth/query_bank.py` (3,600 examples), metrics below |
 | 1.5 | FastAPI + SSE trace streaming + SQLite run store | **Done** | `satquery/api/`, 18 tests; verified live over HTTP and from a browser |
 | 1.6 | Frontend shell: upload, live trace panel, confidence card, answer view | **Partial** | `frontend/app/page.tsx`; builds, type-checks, verified end to end in a browser. **No OpenLayers map viewer yet** |
-| 1.7 | Track B v0: QLoRA on VRSBench + RSVQA subset | **Trains and resumes on a local RTX 4050 (6 GB)**; not yet wired into `rs_vqa_v1` | See "Track B v0" below |
+| 1.7 | Track B v0: QLoRA on VRSBench + RSVQA subset | **Done** - trains, resumes, and answers through the real pipeline on a local RTX 4050 | See "Track B v0" below |
 | 1.8 | `satquery eval` CLI + `--dry-run` + prediction schemas for all four annotation types | **Done** | `satquery/cli/evaluate.py`, `evaluation/schemas.py`, 28 tests |
 | 1.9 | Eval harness v1 with VQA metrics | **Done** | `evaluation/harness.py`, `evaluation/metrics/vqa.py` |
 | 1.10 | Track A v0: encoder + land-cover head on BigEarthNet subset | **Blocked** | Same reason as 1.7 |
 | 1.11 | Golden trace tests for 10 cases | **Done** | `tests/test_golden_traces.py`, 10 goldens, order-independent |
 
-**9 of 11 done, 1 partial, 2 blocked on GPU access.** Test suite: **281 passing**, including 24 tests against real ISRO products.
+**10 of 11 done, 1 partial, 1 blocked.** Test suite: **295 passing**, including 24 against real ISRO products.
+
+Only 1.10 (Track A encoder) remains blocked, and only on dataset volume -
+BigEarthNet v2 is ~66 GB. The GPU itself is no longer a constraint.
 
 ## Honest metrics
 
@@ -112,9 +115,38 @@ annotations only, and its images live in the separate DOTA/DIOR datasets
 (174 MB, CC-BY-4.0), which embeds its images - 2,000 QA pairs over 256x256
 tiles. RSVQA-LR is a P0 prescribed benchmark in its own right.
 
-Remaining for 1.7: the trained adapter is **not yet loaded by `rs_vqa_v1`**,
-which is still a stub. "Trains" and "loads" are done; "answers through the
-real pipeline" is not.
+**1.7 is now complete.** `satquery/tools/rs_vqa.py` loads the base model in
+4-bit plus the trained adapter and answers inside the pipeline. End to end on
+a real Cartosat-2E scene in **16.5 s**:
+
+```
+task       : SINGLE_VQA
+tool       : rs_vqa_v1 1.0.0-qlora
+ANSWER     : urban
+tool conf  : 0.7696 (logprob)      <- the model's own token probabilities
+final conf : 0.8681 HIGH           <- model x agreement x input_quality
+provenance : canonical_rgb RED/GREEN/BLUE, 7687x7640 -> 512x508, percentile 2-98
+```
+
+Two things that make this real rather than cosmetic:
+
+* Confidence is `logprob`, derived from the model's own token probabilities,
+  not a hardcoded constant - so the `model` component of the three-part score
+  now actually moves with the model's certainty.
+* The RGB preview selects bands by **canonical name**, because band 1 is blue
+  on Cartosat MX and HH on EOS-04; selecting positionally would render a
+  false-colour image and silently change the question being asked. It also
+  percentile-stretches, since 11-bit data divided by the uint16 maximum would
+  render near-black.
+
+**Quality means nothing yet.** That answer comes from an adapter trained for
+40 steps on 50 examples. The plumbing is proven, which is exactly what the
+plan asks of v0; the number to care about arrives with a real training run.
+
+The real tool activates only when `SATQUERY_VQA_BASE` and
+`SATQUERY_VQA_ADAPTER` are both set and the GPU stack imports. Otherwise the
+stub stays, so CI and GPU-less machines keep a green suite rather than
+half-loading a model and answering badly.
 
 ## Validation against real ISRO products (2026-08-29)
 

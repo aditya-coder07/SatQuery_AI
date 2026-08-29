@@ -223,8 +223,19 @@ class IndexEngineStub(ToolProtocol):
 # free of any dependency on the real implementation.
 from satquery.tools.index_engine import IndexEngine  # noqa: E402
 
+# rs_vqa_v1 uses the real QLoRA adapter only when SATQUERY_VQA_BASE and
+# SATQUERY_VQA_ADAPTER are both set and the GPU stack is importable.
+# Otherwise the stub stays, so CI and GPU-less machines keep a green suite
+# rather than half-loading a model and answering badly.
+def _vqa_tool():
+    from satquery.tools.rs_vqa import RSVQATool, is_available
+
+    available, _reason = is_available()
+    return RSVQATool() if available else RSVQAStub()
+
+
 REGISTRY = {
-    "rs_vqa_v1": RSVQAStub(),
+    "rs_vqa_v1": _vqa_tool(),
     "caption_v1": CaptionStub(),
     "grounding_v1": GroundingStub(),
     "landcover_v1": LandcoverStub(),

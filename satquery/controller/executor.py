@@ -170,8 +170,16 @@ class Executor:
 
         for step in plan.steps:
             tool = REGISTRY[step.tool]
+            # The user's question is injected at execution time under a
+            # reserved key rather than being placed in the plan. The
+            # capability matrix governs *tunable parameters*; the query is
+            # input data. Keeping it out of step.params means the plan that
+            # gets validated for legality stays exactly what the matrix
+            # permits, and the query is already recorded verbatim in the
+            # trace's own `query` field.
+            runtime_params = {**step.params, "_query": query}
             try:
-                result = tool.run(manifest, step.params)
+                result = tool.run(manifest, runtime_params)
             except Exception as exc:  # noqa: BLE001 - degradation, not a crash
                 if step.on_failure == "abort":
                     raise
@@ -196,7 +204,7 @@ class Executor:
                     step=step.step_id,
                     tool=step.tool,
                     version=result.version,
-                    params=step.params,
+                    params=step.params,  # plan params only; _query is not one
                     rationale_tag=step.rationale_tag,
                     outputs=_json_safe(data),
                     confidence=result.confidence,
