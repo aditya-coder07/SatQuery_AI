@@ -32,6 +32,7 @@ from satquery.contracts.trace import (
 from satquery.controller.confidence import compute_confidence
 from satquery.controller.intent import CLASSIFIER_NAME, IntentPrediction
 from satquery.synth.narrative import synthesise_answer
+from satquery.verify.verifier import verify as verify_claims
 from satquery.tools.stubs import REGISTRY
 
 CODE_VERSION = "0.2.0-phase1"
@@ -216,13 +217,35 @@ class Executor:
             artifacts.extend(a.key for a in result.artifacts)
             emit("step", execution_traces[-1].model_dump())
 
+        if not final_answer:
+            # Tools that return structure rather than prose (land cover,
+            # grounding) still owe the user a sentence. It is synthesised
+            # deterministically from the numbers already computed, so it
+            # cannot assert anything the index engine did not measure.
+            final_answer = synthesise_answer(
+                plan.tasks[0],
+                [t.outputs for t in execution_traces],
+                index_payload,
+            )
+
         agreements, conflicts = physics_agreement_from_indices(index_payload)
         for sub in index_payload.get("substitutions", []):
             conflicts.append(f"substitution: {sub}")
 
+        # Task 2.9: check what the answer actually *claims* against measured
+        # indices. Threshold quality says whether the instrument is
+        # trustworthy; this says whether the statement is true.
+        claim_report = verify_claims(final_answer, index_payload)
+        agreements.update(claim_report["agreements"])
+        conflicts.extend(claim_report["conflicts"])
+        if claim_report["built_up_path"]:
+            built_up = claim_report["built_up_path"]
+        else:
+            built_up = built_up_path(index_payload)
+
         verification = VerificationTrace(
             physics_agreement=agreements,
-            built_up_path=built_up_path(index_payload),
+            built_up_path=built_up,
             complementarity={},  # optical-SAR complementarity is task 2.3
             conflicts=conflicts,
             entailment_gate=EntailmentGateTrace(
@@ -234,17 +257,6 @@ class Executor:
                 flagged=0,
             ),
         )
-
-        if not final_answer:
-            # Tools that return structure rather than prose (land cover,
-            # grounding) still owe the user a sentence. It is synthesised
-            # deterministically from the numbers already computed, so it
-            # cannot assert anything the index engine did not measure.
-            final_answer = synthesise_answer(
-                plan.tasks[0],
-                [t.outputs for t in execution_traces],
-                index_payload,
-            )
 
         emit("verification", verification.model_dump())
 

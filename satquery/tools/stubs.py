@@ -222,6 +222,7 @@ class IndexEngineStub(ToolProtocol):
 # Imported here rather than at module top to keep the stub definitions above
 # free of any dependency on the real implementation.
 from satquery.tools.index_engine import IndexEngine  # noqa: E402
+from satquery.tools.change_vqa import ChangeVQATemplate  # noqa: E402
 
 # rs_vqa_v1 uses the real QLoRA adapter only when SATQUERY_VQA_BASE and
 # SATQUERY_VQA_ADAPTER are both set and the GPU stack is importable.
@@ -242,6 +243,6 @@ REGISTRY = {
     "optsar_fusion_v1": OptSARFusionStub(),
     "change_mask_v1": ChangeMaskStub(),
     "change_caption_v1": ChangeCaptionStub(),
-    "change_vqa_v1": ChangeVQAStub(),
+    "change_vqa_v1": ChangeVQATemplate(),
     "index_engine_v1": IndexEngine(),
 }

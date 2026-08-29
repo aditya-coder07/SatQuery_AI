@@ -264,10 +264,13 @@
       "sentences": 0
     },
     "physics_agreement": {
+      "built_up:fraction": 1.0,
       "mndwi": 1.0,
       "ndbi": 1.0,
       "ndvi": 1.0,
-      "ndwi": 1.0
+      "ndwi": 1.0,
+      "vegetation:fraction": 1.0,
+      "water:fraction": 1.0
     }
   },
   "weights_hashes": {}

@@ -17,11 +17,11 @@
       "method": "uncalibrated"
     },
     "components": {
-      "agreement": 1.0,
+      "agreement": 0.95,
       "input_quality": 1.0,
       "model": 0.8
     },
-    "final": 0.9283
+    "final": 0.9126
   },
   "execution": [
     {
@@ -243,9 +243,12 @@
       "sentences": 0
     },
     "physics_agreement": {
+      "built_up:fraction": 0.7,
       "builtup_proxy": 1.0,
       "ndvi": 1.0,
-      "ndwi": 1.0
+      "ndwi": 1.0,
+      "vegetation:fraction": 1.0,
+      "water:fraction": 1.0
     }
   },
   "weights_hashes": {}
