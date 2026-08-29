@@ -21,14 +21,13 @@ from satquery.contracts.input_manifest import (
 from .checks import blocking_failures, run_checks
 from .coreg import coregister
 from .modality import index_availability
+from .tiling import DEFAULT_TILE_PX, needs_tiling, plan_tiles
 from .reader import read_image
 
 OPTICAL_MODALITIES = {"OPTICAL", "MSI", "PAN"}
 
-# Scenes larger than this are candidates for the tile pyramid (task 2.10).
-# Phase 1 records the need without implementing retrieval.
-TILING_TRIGGER_PX = 4096
-TILE_SIZE_PX = 1024
+# Tiling thresholds now live in satquery/ingest/tiling.py, which implements
+# the pyramid rather than only reporting the need for one (task 2.10).
 
 
 def infer_config(images: list[ImageMeta]) -> str:
@@ -72,19 +71,25 @@ def assign_roles(images: list[ImageMeta], config: str) -> list[ImageMeta]:
 
 
 def build_tiling_report(images: list[ImageMeta]) -> TilingReport:
-    """Report whether the scene is large enough to need the tile pyramid."""
-    largest = max((img.width * img.height) for img in images)
-    biggest_dim = max(max(img.width, img.height) for img in images)
-    if biggest_dim < TILING_TRIGGER_PX:
+    """Report the tile plan for the largest input image.
+
+    Retrieval itself is query-dependent, so the manifest records the plan and
+    the executor narrows it per query via `tiling.select_tiles`.
+    """
+    largest = max(images, key=lambda i: i.width * i.height)
+    if not needs_tiling(largest.width, largest.height):
         return TilingReport(applied=False)
-    tiles = -(-largest // (TILE_SIZE_PX * TILE_SIZE_PX))  # ceiling division
+
+    tiles = plan_tiles(largest.width, largest.height, DEFAULT_TILE_PX)
     return TilingReport(
-        applied=False,
-        level1_tiles=int(tiles),
-        retrieved_tiles=None,
+        applied=True,
+        level1_tiles=len(tiles),
+        retrieved_tiles=None,  # set per query when retrieval runs
         retrieval_reason=(
-            f"scene exceeds {TILING_TRIGGER_PX}px; coarse-to-fine retrieval "
-            "is Phase 2 (task 2.10) - full scene processed for now"
+            f"scene is {largest.width}x{largest.height}; covered by "
+            f"{len(tiles)} tiles of {DEFAULT_TILE_PX}px. Statistics are "
+            "accumulated tile by tile, so peak memory scales with the tile "
+            "size rather than the scene."
         ),
     )
 
