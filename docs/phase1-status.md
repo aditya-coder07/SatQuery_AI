@@ -101,11 +101,41 @@ from 0.417 to 0.285 across those two sets says nothing about whether
 scaling up helped - the harder, uncurated official split is the more likely
 explanation. Quoting it as a regression would be wrong.
 
-### GSD conditioning did not help
+### CORRECTED: GSD conditioning DOES help - the test set could not see it
 
-Multi-resolution augmentation is slightly *worse* on both metrics
-(-0.0090 mAP, -0.0082 at 4 bands). Two readings, and the honest answer is
-that this experiment cannot separate them:
+A multi-resolution evaluation split (`evaluation/splits/multires.py`) scores
+the same test patches at 10/20/30/40 m effective resolution:
+
+| Effective GSD | baseline | multires |
+|---|---|---|
+| 10 m (native) | **0.3092** | 0.2764 |
+| 20 m | 0.2494 | **0.3024** |
+| 30 m | 0.2553 | **0.3048** |
+| 40 m | 0.2215 | **0.2757** |
+| **slope (mAP per doubling)** | **-0.0398** | **+0.0036** |
+
+The baseline degrades steadily as resolution coarsens. The multires model is
+flat. It trades native performance (0.309 -> 0.276) for robustness across the
+range, and the original 10 m-only test measured precisely the condition it
+trades away - which is why it appeared worse.
+
+The same holds under the Cartosat 4-band mask: multires wins at 20 m (0.271
+vs 0.257), 30 m (0.277 vs 0.244) and 40 m (0.274 vs 0.238).
+
+This is the property that matters for a 1.6 m target sensor, and it was
+invisible until the evaluation split existed. The fix was to the
+measurement, not the model.
+
+Caveat: the degradation is simulated by block-averaging, so it removes
+spatial detail a coarser sensor would not resolve but does not reproduce
+another sensor's optics, radiometry or noise. It answers "is this model
+robust to losing detail", not "does it work on Cartosat" - only the
+cross-sensor run answers that.
+
+### Superseded reading (kept for the record)
+
+Measured on the 10 m-only test set, multi-resolution augmentation looked
+slightly worse (-0.0090 mAP). At the time two readings were possible:
 
 * The augmentation asks the model to handle four resolutions with the same
   0.94M parameters, so some loss on the native resolution is expected. The
