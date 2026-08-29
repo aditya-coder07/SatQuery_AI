@@ -224,6 +224,13 @@ class IndexEngineStub(ToolProtocol):
 from satquery.tools.index_engine import IndexEngine  # noqa: E402
 from satquery.tools.change_vqa import ChangeVQATemplate  # noqa: E402
 
+
+def _change_mask_tool():
+    """Real detector when a checkpoint is configured, else the stub."""
+    from satquery.tools.change_mask import ChangeMaskTool, is_available
+
+    return ChangeMaskTool() if is_available()[0] else ChangeMaskStub()
+
 # rs_vqa_v1 uses the real QLoRA adapter only when SATQUERY_VQA_BASE and
 # SATQUERY_VQA_ADAPTER are both set and the GPU stack is importable.
 # Otherwise the stub stays, so CI and GPU-less machines keep a green suite
@@ -241,7 +248,7 @@ REGISTRY = {
     "grounding_v1": GroundingStub(),
     "landcover_v1": LandcoverStub(),
     "optsar_fusion_v1": OptSARFusionStub(),
-    "change_mask_v1": ChangeMaskStub(),
+    "change_mask_v1": _change_mask_tool(),
     "change_caption_v1": ChangeCaptionStub(),
     "change_vqa_v1": ChangeVQATemplate(),
     "index_engine_v1": IndexEngine(),

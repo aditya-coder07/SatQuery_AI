@@ -177,13 +177,22 @@ class TestHarnessRun:
         preds = run_benchmark(load_benchmark(p), tmp_path, "b")
         assert preds.predictions[0]["abstained"] is True
 
-    def test_non_vqa_metrics_declared_not_implemented(self, benchmark):
-        """Phase 1 has VQA metrics only; that must be stated, not faked."""
+    def test_caption_metrics_now_implemented(self, benchmark):
+        """Task 2.14 replaced the Phase 1 "not_implemented" stub for the three
+        non-VQA annotation types."""
         path, root, items = benchmark
         preds = run_benchmark(load_benchmark(path), root, "b", annotation_type="caption")
+        for item in items:
+            item["caption"] = "a reference caption"
         result = score(preds, items)
-        assert result["metric_status"] == "not_implemented"
-        assert "Phase 2" in result["reason"]
+        assert result["metric_status"] == "ok"
+        assert "bleu4_sentence_mean" in result
+
+    def test_no_ground_truth_is_reported_not_scored(self, benchmark):
+        """Absent references must not silently produce a zero score."""
+        path, root, items = benchmark
+        preds = run_benchmark(load_benchmark(path), root, "b", annotation_type="grounding")
+        assert score(preds, items)["metric_status"] == "no_ground_truth"
 
 
 class TestCLI:

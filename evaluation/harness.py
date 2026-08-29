@@ -22,6 +22,7 @@ from satquery.contracts.input_manifest import IngestMode
 from satquery.controller.executor import CODE_VERSION
 from satquery.controller.pipeline import Controller
 
+from .metrics.all_tasks import score_caption, score_grounding, score_landcover
 from .metrics.vqa import score_vqa
 from .schemas import PredictionsFile
 
@@ -153,28 +154,46 @@ def _to_prediction(annotation_type: str, item: dict, query: str, trace) -> dict:
 
 
 def score(predictions: PredictionsFile, items: list[dict]) -> dict:
-    """Score a predictions file against the benchmark's ground truth."""
-    if predictions.annotation_type != "vqa":
-        # Caption/grounding/landcover metrics are Phase 2 (tasks 2.5-2.8).
-        return {
-            "metric_status": "not_implemented",
-            "reason": (
-                f"metrics for annotation type {predictions.annotation_type!r} "
-                "are Phase 2 work; only VQA scoring exists in Phase 1"
-            ),
-        }
+    """Score a predictions file against the benchmark's ground truth.
 
-    truth = {
-        item["item_id"]: {
-            "answer": item.get("answer", ""),
-            "answer_type": item.get("answer_type", "unknown"),
+    Every annotation type is now covered (task 2.14), so a run produces a
+    filled row rather than "not_implemented" for three of four types.
+    """
+    kind = predictions.annotation_type
+
+    if kind == "vqa":
+        truth = {
+            i["item_id"]: {
+                "answer": i.get("answer", ""),
+                "answer_type": i.get("answer_type", "unknown"),
+            }
+            for i in items if "answer" in i
         }
-        for item in items
-        if "answer" in item
-    }
+        scorer = score_vqa
+    elif kind == "caption":
+        truth = {
+            i["item_id"]: {
+                "caption": i.get("caption", ""),
+                "captions": i.get("captions"),
+            }
+            for i in items if ("caption" in i or "captions" in i)
+        }
+        scorer = score_caption
+    elif kind == "grounding":
+        truth = {i["item_id"]: {"box": i.get("box")} for i in items if i.get("box")}
+        scorer = score_grounding
+    elif kind == "landcover":
+        truth = {
+            i["item_id"]: {"labels": i.get("labels", [])}
+            for i in items if "labels" in i
+        }
+        scorer = score_landcover
+    else:
+        return {"metric_status": "unknown_annotation_type", "type": kind}
+
     if not truth:
-        return {"metric_status": "no_ground_truth"}
-    return {"metric_status": "ok", **score_vqa(predictions.predictions, truth)}
+        return {"metric_status": "no_ground_truth", "type": kind}
+    return {"metric_status": "ok", "type": kind, **scorer(predictions.predictions, truth)}
 
 
 def evaluate(
