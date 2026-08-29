@@ -58,12 +58,13 @@ def is_available() -> tuple[bool, str]:
         return False, f"{ENV_CHECKPOINT} is not set"
     if not Path(path).exists():
         return False, f"checkpoint not found: {path}"
+    # Checkpoint contents before environment - see caption.py.
+    if not (Path(path) / "vocab.json").exists():
+        return False, f"vocab.json not found beside {path}"
     try:
         import torch  # noqa: F401
     except ImportError:
         return False, "torch is not installed"
-    if not (Path(path) / "vocab.json").exists():
-        return False, f"vocab.json not found beside {path}"
     return True, "ready"
 
 

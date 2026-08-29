@@ -45,10 +45,20 @@ TOOL_NAME = "caption"
 TOOL_VERSION = "1.0.0"
 ENV_CHECKPOINT = "SATQUERY_CAPTION"
 
-# Imported from the training module rather than restated, so the tool cannot
-# drift from the size the weights were fitted at. A mismatch here degrades
-# quality silently - the model still runs, it just sees the wrong scale.
-from training.train_caption import IMAGE_SIZE  # noqa: E402
+def image_size() -> int:
+    """The size the weights were fitted at, read from the training module.
+
+    Looked up lazily, NOT imported at module scope. `training.train_caption`
+    imports torch at import time, and `stubs.py` builds the registry when it
+    is imported - so a module-level import here made the entire package
+    unimportable on any machine without torch, which is every CI runner.
+    Restating the number instead would let the tool drift from the weights,
+    and a size mismatch degrades quality silently: the model still runs, it
+    just sees the wrong scale.
+    """
+    from training.train_caption import IMAGE_SIZE
+
+    return IMAGE_SIZE
 
 
 class CaptionPayload(ToolPayload):
@@ -61,16 +71,18 @@ def is_available() -> tuple[bool, str]:
         return False, f"{ENV_CHECKPOINT} is not set"
     if not Path(path).exists():
         return False, f"checkpoint not found: {path}"
-    for module in ("torch",):
-        try:
-            __import__(module)
-        except ImportError:
-            return False, f"{module} is not installed"
+    # Checkpoint contents first, environment second: a missing vocab.json is a
+    # mistake in the path the operator just supplied, and naming it is more
+    # useful than "torch is not installed" when both are true.
     if not (Path(path) / "vocab.json").exists():
         # The vocabulary is built from the training captions and saved beside
         # the weights. Without it the token ids decode to nothing, which would
         # surface as an empty caption rather than an obvious failure.
         return False, f"vocab.json not found beside {path}"
+    try:
+        import torch  # noqa: F401
+    except ImportError:
+        return False, "torch is not installed"
     return True, "ready"
 
 
@@ -138,7 +150,7 @@ class CaptionTool(ToolProtocol):
 
         from training.train_change_caption import EOS, PAD
 
-        array = _image_array(manifest.images[0], IMAGE_SIZE)
+        array = _image_array(manifest.images[0], image_size())
         batch = torch.from_numpy(array).unsqueeze(0).to(handle.device)
 
         with torch.no_grad():
