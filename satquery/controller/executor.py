@@ -6,8 +6,7 @@ the classifier's own probabilities, verification from the deterministic index
 engine, and confidence from the three-component combiner.
 
 Where a component genuinely does not exist yet the trace says so explicitly
-rather than reporting a fabricated number - `complementarity` is still `{}`
-for that reason.
+rather than reporting a fabricated number.
 """
 
 from __future__ import annotations
@@ -161,6 +160,11 @@ class Executor:
         # fitted transform may be applied. See CALIBRATABLE_CONFIDENCE_METHODS.
         confidence_method: str | None = None
         index_payload: dict = {}
+        # optsar_fusion_v1 computes a per-query triad (optical / SAR / fused)
+        # and puts the score in its payload. The trace hardcoded `{}`, so the
+        # number task 2.3 exists to produce was computed and then dropped on
+        # the floor.
+        complementarity: dict = {}
         warnings: list[str] = []
         # Set when a step with on_failure="abort" raised. The run stops and
         # becomes a named abstention rather than a traceback (task 3.13).
@@ -222,6 +226,8 @@ class Executor:
                 continue
 
             data = result.payload.data
+            if isinstance(data.get("complementarity"), dict):
+                complementarity = data["complementarity"]
             if step.tool == "index_engine_v1":
                 index_payload = data
             else:
@@ -330,7 +336,9 @@ class Executor:
         verification = VerificationTrace(
             physics_agreement=agreements,
             built_up_path=built_up,
-            complementarity={},  # optical-SAR complementarity is task 2.3
+            # Empty only when no fusion step ran, which is every
+            # single-image and bi-temporal configuration.
+            complementarity=complementarity,
             conflicts=conflicts,
             entailment_gate=EntailmentGateTrace(
                 sentences=gate.sentences,

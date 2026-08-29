@@ -249,6 +249,17 @@ def _vqa_tool():
     return RSVQATool() if available else RSVQAStub()
 
 
+def _landcover_tool():
+    """Real Track A head when SATQUERY_LANDCOVER is set, else the stub.
+
+    Wired with selective prediction rather than a 0.5 threshold - task 3.6
+    measured that this head is worse than trivial at 0.5.
+    """
+    from satquery.tools.landcover import LandcoverTool, is_available
+
+    return LandcoverTool() if is_available()[0] else LandcoverStub()
+
+
 def _caption_tool():
     """Real captioner when SATQUERY_CAPTION is set, else the stub (task 2.8)."""
     from satquery.tools.caption import CaptionTool, is_available
@@ -274,7 +285,7 @@ REGISTRY = {
     "rs_vqa_v1": _vqa_tool(),
     "caption_v1": _caption_tool(),
     "grounding_v1": _grounding_tool(),
-    "landcover_v1": LandcoverStub(),
+    "landcover_v1": _landcover_tool(),
     "optsar_fusion_v1": _fusion_tool(),
     "change_mask_v1": _change_mask_tool(),
     "change_caption_v1": _change_caption_tool(),

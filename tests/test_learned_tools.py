@@ -23,12 +23,22 @@ from satquery.tools import grounding as grounding_mod
 from satquery.tools.stubs import REGISTRY
 
 
-def has_ckpt(path: str) -> bool:
+def has_ckpt(path: str, needs: str = "vocab.json") -> bool:
+    """A checkpoint the tool can actually load.
+
+    `needs` differs per tool: the caption/grounding models ship a vocab.json,
+    the Track A head ships band_stats.json. Requiring vocab.json for all of
+    them silently skipped the land-cover tests.
+    """
     try:
         import torch  # noqa: F401
     except ImportError:
         return False
-    return Path(path).exists() and (Path(path) / "vocab.json").exists()
+    return Path(path).exists() and (Path(path) / needs).exists()
+
+
+def has_track_a() -> bool:
+    return has_ckpt("checkpoints/track_a_full_base", needs="band_stats.json")
 
 
 class TestAvailabilityGates:
@@ -165,3 +175,84 @@ class TestChangeCaptionTool:
         monkeypatch.setenv("SATQUERY_CHANGE_CAPTION", "checkpoints/change_caption")
         with pytest.raises(ValueError, match="bi-temporal"):
             change_caption_mod.ChangeCaptionTool().run(ingest([msi_6band]), {})
+
+
+class TestLandcoverTool:
+    """Track A wired with selective prediction (tasks 2.1, 3.3, 3.6).
+
+    Task 3.6 measured that this head is WORSE than always predicting negative
+    at threshold 0.5, so the tool must not threshold at 0.5, and it must not
+    run at all without the band statistics the head was normalised with.
+    """
+
+    def test_the_threshold_is_never_naive(self):
+        """0.5 reproduces the worse-than-trivial behaviour."""
+        from satquery.tools.landcover import decision_confidence
+
+        assert decision_confidence() > 0.5
+
+    def test_a_bad_configured_threshold_falls_back_to_the_measured_one(
+        self, tmp_path, monkeypatch
+    ):
+        from satquery.controller.abstention import ENV_THRESHOLDS
+        from satquery.tools.landcover import (
+            DEFAULT_DECISION_CONFIDENCE,
+            decision_confidence,
+        )
+
+        bad = tmp_path / "t.yaml"
+        bad.write_text("landcover:\n  decision_confidence: 0.4\n", encoding="utf-8")
+        monkeypatch.setenv(ENV_THRESHOLDS, str(bad))
+        assert decision_confidence() == DEFAULT_DECISION_CONFIDENCE
+
+    def test_class_names_match_the_training_order(self):
+        """An invented ordering printed the wrong label on every assertion."""
+        from satquery.tools.landcover import _FALLBACK_CLASS_NAMES, class_names
+
+        names = class_names()
+        assert len(names) == 19
+        assert names[18] == "Urban fabric"
+        assert names[0] == "Agro-forestry areas"
+        assert _FALLBACK_CLASS_NAMES == names
+
+    def test_missing_band_stats_refuses_to_run(self, tmp_path, monkeypatch):
+        """Running without them produced confident nonsense - see the source."""
+        ckpt = tmp_path / "ckpt"
+        ckpt.mkdir()
+        monkeypatch.setenv("SATQUERY_LANDCOVER", str(ckpt))
+        from satquery.tools import landcover
+
+        available, reason = landcover.is_available()
+        assert available is False
+        assert "band_stats.json" in reason
+
+    @pytest.mark.skipif(
+        not has_track_a(), reason="no Track A checkpoint with band stats"
+    )
+    def test_it_applies_the_training_normalisation(self, monkeypatch, msi_6band):
+        from satquery.ingest import ingest
+        from satquery.tools import landcover
+
+        monkeypatch.setenv("SATQUERY_LANDCOVER", "checkpoints/track_a_full_base")
+        result = landcover.LandcoverTool().run(ingest([msi_6band]), {})
+        data = result.payload.data
+        assert data["calibration"].startswith("affine:")
+        # Assertions + denials + abstentions must account for all 19 classes.
+        assert (
+            len(data["asserted"]) + len(data["abstained"]) + data["n_denied"] == 19
+        )
+        assert result.confidence_method == "mean_asserted_probability"
+
+    @pytest.mark.skipif(
+        not has_track_a(), reason="no Track A checkpoint with band stats"
+    )
+    def test_an_abstaining_run_still_answers(self, monkeypatch, msi_6band):
+        """Recall is 0.25%, so it usually asserts nothing - and must say so."""
+        from satquery.ingest import ingest
+        from satquery.tools import landcover
+
+        monkeypatch.setenv("SATQUERY_LANDCOVER", "checkpoints/track_a_full_base")
+        result = landcover.LandcoverTool().run(ingest([msi_6band]), {})
+        assert result.payload.data["answer"].strip()
+        if not result.payload.data["asserted"]:
+            assert any("abstained on" in w for w in result.warnings)
