@@ -5,6 +5,7 @@
   "abstain_trigger": null,
   "abstained": false,
   "answer": "fake answer string",
+  "artifact_paths": "<volatile>",
   "artifacts": [
     "ndvi",
     "ndwi",

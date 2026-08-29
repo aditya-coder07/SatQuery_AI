@@ -5,6 +5,7 @@
   "abstain_trigger": null,
   "abstained": false,
   "answer": "Note: this input configuration (SINGLE) cannot support TEMPORAL_CHANGE_VQA, which is what the question asks for. Answering with SINGLE_VQA instead. fake answer string",
+  "artifact_paths": "<volatile>",
   "artifacts": [],
   "code_version": "0.2.0-phase1",
   "confidence": {

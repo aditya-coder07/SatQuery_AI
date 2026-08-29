@@ -5,6 +5,7 @@
   "abstain_trigger": null,
   "abstained": false,
   "answer": "A new building was constructed in the center.",
+  "artifact_paths": "<volatile>",
   "artifacts": [
     "ndvi",
     "ndwi",

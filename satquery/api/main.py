@@ -29,6 +29,7 @@ from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response, StreamingResponse
 
+from satquery.contracts.trace import Trace
 from satquery.controller.pipeline import Controller
 from satquery.api.store import RunStore
 
@@ -253,6 +254,53 @@ def get_preview(run_id: str, role: str, max_edge: int = 512):
         content=buffer.getvalue(),
         media_type="image/png",
         headers={"Cache-Control": "public, max-age=3600"},
+    )
+
+
+@app.get("/models")
+def get_model_registry():
+    """Model registry page data (task 3.12).
+
+    Read-only and assembled from what the training runs wrote. Registered
+    before /runs/{run_id} would matter only if the paths collided; they do
+    not, but the ordering is kept explicit anyway.
+    """
+    from satquery.report.registry import model_registry
+
+    return model_registry()
+
+
+@app.get("/benchmarks")
+def get_benchmarks():
+    """Benchmark page data (task 3.12): every Phase 3 measurement."""
+    from satquery.report.registry import benchmarks
+
+    return benchmarks()
+
+
+@app.get("/runs/{run_id}/report.pdf")
+def get_run_report(run_id: str):
+    """Render a completed run to a PDF (task 3.12)."""
+    from fastapi.responses import FileResponse
+
+    from satquery.report.pdf_report import export_pdf
+
+    record = get_store().get(run_id)
+    if record is None or not record.get("trace"):
+        raise HTTPException(404, f"no completed run {run_id}")
+
+    trace = Trace.model_validate(
+        record["trace"] if isinstance(record["trace"], dict)
+        else json.loads(record["trace"])
+    )
+    out_dir = Path(tempfile.mkdtemp(prefix=f"satquery_report_{run_id}_"))
+    try:
+        pdf = export_pdf(trace, out_dir / f"{run_id}.pdf")
+    except RuntimeError as exc:
+        # reportlab is optional; say so rather than returning a 500.
+        raise HTTPException(503, str(exc)) from exc
+    return FileResponse(
+        pdf, media_type="application/pdf", filename=f"{run_id}.pdf"
     )
 
 

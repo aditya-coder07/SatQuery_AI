@@ -25,6 +25,9 @@ GOLDEN_DIR = Path(__file__).parent / "golden_traces"
 # meaning. Everything else is compared exactly.
 VOLATILE_KEYS = {
     "run_id", "timestamp_utc", "runtime_ms", "path", "output_dir",
+    # Per-run temporary directories. The artifact KEYS in `artifacts` stay
+    # compared; only the filesystem paths are volatile.
+    "artifact_paths",
 }
 
 

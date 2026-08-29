@@ -5,6 +5,7 @@
   "abstain_trigger": null,
   "abstained": false,
   "answer": "Index thresholds indicate 23% vegetation, 77% water and 19% likely built-up land. These classes are measured independently and may overlap.",
+  "artifact_paths": "<volatile>",
   "artifacts": [
     "ndvi",
     "ndwi",

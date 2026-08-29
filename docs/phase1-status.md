@@ -1230,3 +1230,77 @@ The frontend confidence card already showed the three-component breakdown from
 Phase 1 (`frontend/app/page.tsx`), so that half of the acceptance criterion
 was already met; what was missing was any evidence the components mean
 anything, which is what the stress table above supplies.
+
+## Task 3.12 - PDF report, model registry page, benchmark page (2026-08-29)
+
+### PDF report
+
+`satquery/report/pdf_report.py` renders a `Trace` to a PDF: query, answer,
+confidence breakdown with band, routing decision, every executed step,
+verification including the entailment gate's four counts, and previews of the
+rasters the run produced (2-98% percentile stretch, because a min/max stretch
+turns a scene with one hot pixel into a black square). Served at
+`GET /runs/{run_id}/report.pdf`.
+
+Two rules shape it:
+
+- **The PDF reports the trace, it does not re-derive anything.** A report that
+  recomputed statistics could disagree with the trace it describes, and then
+  there are two answers and no way to tell which the system gave.
+- **A missing value is printed as missing.** `ece_after = -1.0` renders "ECE
+  not measured", an empty complementarity block says "not computed", and an
+  abstention prints its trigger *and* its resolving input. The sentinels exist
+  so a reader can tell an unmeasured value from a measured one; a report that
+  quietly omitted them would undo that.
+
+**The first version produced a 4 KB PDF with no images**, and the reason was a
+real gap rather than a rendering bug: `Trace.artifacts` holds artifact *keys*
+(`ndvi`, `change_mask`), and the filesystem paths were written to disk and
+never recorded anywhere. Nothing downstream could find them. `Trace` now
+carries `artifact_paths`, a key→path map, marked volatile in the golden
+comparison because the paths are per-run temporary directories while the keys
+are stable. The PDF is now ~70 KB with the index rasters embedded.
+
+The tests assert what the document *says*, not that a file appeared:
+`export_pdf(compress=False)` writes uncompressed content streams so the text
+can be read out of the bytes without adding a PDF parser as a test dependency.
+A test that only checked the file was non-empty would pass for a blank page.
+
+### Model registry and benchmark pages
+
+`GET /models` and `GET /benchmarks`, rendered by `frontend/app/models` and
+`frontend/app/benchmarks`. Both are assembled **by reading what the pipeline
+already wrote** - `run_metadata.json` and `metrics.json` next to each
+checkpoint, `configs/model_lock.json`, `configs/calibration.json`, and the
+seven JSON reports under `docs/assets/`. Neither page has a hardcoded number
+in it; a page carrying its own copy of a metric is a page that will eventually
+disagree with the run that produced it.
+
+Three deliberate choices:
+
+- **Caveats are rendered as prominently as the numbers they qualify.** The
+  registry shows `mAP 0.2854` with "official test shard, not comparable to the
+  v0 figure of 0.4171, and worse than always predicting negative at threshold
+  0.5" in an amber block directly beneath it. That is the whole point of the
+  page.
+- **Rejected calibrations are shown, not hidden.** "We measured this and
+  declined to ship it" is a stronger claim than silence, and it stops someone
+  re-deriving the same rejected temperature later.
+- **Missing reports are listed by name with the path they were expected at.**
+  A benchmark page that silently drops an ungenerated report looks complete
+  when it is not.
+
+Three bugs found and fixed while building them:
+
+1. **A CSS collision that would have broken the existing run view.** The first
+   stylesheet defined bare `.grid`, `.metric` and `.error`; `.grid` was
+   already a two-column CSS grid used by the run page, and redefining it as a
+   table broke both pages at once. Every new selector is now scoped under
+   `.page` and uses the existing theme variables.
+2. **NaN in training metrics broke JSON serialisation.** Average precision for
+   a class with no positive examples is undefined, and `metrics.json` records
+   it as NaN, which is not valid JSON. The executor already had a rule for
+   this; it is now promoted to `satquery/jsonsafe.py` and shared, rather than
+   duplicated into a second copy that would eventually disagree.
+3. **Integer counts rendered as `1093.0000`** - spurious precision on a sample
+   count.

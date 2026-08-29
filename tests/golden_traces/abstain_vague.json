@@ -5,6 +5,7 @@
   "abstain_trigger": null,
   "abstained": false,
   "answer": "fake answer string",
+  "artifact_paths": "<volatile>",
   "artifacts": [],
   "code_version": "0.2.0-phase1",
   "confidence": {

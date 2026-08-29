@@ -5,6 +5,7 @@
   "abstain_trigger": null,
   "abstained": false,
   "answer": "Note: this input configuration (SINGLE) cannot support TEMPORAL_CHANGE_MAP, which is what the question asks for. Answering with SINGLE_LANDCOVER instead. Index thresholds indicate 18% vegetation, 82% water and 82% built-up land. These classes are measured independently and may overlap.",
+  "artifact_paths": "<volatile>",
   "artifacts": [
     "ndvi",
     "ndwi",

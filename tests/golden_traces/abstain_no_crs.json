@@ -5,6 +5,7 @@
   "abstain_trigger": "input_validation",
   "abstained": true,
   "answer": "input validation failed (crs_present) - no reliable answer is possible from these inputs - supply inputs that pass those checks; each check's own message is in the trace under ingest.checks",
+  "artifact_paths": "<volatile>",
   "artifacts": [],
   "code_version": "0.2.0-phase1",
   "confidence": {

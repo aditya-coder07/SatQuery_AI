@@ -5,6 +5,7 @@
   "abstain_trigger": null,
   "abstained": false,
   "answer": "Note: this input configuration (SINGLE) cannot support XMODAL_JOINT_EXTRACT, which is what the question asks for. Answering with SINGLE_GROUND instead. Localised 1 matching region.",
+  "artifact_paths": "<volatile>",
   "artifacts": [
     "grounding_bboxes"
   ],

@@ -5,6 +5,7 @@
   "abstain_trigger": null,
   "abstained": false,
   "answer": "Produced a change mask; see the exported raster artifact.",
+  "artifact_paths": "<volatile>",
   "artifacts": [
     "ndvi",
     "ndwi",

@@ -5,6 +5,7 @@
   "abstain_trigger": "low_confidence",
   "abstained": true,
   "answer": "combined confidence 0.00 is below the 0.25 threshold; the limiting component is model at 0.00 - the model itself was uncertain; a higher-resolution or less cloudy scene, or a more specific question, is what moves this component",
+  "artifact_paths": "<volatile>",
   "artifacts": [
     "ndvi",
     "ndwi",

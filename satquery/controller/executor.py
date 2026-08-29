@@ -18,6 +18,7 @@ from collections.abc import Callable
 from typing import Any
 
 from satquery.contracts.input_manifest import InputManifest
+from satquery.jsonsafe import json_safe as _json_safe
 from satquery.contracts.plan import Plan
 from satquery.contracts.trace import (
     ClassifierTrace,
@@ -43,22 +44,6 @@ CODE_VERSION = "0.2.0-phase1"
 
 # Answer-bearing payload keys, in priority order.
 _ANSWER_KEYS = ("answer", "caption", "description", "summary")
-
-
-def _json_safe(value: Any) -> Any:
-    """Replace non-finite floats so the trace always serialises to valid JSON.
-
-    Index statistics over an all-nodata band legitimately produce NaN. NaN is
-    not valid JSON and would break the SSE stream, so it becomes None here -
-    a missing value, which is what it means.
-    """
-    if isinstance(value, float):
-        return value if math.isfinite(value) else None
-    if isinstance(value, dict):
-        return {k: _json_safe(v) for k, v in value.items()}
-    if isinstance(value, (list, tuple)):
-        return [_json_safe(v) for v in value]
-    return value
 
 
 def physics_agreement_from_indices(payload: dict) -> tuple[dict[str, float], list[str]]:
@@ -163,6 +148,11 @@ class Executor:
 
         execution_traces: list[StepExecutionTrace] = []
         artifacts: list[str] = []
+        # Artifact KEYS go in `artifacts` (stable, golden-comparable); the
+        # filesystem paths go here. The PDF report (task 3.12) needs the
+        # paths, and they were previously written to disk without ever
+        # reaching the trace, so nothing downstream could find them.
+        artifact_paths: dict[str, str] = {}
         final_answer = ""
         model_confidence = 1.0
         # The `confidence_method` of the tool that set the running minimum.
@@ -261,6 +251,7 @@ class Executor:
             )
             warnings.extend(result.warnings)
             artifacts.extend(a.key for a in result.artifacts)
+            artifact_paths.update({a.key: str(a.path) for a in result.artifacts})
             emit("step", execution_traces[-1].model_dump())
 
         if not final_answer:
@@ -427,6 +418,7 @@ class Executor:
             confidence=confidence,
             answer=final_answer,
             artifacts=artifacts,
+            artifact_paths=artifact_paths,
             abstained=abstained,
             abstain_reason=abstain_reason,
             abstain_trigger=decision.trigger,

@@ -18,3 +18,8 @@ scikit-learn==1.8.0
 fastapi==0.128.0
 uvicorn==0.40.0
 python-multipart==0.0.30
+
+# PDF report generation (task 3.12). Optional: satquery.report is not on the
+# runtime path, the import is deferred, and the error names this line. A
+# machine that only serves queries does not need a PDF engine.
+reportlab==5.0.1

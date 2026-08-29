@@ -92,6 +92,10 @@ class Trace(BaseModel):
     confidence: ConfidenceTrace
     answer: str
     artifacts: list[str]
+    # Artifact key -> filesystem path. Separate from `artifacts` because the
+    # keys are stable and comparable while the paths are per-run temporary
+    # directories; the golden traces normalise this field away.
+    artifact_paths: dict[str, str] = {}
     abstained: bool
     abstain_reason: str | None = None
     # Task 3.6. `abstain_reason` says what went wrong; these say which rule

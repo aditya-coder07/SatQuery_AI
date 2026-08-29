@@ -5,6 +5,7 @@
   "abstain_trigger": null,
   "abstained": false,
   "answer": "Localised 1 matching region.",
+  "artifact_paths": "<volatile>",
   "artifacts": [
     "grounding_bboxes"
   ],

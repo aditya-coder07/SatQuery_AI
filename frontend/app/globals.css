@@ -243,3 +243,112 @@ ul.checks li {
   color: var(--muted);
   margin-bottom: 6px;
 }
+
+/* --- Model registry and benchmark pages (plan task 3.12) -----------------
+   Every selector below is scoped under `.page`. An earlier version defined
+   bare `.grid`, `.metric` and `.error`, which collide with rules the run
+   view already uses - `.grid` in particular is a two-column CSS grid there,
+   and redefining it as a table broke both pages at once. Scoping is not
+   tidiness here; it is the difference between adding a page and breaking an
+   existing one. Colours come from the theme variables for the same reason.  */
+
+.page {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 32px 24px 64px;
+}
+.page h1 { font-size: 26px; margin: 0 0 6px; }
+.page h2 { font-size: 18px; margin: 32px 0 10px; }
+.page h3 { font-size: 14px; margin: 0 0 8px; }
+.page code {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 1px 5px;
+  font-size: 12px;
+}
+
+.page .note { color: var(--muted); font-size: 13px; line-height: 1.55; }
+.page .question { color: var(--muted); font-size: 13px; font-style: italic; }
+.page .load-error { color: var(--low); }
+
+.page .card {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 14px 16px;
+  margin: 12px 0;
+  background: var(--panel);
+}
+.page .card.warn { border-color: var(--medium); }
+
+.page .task {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--muted);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 2px 6px;
+  margin-left: 6px;
+}
+
+.page .stats { display: flex; flex-wrap: wrap; gap: 24px; margin: 10px 0 4px; }
+.page .stat { min-width: 170px; }
+.page .stat .label {
+  font-size: 11px;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.page .stat .value { font-size: 20px; font-weight: 600; color: var(--text); }
+.page .stat .sub { font-size: 11px; color: var(--muted); }
+
+.page .training { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.page .chip {
+  font-size: 11px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 2px 8px;
+  color: var(--muted);
+}
+
+/* Caveats are styled to be read, not skipped. A number shown without the
+   limitation recorded beside it is how a reader forms a wrong impression of
+   a real measurement. */
+.page .caveat {
+  font-size: 12px;
+  line-height: 1.55;
+  color: var(--medium);
+  background: rgba(210, 153, 34, 0.08);
+  border-left: 3px solid var(--medium);
+  padding: 8px 10px;
+  margin: 10px 0 0;
+}
+.page .caveat-cell { font-size: 11px; color: var(--medium); max-width: 320px; }
+
+.page .table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  margin: 8px 0 4px;
+}
+.page .table th,
+.page .table td {
+  border-bottom: 1px solid var(--border);
+  padding: 6px 8px;
+  text-align: left;
+  vertical-align: top;
+}
+.page .table th {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+  white-space: nowrap;
+}
+.page .table tr.muted td { color: var(--muted); }
+.page .mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11px;
+}
