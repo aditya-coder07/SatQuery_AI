@@ -17,13 +17,12 @@ numbers, including where they are weak.
 | 1.7 | Track B v0: QLoRA on VRSBench + RSVQA subset | **Done** - trains, resumes, and answers through the real pipeline on a local RTX 4050 | See "Track B v0" below |
 | 1.8 | `satquery eval` CLI + `--dry-run` + prediction schemas for all four annotation types | **Done** | `satquery/cli/evaluate.py`, `evaluation/schemas.py`, 28 tests |
 | 1.9 | Eval harness v1 with VQA metrics | **Done** | `evaluation/harness.py`, `evaluation/metrics/vqa.py` |
-| 1.10 | Track A v0: encoder + land-cover head on BigEarthNet subset | **Blocked** | Same reason as 1.7 |
+| 1.10 | Track A v0: encoder + land-cover head on BigEarthNet subset | **Done** | `training/track_a_encoder.py`, 24 tests, mAP on the official test split - see "Track A v0" below |
 | 1.11 | Golden trace tests for 10 cases | **Done** | `tests/test_golden_traces.py`, 10 goldens, order-independent |
 
-**10 of 11 done, 1 partial, 1 blocked.** Test suite: **295 passing**, including 24 against real ISRO products.
+**11 of 11 done** (1.6 partial - no OpenLayers viewer). Test suite: **346 passing**, including 24 against real ISRO products.
 
-Only 1.10 (Track A encoder) remains blocked, and only on dataset volume -
-BigEarthNet v2 is ~66 GB. The GPU itself is no longer a constraint.
+Phase 1 is functionally complete. Nothing remains blocked.
 
 ## Honest metrics
 
@@ -82,6 +81,57 @@ Stated plainly so the trace is not mistaken for more than it is:
   tiles; coarse-to-fine retrieval is task 2.10.
 - **Non-VQA metrics** return `metric_status: "not_implemented"` rather than a
   fabricated score.
+
+## Track A v0 - band-agnostic encoder (2026-08-29)
+
+Trained on the official BigEarthNet v2 splits (7,180 train / 3,248 test), a
+14k-patch subset with **10 S2 bands including SWIR** and paired S1. Official
+splits are used unchanged: adjacent BigEarthNet patches are near-duplicates,
+so a random resplit inflates validation accuracy (docs/03 section 4.3).
+
+| Condition | 10-band mAP | 4-band mAP (Cartosat) | Retention |
+|---|---|---|---|
+| **With** band dropout (p=0.3) | 0.4171 | **0.3765** | **90.2%** |
+| **Without** (control) | **0.4310** | 0.3639 | 84.4% |
+
+### The result contradicts a claim in docs/03
+
+Doc `03` section 3 calls band dropout *"the single mechanism that lets a
+12-band-trained encoder run on 4-band Cartosat data."* **That is not what the
+ablation shows.** The control - trained with every band present at every step
+- still retained 84.4% at 4 bands. Dropout adds a modest +5.8 points of
+retention on top, and costs 0.0139 mAP at full bands.
+
+The actual enabler is the **masked-mean architecture**: a conventional
+fixed-10-channel convolution could not run on 4 bands at all. There are two
+mechanisms, not one, and the un-ablated one is doing most of the work. This
+should be corrected before it becomes a claim in the report.
+
+### Limits on these numbers
+
+- **Single seed, 3 epochs per condition.** A 0.0126 mAP gap cannot be called
+  significant from one run each. Suggestive, not established.
+- **mAP 0.42 is not competitive.** Published BigEarthNet results reach
+  ~0.65-0.85. This is 0.41M parameters over 3 epochs on a 7,180-patch subset
+  of a 480k dataset - appropriate for v0, not a reportable result.
+- **The 4-band condition simulates Cartosat by masking S2 bands.** It shares
+  Sentinel-2's radiometry and 10 m GSD; the real sensor is 1.6 m with
+  different response curves. The genuine cross-sensor test uses the held-out
+  Bhoonidhi product.
+
+### Design
+
+Three choices make an arbitrary band subset a normal input rather than a
+degraded special case: a **shared per-band stem** so no fixed channel layout
+is ever learned; a **learned band-identity embedding**, without which a
+subset is ambiguous (the model could not distinguish NIR from SWIR1); and
+**masked mean pooling**, where absent bands contribute nothing and the
+divisor is the count of present bands, so a 4-band input is not four-tenths
+the magnitude of a 10-band one.
+
+A test writes 1e4 into every masked-out band and asserts the output is
+unchanged - if that failed the mask would be decorative and 4-band inference
+would be corrupted by whatever sat in the missing channels.
 
 ## Track B v0 - QLoRA on a 6 GB laptop GPU (2026-08-29)
 
