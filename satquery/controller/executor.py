@@ -29,6 +29,7 @@ from satquery.contracts.trace import (
     Trace,
     VerificationTrace,
 )
+from satquery.controller.calibration import CALIBRATABLE_CONFIDENCE_METHODS
 from satquery.controller.confidence import compute_confidence
 from satquery.controller.intent import CLASSIFIER_NAME, IntentPrediction
 from satquery.synth.narrative import synthesise_answer
@@ -145,6 +146,11 @@ class Executor:
         artifacts: list[str] = []
         final_answer = ""
         model_confidence = 1.0
+        # The `confidence_method` of the tool that set the running minimum.
+        # Calibration is only defined on a probability of correctness, so the
+        # method - not merely "a learned tool ran" - decides whether the
+        # fitted transform may be applied. See CALIBRATABLE_CONFIDENCE_METHODS.
+        confidence_method: str | None = None
         index_payload: dict = {}
         warnings: list[str] = []
 
@@ -193,7 +199,9 @@ class Executor:
             else:
                 # Only learned tools contribute to the model confidence
                 # component; the index engine is deterministic by construction.
-                model_confidence = min(model_confidence, result.confidence)
+                if result.confidence <= model_confidence:
+                    model_confidence = result.confidence
+                    confidence_method = result.confidence_method
 
             for key in _ANSWER_KEYS:
                 if key in data:
@@ -264,6 +272,11 @@ class Executor:
             model_confidence=model_confidence,
             manifest=manifest,
             agreements=agreements,
+            head=(
+                plan.tasks[0]
+                if confidence_method in CALIBRATABLE_CONFIDENCE_METHODS
+                else None
+            ),
         )
 
         emit("confidence", confidence.model_dump())

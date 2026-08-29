@@ -515,3 +515,123 @@ from deterministic narrative synthesis grounded in real index statistics.
 3. Add the OpenLayers map viewer to complete 1.6.
 4. Run `scripts/inspect_product.py` on the Bhoonidhi samples to close
    verification items 5 and 6.
+
+## Task 3.3 - calibration (2026-08-29)
+
+Every trace since task 1.3 has carried `method="uncalibrated", T=1.0,
+ece_after=-1.0`. Two of those three are now real for two heads, and the
+sentinel that remains is a measured decision rather than an unfilled slot.
+
+Fit on one half of each evaluation set, ECE reported on the other half, which
+the fit never saw. `evaluation/calibration.py` holds the maths (numpy/scipy
+only, so it runs in CI without torch); `evaluation/calibrate.py` produces the
+logits and writes the report; `satquery/controller/calibration.py` is the only
+place a fitted parameter enters the running system.
+
+### Results
+
+| head | method | params | ECE before | ECE after | Brier before | Brier after | n_fit / n_eval | shipped |
+|---|---|---|---|---|---|---|---|---|
+| land-cover (Track A) | temperature | T=1.608 | 0.0638 | **0.0922** | 0.14685 | 0.14726 | 2,934 / 2,933 | no |
+| land-cover (Track A) | affine | a=0.348, b=-0.852 | 0.0638 | **0.0470** | 0.14685 | 0.13786 | 2,934 / 2,933 | **yes** |
+| change mask (LEVIR) | temperature | T=0.862 | 0.0668 | 0.0591 | 0.04422 | 0.04419 | 1,024 / 1,024 | no |
+| change mask (LEVIR) | affine | a=0.973, b=-1.644 | 0.0668 | **0.0034** | 0.04422 | 0.02713 | 1,024 / 1,024 | **yes** |
+| Tier-1 intent router | temperature | T=0.758 | 0.1920 | **0.2158** | 0.13640 | 0.14372 | 14 / 15 | no |
+
+Reliability diagrams for every row are in `docs/assets/calibration/`, before
+and after, with per-bin populations drawn underneath the bars. The full
+machine-readable evidence, including every rejected fit, is
+`docs/assets/calibration/report.json`.
+
+### Temperature scaling alone is the wrong shape for both heads
+
+This is the substantive finding, and it is not a tuning detail.
+
+Temperature scaling divides the logits: it can rescale confidence but cannot
+shift it. The change head was trained with `pos_weight=10.11` to stop it
+predicting "no change" everywhere, and weighted BCE moves the optimal logit
+by `log(pos_weight) = 2.31` - **a constant offset, which no single
+temperature removes.** The fitted affine slope is `a=0.973`, essentially 1:
+there is almost no scale error to correct. All of the miscalibration is the
+intercept, `b=-1.644`, which is 71% of the theoretical `log(10.11)` offset
+(the head did not fully converge to the weighted optimum). ECE falls 20x,
+from 0.0668 to 0.0034.
+
+Land-cover has both problems - it is overconfident *and* offset - so the
+affine fit corrects both where temperature could only trade one end of the
+range against the other and made ECE worse (0.0638 -> 0.0922) while improving
+NLL. Both methods are fitted for every multi-label head and the choice is
+made on held-out ECE, so this comparison is the evidence rather than a
+preference.
+
+### The Tier-1 router is deliberately left uncalibrated
+
+T=0.758 was fitted and is **not shipped**. `CLEAN_HOLDOUT` is 29 hand-written
+queries, so the fitting half is 14 points. A temperature fitted on 14 points
+is fitted to noise, and the held-out half says so directly: ECE got *worse*,
+0.1920 -> 0.2158. The router therefore keeps `ece_after = -1.0` at runtime.
+
+The synthetic bank's own held-out split was not used instead, despite being
+3,600 examples. It measures template memorisation - the same reason its
+accuracy is 100% and meaningless - so a temperature fitted there would be
+calibrated to a distribution the router never meets. **Calibrating the router
+needs a real query set, not a bigger synthetic one.**
+
+### Guards, and why each one exists
+
+`calibrate_head` refuses a fit that:
+
+1. was fitted on fewer than 500 points (the router case);
+2. saturated at a search bound - uninformative logits are best "calibrated"
+   by flattening everything onto the base rate, which improves both ECE *and*
+   Brier while discarding the model entirely, so only the bound catches it;
+3. did not improve ECE on the held-out half (land-cover temperature);
+4. improved ECE while worsening Brier - the signature of a transform
+   collapsing probabilities toward the base rate. ECE alone is gameable this
+   way; Brier is strictly proper and rises under exactly that move;
+5. has a non-positive affine slope, which would silently invert every ranking.
+
+Both shipped transforms are monotone, so **every mAP, AP and F1 already
+reported is unchanged**. Calibration changes what a number claims, never
+which answer is given. There is a test asserting the ranking is preserved.
+
+### What is calibrated at runtime today: nothing, on purpose
+
+The registry is fitted, the runtime path is wired and tested, and it is
+currently inactive - because no tool reports a quantity the registry is
+defined on:
+
+- stub tools return hardcoded constants (`threshold_rule`). A constant has no
+  reliability curve, and recalibrating one produces a number that looks
+  measured and is not.
+- `index_engine_v1` is `deterministic`. There is no probability to fit.
+- **`change_mask_v1` and `optsar_fusion` declare
+  `confidence_method="softmax_temp_scaled"`, which has been inaccurate since
+  Phase 2.** They compute `mean(|p - 0.5|) * 2`, a *sharpness* statistic, not
+  P(correct), and nothing was temperature-scaled. Feeding it through a fitted
+  probability calibration would be a category error. The label should be
+  corrected; the calibration gate does not depend on the name being fixed,
+  because the value is excluded explicitly.
+
+`CALIBRATABLE_CONFIDENCE_METHODS` in `satquery/controller/calibration.py`
+holds the opt-in list, and the path activates by itself the moment a tool
+reports a genuine per-head probability. The alternative - putting the
+land-cover transform on a stub's hardcoded 0.8, which turns a demo trace from
+HIGH into a "calibrated" MEDIUM - would have been a fabricated number in
+front of a judge.
+
+The trace now distinguishes four states instead of one word: calibrated
+(`affine:SINGLE_LANDCOVER`), score-is-not-a-probability, registry
+missing/unreadable, and no-accepted-fit-for-this-head. Each has a different
+fix, so the trace should not blur them.
+
+### What this does not measure
+
+The land-cover fit is on the official BigEarthNet test shard, which is
+uniformly 10 m. It establishes calibration **at native resolution only** and
+says nothing about whether confidence stays honest as resolution coarsens -
+which is the condition that matters for a 1.6 m target sensor, and which the
+multi-resolution split in `evaluation/splits/multires.py` exists to test.
+Recalibrating per effective GSD is open work. Every registry entry carries a
+`split_note` recording exactly this, and a test refuses to ship an entry
+without one.

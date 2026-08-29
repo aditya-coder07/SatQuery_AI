@@ -14,7 +14,7 @@
     "calibration": {
       "T": 1.0,
       "ece_after": -1.0,
-      "method": "uncalibrated"
+      "method": "uncalibrated (score is not a calibratable probability)"
     },
     "components": {
       "agreement": 0.95,

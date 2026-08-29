@@ -12,8 +12,12 @@ geometric mean collapses toward zero if any single component collapses, which
 is the behaviour we want. A confident model on a corrupt input should not
 score 0.66 because two of three components were fine.
 
-Phase 1 uses equal weights and no calibration; task 3.3/3.4 fits the weights
-and applies temperature scaling.
+Phase 1 used equal weights and no calibration. Task 3.3 supplies the
+calibration: when the head that produced the score has an accepted fit in
+`configs/calibration.json`, the **model** component is recalibrated before it
+is combined, and the trace reports the real method and held-out ECE instead
+of the sentinel. Fitting the three component weights is still task 3.4, so
+the combination below remains an unweighted geometric mean.
 """
 
 from __future__ import annotations
@@ -24,6 +28,7 @@ from satquery.contracts.trace import (
     ConfidenceComponentsTrace,
     ConfidenceTrace,
 )
+from satquery.controller.calibration import load_registry, method_label
 
 HIGH_BAND = 0.75
 MEDIUM_BAND = 0.45
@@ -86,9 +91,23 @@ def compute_confidence(
     model_confidence: float,
     manifest: InputManifest,
     agreements: dict[str, float],
+    head: str | None = None,
 ) -> ConfidenceTrace:
-    """Combine the three components into the reported confidence."""
-    model = max(0.0, min(1.0, float(model_confidence)))
+    """Combine the three components into the reported confidence.
+
+    `head` names the head that produced `model_confidence`, and is the key
+    into the calibration registry. Passing None - which is correct whenever
+    no learned tool contributed a score - leaves the value untouched and
+    keeps the uncalibrated sentinel in the trace, because recalibrating a
+    number that did not come from the fitted head would be worse than not
+    calibrating at all.
+    """
+    raw_model = max(0.0, min(1.0, float(model_confidence)))
+
+    registry = load_registry()
+    entry = registry.lookup(head)
+    model = entry.apply(raw_model) if entry is not None else raw_model
+
     agreement = physics_agreement(agreements)
     quality = input_quality(manifest)
     final = geometric_mean(model, agreement, quality)
@@ -102,12 +121,15 @@ def compute_confidence(
             input_quality=round(quality, 6),
         ),
         calibration=ConfidenceCalibrationTrace(
-            # Honest placeholder: calibration is task 3.3 and has not been
-            # fitted yet. T=1.0 means "no temperature scaling applied", and
-            # ece_after=-1.0 is the documented "not measured" sentinel - NaN
-            # would serialise to invalid JSON and break the SSE stream.
-            method="uncalibrated",
-            T=1.0,
-            ece_after=UNMEASURED_ECE,
+            method=method_label(entry, registry, head),
+            # For an affine fit T is the equivalent temperature (1/a); the
+            # intercept is what actually did the work and is recorded in the
+            # registry alongside the split it was fitted on.
+            T=1.0 if entry is None else round(entry.T, 6),
+            # -1.0 remains the documented "not measured" sentinel for any
+            # head without an accepted fit. A real ECE is in [0, 1], so the
+            # two can never be confused; NaN would break JSON and the SSE
+            # stream, which is why the sentinel is negative rather than NaN.
+            ece_after=UNMEASURED_ECE if entry is None else round(entry.ece_after, 6),
         ),
     )
