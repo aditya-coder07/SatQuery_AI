@@ -11,6 +11,13 @@ import json
 
 import numpy as np
 import pytest
+
+# torch is a TRAINING dependency, not a runtime one: the ingest pipeline,
+# index engine, controller, API and evidence pack all work without it. CI
+# therefore does not install it, and these tests skip there rather than
+# adding an ~800 MB download to every run. They do execute locally, where
+# the training environment exists.
+pytest.importorskip("torch")
 import torch
 
 from training.prepare.whu_opt_sar import CLASSES, build_index, discover
