@@ -195,6 +195,10 @@ def main() -> int:
     p.add_argument("--seed", type=int, default=42)
     p.add_argument("--save-every", type=int, default=50)
     p.add_argument("--resume", action="store_true")
+    p.add_argument(
+        "--freeze-encoder", action="store_true",
+        help="train only the new head; separates adaptation from forgetting",
+    )
     args = p.parse_args()
 
     import torch
@@ -219,7 +223,18 @@ def main() -> int:
     model, source = load_pretrained_encoder(args.init or Path("."), torch, device, args.dim)
     model = replace_head(model, torch, args.dim, N_WHU_CLASSES).to(device)
 
-    optimizer = torch.optim.AdamW(model.parameters(), lr=args.lr)
+    if args.freeze_encoder:
+        # Only the head learns. If cross-sensor agreement holds here but
+        # collapses with a fully fine-tuned encoder, the cause is
+        # catastrophic forgetting rather than the bridge itself.
+        for name, param in model.named_parameters():
+            param.requires_grad = name.startswith("head.")
+        trainable = [p for p in model.parameters() if p.requires_grad]
+        print(f"frozen encoder: training {sum(p.numel() for p in trainable)} params only")
+    else:
+        trainable = list(model.parameters())
+
+    optimizer = torch.optim.AdamW(trainable, lr=args.lr)
     criterion = nn.BCEWithLogitsLoss()
     state, _ = maybe_resume(args.ckpt_dir, model, optimizer, enabled=args.resume)
 
@@ -230,6 +245,7 @@ def main() -> int:
         "epochs": args.epochs,
         "lr": args.lr,
         "band_dropout": args.band_dropout,
+        "freeze_encoder": args.freeze_encoder,
         "classes": index["classes"],
         "split_method": index.get("split_method"),
     })

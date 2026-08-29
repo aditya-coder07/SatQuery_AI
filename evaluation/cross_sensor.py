@@ -60,11 +60,22 @@ PATCH = 120                 # BigEarthNet patch size, in pixels
 BEN_GSD = 10.0              # metres, the resolution the encoder was trained at
 CARTOSAT_ORDER = ["BLUE", "GREEN", "RED", "NIR"]
 
-# Classes whose presence should correlate with a high vegetation index.
+# Vegetation group: FOREST ONLY, in both taxonomies.
+#
+# Cropland classes are deliberately excluded. WHU's "farmland" and
+# BigEarthNet's "Arable land" both include bare and ploughed fields, which
+# have LOW NDVI - so grouping them under "vegetation" and correlating against
+# NDVI manufactures a negative correlation from the taxonomy rather than
+# measuring the model. That is exactly what happened in the first Stage A2
+# evaluation. Forest is unambiguously vegetated in both vocabularies, which
+# makes the two models comparable on the same semantic content.
 VEGETATION_CLASSES = [
     "Broad-leaved forest", "Coniferous forest", "Mixed forest",
-    "Transitional woodland, shrub", "Arable land", "Pastures",
-    "Agro-forestry areas", "Permanent crops", "Complex cultivation patterns",
+]
+# Kept for reference: the cropland classes excluded above, and why.
+CROPLAND_CLASSES = [
+    "Arable land", "Pastures", "Permanent crops", "Complex cultivation patterns",
+    "Agro-forestry areas", "Transitional woodland, shrub",
     "Land principally occupied by agriculture, with significant areas of natural vegetation",
 ]
 WATER_CLASSES = ["Inland waters", "Marine waters", "Coastal wetlands", "Inland wetlands"]
@@ -76,7 +87,9 @@ BUILT_CLASSES = ["Urban fabric", "Industrial or commercial units"]
 WHU_CLASSES = ["background", "farmland", "city", "village", "water", "forest",
                "road", "others"]
 WHU_GROUPS = {
-    "vegetation": ["farmland", "forest"],
+    # Forest only, matching VEGETATION_CLASSES: "farmland" covers bare and
+    # ploughed fields and would poison an NDVI correlation.
+    "vegetation": ["forest"],
     "water": ["water"],
     "built_up": ["city", "village", "road"],
 }

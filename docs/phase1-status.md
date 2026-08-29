@@ -133,6 +133,40 @@ A test writes 1e4 into every masked-out band and asserts the output is
 unchanged - if that failed the mask would be decorative and 4-band inference
 would be corrupted by whatever sat in the missing channels.
 
+## CORRECTION and Stage A2 outcome (2026-08-29, later)
+
+The cross-sensor numbers below used a vegetation group that included
+cropland classes ("Arable land", WHU "farmland"). Those cover bare and
+ploughed fields, which have LOW NDVI, so the grouping manufactured a
+negative correlation from the taxonomy rather than measuring the model.
+
+Re-measured with a **forest-only** vegetation group, comparable across both
+taxonomies:
+
+| Spearman vs physics | TrackA 10m | TrackA 1.6m | A2-full 1.6m | A2-frozen 1.6m |
+|---|---|---|---|---|
+| vegetation (forest) | +0.455 | **+0.161** | +0.245 | -0.126 |
+| water | +0.689 | +0.672 | -0.061 | -0.027 |
+| built-up | +0.726 | +0.745 | -0.068 | +0.200 |
+
+**Correction:** vegetation at native resolution is **+0.161, not -0.135**.
+It does not invert. The degradation is real and large (0.455 -> 0.161, a 65%
+drop) while water and built-up are unaffected, so the conclusion that
+resolution specifically harms vegetation stands - but the magnitude was
+overstated and the original figure should not be quoted.
+
+**Stage A2 does not help, in either variant.** Both are worse than the Track
+A baseline on water and built-up. The frozen-encoder run is the diagnostic
+one: with the encoder byte-identical to Track A's, retraining only the 2,056
+-parameter head on WHU still degraded Cartosat agreement. That **rules out
+catastrophic forgetting** as the cause - the features were untouched. The
+problem is WHU-OPT-SAR's domain and label semantics, not lost features.
+
+What this does not establish: whether a resolution bridge helps at all. It
+shows that *this* bridge, in a multi-label-presence formulation on this
+dataset, does not. A segmentation-head formulation, or a bridge dataset
+closer to the Indian target domain, remains untested.
+
 ## Cross-sensor test on real Cartosat imagery (2026-08-29)
 
 The simulated ablation masks Sentinel-2 bands, so it shares S2 radiometry and
