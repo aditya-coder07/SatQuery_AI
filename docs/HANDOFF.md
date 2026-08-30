@@ -1,8 +1,16 @@
 # Session handoff — 2026-08-29
 
-State: branch `phase-0-closeout`, **770 tests passing**, working tree clean,
-**pushed**. PR #1 was already merged; the 25 Phase-3-and-later commits are
-open as **PR #2**.
+State: branch `phase-0-closeout`, **855 tests passing**, working tree clean,
+**pushed** to PR #2. **Phase 4 is audited and largely closed — read
+`docs/phase4-status.md` first**: 5 of 8 tasks DONE, 3 PARTIAL, and the missing
+halves are a person in a room (narrated rehearsals on the venue laptop), a
+licence decision (publishing weights), and a screen recording (the backup
+video). Nothing else is blocking.
+
+New in Phase 4: `docs/technical-report.md`, `docs/model-cards.md`,
+`docs/deck.md`, `docs/judge-qa.md`, `docs/rehearsal.md`, `docs/code-freeze.md`,
+`docs/phase4-status.md`, and `docs/ps-26167.md` — the authoritative PS text,
+now in git, which is what made the traceability check possible.
 
 **Update 2026-08-30.** The two items this file listed as highest-value were
 worked, and CDVQA went from not-on-disk to fully measured in three passes.
