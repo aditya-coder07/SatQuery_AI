@@ -53,9 +53,12 @@ Current headline status (see `docs/00` §3.1 for the evidence behind each):
 
 | M9 | Combine outputs, estimate confidence, return visual evidence | **VERIFIED** |
 
-Inputs I1–I5 are **VERIFIED**; I6 (large scenes) is built but is **not a PS
-clause**. Of the three prescribed benchmarks, RSVQA-LR and CDVQA are evaluated;
-**VRSBench is not** (imagery lives in DOTA, not on disk). Fifteen known
+Inputs I1, I4 and I5 are **VERIFIED**; **I2 and I3 are PARTIAL** — the pair
+configurations are detected, but the capability matrix's `min_overlap_pct` and
+`require_dates` gates are declared and never read, so a pair of images of
+different places is accepted (limitation L16). I6 (large scenes) is built but
+is **not a PS clause**. Of the three prescribed benchmarks, RSVQA-LR and CDVQA are evaluated;
+**VRSBench is not** (imagery lives in DOTA, not on disk). Sixteen known
 limitations are recorded in `docs/00` §3.6 rather than left to be discovered.
 
 The matrix was checked clause-by-clause against
