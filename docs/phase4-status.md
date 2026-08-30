@@ -151,10 +151,18 @@ strongest one.
 
 ## Freeze commit
 
+The authoritative pointer is the **annotated tag `phase-4-freeze`**, not a SHA
+written into this file. A commit cannot contain its own hash, so any SHA
+recorded here would name the commit *before* the one that records it — which
+is exactly the mistake this line replaces.
+
+```bash
+git rev-list -n1 phase-4-freeze     # the freeze commit
+git show phase-4-freeze             # what it marks
+```
+
 | | |
 |---|---|
-| **SHA** | `1f84f4de9b2184b66ed4a0d311b78010271a0447` |
-| Short | `1f84f4d` |
 | Branch | `phase-0-closeout` |
 | Tag | `phase-4-freeze` |
 | Date | 2026-08-30 |
