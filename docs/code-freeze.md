@@ -34,7 +34,7 @@ history — 0.0000, then 0.4439, then 0.5380 — is still readable.
 | Demo bundle | 9 / 9 beats behave as scripted |
 | Working tree | clean |
 
-Freeze commit: `cab2d28dbc5013c2bd52899c4fba9a85e24e3aa3` (tag `phase-4-freeze`), also recorded in `docs/phase4-status.md`.
+Freeze commit: `1f84f4de9b2184b66ed4a0d311b78010271a0447` (tag `phase-4-freeze`), also recorded in `docs/phase4-status.md`.
 
 ## The bug-fix bar
 

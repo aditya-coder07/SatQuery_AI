@@ -153,8 +153,8 @@ strongest one.
 
 | | |
 |---|---|
-| **SHA** | `cab2d28dbc5013c2bd52899c4fba9a85e24e3aa3` |
-| Short | `cab2d28` |
+| **SHA** | `1f84f4de9b2184b66ed4a0d311b78010271a0447` |
+| Short | `1f84f4d` |
 | Branch | `phase-0-closeout` |
 | Tag | `phase-4-freeze` |
 | Date | 2026-08-30 |
