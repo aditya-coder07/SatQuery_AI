@@ -73,11 +73,15 @@ class _Handle:
     def __init__(self, checkpoint: Path):
         import torch
 
-        from training.common.checkpointing import find_latest_checkpoint, load_checkpoint
+        from training.common.checkpointing import (
+            find_latest_checkpoint,
+            load_checkpoint,
+            safe_torch_load,
+        )
         from training.train_change_mask import build_model
 
         latest = find_latest_checkpoint(checkpoint) or checkpoint
-        payload = torch.load(latest, map_location="cpu", weights_only=False)
+        payload = safe_torch_load(latest)
         dim = (payload.get("extra") or {}).get("dim", 16)
         model = build_model(dim)
         load_checkpoint(latest, model, map_location="cpu")

@@ -1811,6 +1811,16 @@ python evaluation/cdvqa_diagnosis.py --predictions artifacts/cdvqa/test_2900.jso
     --manifest data/cdvqa/cdvqa_test.json --out artifacts/cdvqa/diagnosis.json
 ```
 
+> **The first command no longer runs as written (2026-08-30).**
+> `data/cdvqa/webdataset/` was deleted when the disk filled - it held 2.3 GB
+> of mirror shards that had been superseded. Re-downloading them would
+> reproduce this section exactly, but there is no reason to: the section below
+> builds the same manifest with `--second data/second`, which resolves every
+> CDVQA image id and gives **100% coverage instead of the 7.3% these numbers
+> rest on**. The command is left as it was run rather than edited to match
+> what came later, because the coverage caveat below is only meaningful if the
+> command that produced it is visible.
+
 **Caveat on coverage.** 7.3% of the test questions, chosen by which mirror
 shards finished downloading rather than by any sampling scheme - so it is
 arbitrary, not random. It is enough to establish a *structural* zero, which is

@@ -185,11 +185,12 @@ class _Handle:
         from training.common.checkpointing import (
             find_latest_checkpoint,
             load_checkpoint,
+            safe_torch_load,
         )
         from training.track_a_full import build_model
 
         latest = find_latest_checkpoint(checkpoint) or checkpoint
-        payload = torch.load(latest, map_location="cpu", weights_only=False)
+        payload = safe_torch_load(latest)
         state = payload.get("model_state_dict", {})
         # GSD conditioning must match the checkpoint or load_state_dict leaves
         # the FiLM layers randomly initialised - a silent partial load, which

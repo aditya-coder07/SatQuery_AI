@@ -251,9 +251,10 @@ class _SemanticHandle:
     def __init__(self, checkpoint: Path):
         import torch
 
+        from training.common.checkpointing import safe_torch_load
         from training.train_change_vqa import build_model, build_pretrained_model
 
-        payload = torch.load(checkpoint, map_location="cpu", weights_only=False)
+        payload = safe_torch_load(checkpoint)
         state = payload.get("model", payload)
         dim = payload.get("dim", 48)
         # The checkpoint records which encoder it was trained with. Guessing

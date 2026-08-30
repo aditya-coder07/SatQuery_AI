@@ -97,12 +97,16 @@ def degradation_slope(by_factor: dict[int, float]) -> float:
 
 
 def load_model(checkpoint: Path, torch, device, dim: int):
-    from training.common.checkpointing import find_latest_checkpoint, load_checkpoint
+    from training.common.checkpointing import (
+        find_latest_checkpoint,
+        load_checkpoint,
+        safe_torch_load,
+    )
 
     latest = find_latest_checkpoint(checkpoint)
     if latest is None:
         raise SystemExit(f"no checkpoint in {checkpoint}")
-    payload = torch.load(latest, map_location="cpu", weights_only=False)
+    payload = safe_torch_load(latest)
     # GSD conditioning presence must match the checkpoint, or load_state_dict
     # silently leaves the FiLM layers randomly initialised.
     has_gsd = any(k.startswith("gsd_mlp.") for k in payload["model_state_dict"])

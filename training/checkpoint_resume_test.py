@@ -10,6 +10,9 @@ import torch.optim as optim
 import random
 import numpy as np
 
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from training.common.checkpointing import safe_torch_load
+
 def set_seed(seed):
     random.seed(seed)
     np.random.seed(seed)
@@ -49,8 +52,9 @@ def main():
         latest_ckpt = get_latest_checkpoint(args.ckpt_dir)
         if latest_ckpt:
             print(f"Found checkpoint: {latest_ckpt}")
-            # weights_only=False because we load non-tensor states like random_state
-            checkpoint = torch.load(latest_ckpt, weights_only=False)
+            # safe_torch_load keeps weights_only=True in force; the numpy
+            # types the RNG state needs are allowlisted, nothing else is.
+            checkpoint = safe_torch_load(latest_ckpt)
             model.load_state_dict(checkpoint['model_state_dict'])
             optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
             start_step = checkpoint['step']

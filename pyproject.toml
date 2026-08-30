@@ -24,14 +24,17 @@ dependencies = [
     "scikit-learn==1.8.0",
     # API + SSE. python-multipart is required for multipart form uploads;
     # FastAPI raises at import time on the upload routes without it.
-    "fastapi==0.128.0",
+    "fastapi==0.141.1",
+    # Pinned explicitly: fastapi only requires >=0.46.0, and 0.50.0 carried
+    # five advisories on the unauthenticated request path.
+    "starlette==1.6.0",
     "uvicorn==0.40.0",
-    "python-multipart==0.0.30",
+    "python-multipart==0.0.32",
     # Direct runtime import: satquery/tools/imaging.py renders the browser
     # previews the comparators need, and satquery/report/pdf_report.py embeds
     # them. It was undeclared and only present because scikit-image happens to
     # pull it in - a transitive dependency doing load-bearing work.
-    "pillow==12.1.0",
+    "pillow==12.3.0",
 ]
 
 [project.optional-dependencies]

@@ -78,6 +78,7 @@ class _Handle:
         from training.common.checkpointing import (
             find_latest_checkpoint,
             load_checkpoint,
+            safe_torch_load,
         )
         from training.train_grounding import build_model
 
@@ -85,7 +86,7 @@ class _Handle:
             (checkpoint / "vocab.json").read_text(encoding="utf-8")
         )
         latest = find_latest_checkpoint(checkpoint) or checkpoint
-        payload = torch.load(latest, map_location="cpu", weights_only=False)
+        payload = safe_torch_load(latest)
         dim = (payload.get("extra") or {}).get("dim", 128)
         model = build_model(vocab_size=len(self.vocab), dim=dim)
         load_checkpoint(latest, model, map_location="cpu")
