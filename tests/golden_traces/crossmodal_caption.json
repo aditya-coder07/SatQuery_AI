@@ -295,6 +295,11 @@
         "status": "PASS"
       },
       {
+        "message": "footprint overlap 100%",
+        "name": "footprint_overlap",
+        "status": "PASS"
+      },
+      {
         "message": "one optical and one SAR image present",
         "name": "crossmodal_pairing",
         "status": "PASS"

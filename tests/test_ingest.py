@@ -285,3 +285,107 @@ class TestBenchmarkFormats:
         assert trace.abstained is False
         assert trace.routing.selected_task == "SINGLE_VQA"
         assert trace.answer
+
+
+class TestFootprintOverlap:
+    """The gate that was declared for three phases and enforced by nothing.
+
+    `configs/capability_matrix.yaml` has carried `min_overlap_pct` since Phase
+    0. `RequiresSchema` declared only `config` with `extra="allow"`, so the
+    value was parsed and read by nothing, and `Router.legal_tasks` gated on
+    configuration alone. The measured consequence (2026-08-30): an optical and
+    a SAR scene written 60 km apart routed to `XMODAL_JOINT_EXTRACT`, answered,
+    and raised no failing check - the system fused two different places into
+    one confident answer.
+    """
+
+    def _offset(self, tmp_path, source, easting, northing, names):
+        import rasterio
+        from rasterio.transform import from_origin
+
+        with rasterio.open(source) as src:
+            data, profile = src.read(), src.profile
+        profile.update(transform=from_origin(easting, northing, 10.0, 10.0))
+        out = tmp_path / f"offset_{easting:.0f}.tif"
+        with rasterio.open(out, "w", **profile) as dst:
+            dst.write(data)
+            dst.descriptions = names
+        return out
+
+    def test_identical_footprints_are_full_overlap(self, msi_6band, sar_dualpol):
+        from satquery.ingest.checks import footprint_overlap_pct
+        from satquery.ingest import ingest
+
+        manifest = ingest([msi_6band, sar_dualpol])
+        assert footprint_overlap_pct(*manifest.images) == pytest.approx(100.0)
+
+    def test_disjoint_footprints_fail(self, tmp_path, msi_6band, sar_dualpol):
+        from satquery.ingest import ingest
+
+        far = self._offset(tmp_path, sar_dualpol, 560000.0, 1940000.0, ("VV", "VH"))
+        manifest = ingest([msi_6band, far])
+        overlap = next(c for c in manifest.checks if c.name == "footprint_overlap")
+        assert overlap.status == "FAIL"
+        assert overlap.value == 0.0
+
+    def test_a_disjoint_pair_cannot_reach_the_crossmodal_task(
+        self, tmp_path, msi_6band, sar_dualpol
+    ):
+        """The regression that matters: not the check, but the gate on it."""
+        from satquery.controller.matrix_loader import load_matrix
+        from satquery.controller.router import Router
+        from satquery.ingest import ingest
+
+        far = self._offset(tmp_path, sar_dualpol, 560000.0, 1940000.0, ("VV", "VH"))
+        manifest = ingest([msi_6band, far])
+        router = Router(load_matrix("configs/capability_matrix.yaml"))
+
+        assert "XMODAL_JOINT_EXTRACT" not in router.legal_tasks(manifest)
+        unmet = router.unmet_requirements("XMODAL_JOINT_EXTRACT", manifest)
+        assert unmet and "overlap" in unmet[0]
+
+    def test_a_valid_pair_still_reaches_the_crossmodal_task(
+        self, msi_6band, sar_dualpol
+    ):
+        """The gate must not cost the legitimate path.
+
+        This is why `max_coreg_shift_px` is deliberately not enforced: on this
+        very pair - identical footprints, same CRS, same GSD - the cross-modal
+        phase correlation reports ~38 px against the matrix's 2.0 px limit.
+        """
+        from satquery.controller.matrix_loader import load_matrix
+        from satquery.controller.router import Router
+        from satquery.ingest import ingest
+
+        manifest = ingest([msi_6band, sar_dualpol])
+        router = Router(load_matrix("configs/capability_matrix.yaml"))
+        assert "XMODAL_JOINT_EXTRACT" in router.legal_tasks(manifest)
+
+    def test_clarify_or_abstain_is_never_gated_away(
+        self, tmp_path, msi_6band, sar_dualpol
+    ):
+        """Gating the destination-of-last-resort would leave nothing to route
+        to, which turns a graceful refusal into a crash."""
+        from satquery.controller.matrix_loader import load_matrix
+        from satquery.controller.router import Router
+        from satquery.ingest import ingest
+
+        far = self._offset(tmp_path, sar_dualpol, 560000.0, 1940000.0, ("VV", "VH"))
+        manifest = ingest([msi_6band, far])
+        router = Router(load_matrix("configs/capability_matrix.yaml"))
+        assert "CLARIFY_OR_ABSTAIN" in router.legal_tasks(manifest)
+
+    def test_an_ungeoreferenced_pair_warns_rather_than_failing(self, tmp_path):
+        """"Overlap unknown" and "no overlap" are different answers, and only
+        the second is a defect in the pair. Benchmark inputs are
+        ungeoreferenced by construction."""
+        from evaluation.scenes import build_no_crs_raster
+        from satquery.ingest import ingest
+        from satquery.ingest.checks import (
+            check_footprint_overlap,
+            footprint_overlap_pct,
+        )
+
+        image = ingest([build_no_crs_raster(tmp_path / "a.tif")]).images[0]
+        assert footprint_overlap_pct(image, image) is None
+        assert check_footprint_overlap(image, image).status == "WARN"

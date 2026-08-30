@@ -18,6 +18,12 @@ GSD_RATIO_WARN = 4.0
 GSD_RATIO_FAIL = 20.0
 MIN_DIMENSION_PX = 32
 
+# Below this the two images cannot be describing the same place at all, and
+# any joint answer is about two different scenes. The per-task requirement is
+# stricter and lives in the capability matrix (`min_overlap_pct`); this is the
+# floor at which the pair itself is invalid rather than merely poor.
+OVERLAP_FAIL_PCT = 10.0
+
 
 def _pass(name: str, message: str, value=None) -> CheckResult:
     return CheckResult(name=name, status="PASS", value=value, message=message)
@@ -128,6 +134,79 @@ def check_gsd_ratio(a: ImageMeta, b: ImageMeta) -> CheckResult:
     return _pass("gsd_ratio", f"GSD ratio {ratio:.2f}x", round(ratio, 3))
 
 
+def footprint_overlap_pct(a: ImageMeta, b: ImageMeta) -> float | None:
+    """Percentage of the smaller footprint covered by the larger.
+
+    Measured in the reference image's CRS. Returns None when either image is
+    ungeoreferenced, because "no overlap" and "overlap unknown" are different
+    answers and only the first is a defect in the pair.
+
+    Ratio-of-the-smaller rather than intersection-over-union: a 1.6 m Cartosat
+    scene inside a much larger EOS-04 ScanSAR swath is a *valid* pair whose IoU
+    is tiny. What matters is whether the smaller image is covered.
+    """
+    import rasterio
+    from rasterio.warp import transform_bounds
+
+    try:
+        with rasterio.open(a.path) as src_a, rasterio.open(b.path) as src_b:
+            if src_a.crs is None or src_b.crs is None:
+                return None
+            bounds_a = src_a.bounds
+            bounds_b = (
+                src_b.bounds
+                if src_b.crs == src_a.crs
+                else transform_bounds(src_b.crs, src_a.crs, *src_b.bounds)
+            )
+    except Exception:  # noqa: BLE001 - an unreadable raster is another check's job
+        return None
+
+    left = max(bounds_a[0], bounds_b[0])
+    bottom = max(bounds_a[1], bounds_b[1])
+    right = min(bounds_a[2], bounds_b[2])
+    top = min(bounds_a[3], bounds_b[3])
+    if right <= left or top <= bottom:
+        return 0.0
+
+    intersection = (right - left) * (top - bottom)
+    area_a = (bounds_a[2] - bounds_a[0]) * (bounds_a[3] - bounds_a[1])
+    area_b = (bounds_b[2] - bounds_b[0]) * (bounds_b[3] - bounds_b[1])
+    smaller = min(area_a, area_b)
+    if smaller <= 0:
+        return None
+    return min(100.0, intersection / smaller * 100.0)
+
+
+def check_footprint_overlap(a: ImageMeta, b: ImageMeta) -> CheckResult:
+    """Do the two images describe the same place?
+
+    Added 2026-08-30 (limitation L16). The capability matrix had declared
+    `min_overlap_pct` since Phase 0 and **nothing read it**, so an optical and
+    a SAR scene 60 km apart were fused into a single confident answer. The
+    matrix's per-task threshold is enforced by the router; this check supplies
+    the measurement it gates on, and fails outright below OVERLAP_FAIL_PCT
+    where no task could accept the pair anyway.
+    """
+    overlap = footprint_overlap_pct(a, b)
+    if overlap is None:
+        return _warn(
+            "footprint_overlap",
+            "footprint overlap could not be measured - an image is "
+            "ungeoreferenced, so co-registration cannot be verified",
+        )
+    if overlap < OVERLAP_FAIL_PCT:
+        return _fail(
+            "footprint_overlap",
+            f"footprint overlap {overlap:.0f}% - the images do not cover the "
+            f"same area, so no joint answer is meaningful",
+            round(overlap, 2),
+            OVERLAP_FAIL_PCT,
+        )
+    return _pass(
+        "footprint_overlap", f"footprint overlap {overlap:.0f}%", round(overlap, 2)
+    )
+
+
 def check_crossmodal_pairing(images: list[ImageMeta]) -> CheckResult:
     mods = {img.modality for img in images}
     has_sar = "SAR" in mods
@@ -194,6 +273,7 @@ def run_checks(
         a, b = images
         results.append(check_crs_match(a, b))
         results.append(check_gsd_ratio(a, b))
+        results.append(check_footprint_overlap(a, b))
         if config == "CROSSMODAL_PAIR":
             results.append(check_crossmodal_pairing(images))
         elif config == "BITEMPORAL_PAIR":

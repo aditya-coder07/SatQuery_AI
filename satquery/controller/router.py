@@ -5,7 +5,12 @@ hold:
 
 1. **Config gating.** The input configuration determines which tasks are even
    legal. A single image can never route to change detection, no matter what
-   the query says.
+   the query says. Since 2026-08-30 this also enforces the matrix's *input
+   requirements* - `min_overlap_pct`, `max_coreg_shift_px`, `require_dates`,
+   `min_bands_optical`. Those had been declared in the matrix since Phase 0
+   and read by nothing, so a task whose declared precondition was unmet was
+   still selectable (limitation L16): an optical and a SAR scene 60 km apart
+   routed to XMODAL_JOINT_EXTRACT and were fused into one confident answer.
 2. **Intent classification**, restricted to the legal set. The classifier can
    only ever choose among tasks that are already legal, so a misclassification
    degrades answer quality but cannot produce an illegal plan.
@@ -105,11 +110,89 @@ class Router:
         self.vram_budget_mb = vram_budget_mb
 
     # -- gating ----------------------------------------------------------
+    @staticmethod
+    def _check_value(manifest: InputManifest, name: str):
+        """The measured value of an ingest check, or None if it did not run."""
+        for check in manifest.checks:
+            if check.name == name:
+                return check.value
+        return None
+
+    def unmet_requirements(self, task: str, manifest: InputManifest) -> list[str]:
+        """Matrix-declared input requirements this manifest does not satisfy.
+
+        Returns human-readable reasons, which the caller turns into an
+        exclusion notice, so a rejected task always says *why* rather than
+        silently disappearing from the legal set.
+
+        `CLARIFY_OR_ABSTAIN` is never excluded: it is the destination when
+        everything else is, and gating it would leave nothing to route to.
+        """
+        if task == "CLARIFY_OR_ABSTAIN":
+            return []
+        cfg = self.matrix.tasks.get(task)
+        if cfg is None:
+            return []
+        requires = cfg.requires
+        unmet: list[str] = []
+
+        minimum = getattr(requires, "min_overlap_pct", None)
+        if minimum is not None and len(manifest.images) == 2:
+            overlap = self._check_value(manifest, "footprint_overlap")
+            # An unmeasurable overlap (ungeoreferenced input) is not treated as
+            # a failure here: check_footprint_overlap already WARNs, and
+            # benchmark inputs are ungeoreferenced by construction.
+            if isinstance(overlap, (int, float)) and overlap < minimum:
+                unmet.append(
+                    f"footprint overlap {overlap:.0f}% is below the {minimum}% "
+                    f"this task requires"
+                )
+
+        # `max_coreg_shift_px` and `require_dates` are deliberately NOT
+        # enforced as hard exclusions, and the reasons are measured rather
+        # than assumed:
+        #
+        # * **Co-registration shift.** On a synthetic optical+SAR pair with
+        #   *identical* footprints - 100% overlap, same CRS, same GSD - the
+        #   gradient-domain phase correlation reports **38.1 px**, twenty
+        #   times the 2.0 px the matrix allows. The estimator is useful as a
+        #   relative quality signal and its absolute accuracy across
+        #   modalities is unvalidated, so gating on it would refuse
+        #   well-formed pairs. It belongs in `degraded_if` as a confidence
+        #   penalty, which is where the matrix already puts comparable
+        #   signals, not in a hard gate.
+        #
+        # * **`require_dates`.** Enforcing it would refuse change analysis on
+        #   every pair without acquisition metadata, which includes the
+        #   prescribed benchmark inputs - CDVQA ships undated PNGs. The
+        #   existing `temporal_order` WARN already records that t1/t2 order
+        #   came from input order rather than metadata, which is the honest
+        #   disclosure without making the benchmark unrunnable.
+        #
+        # Both remain declared in the matrix, and both are recorded as open in
+        # docs/00 §3.6 rather than quietly satisfied here.
+
+        minimum_bands = getattr(requires, "min_bands_optical", None)
+        if minimum_bands is not None:
+            optical = [
+                img for img in manifest.images
+                if img.modality in ("OPTICAL", "MSI", "PAN")
+            ]
+            if optical and max(len(img.bands) for img in optical) < minimum_bands:
+                unmet.append(
+                    f"the optical image has "
+                    f"{max(len(img.bands) for img in optical)} bands, below the "
+                    f"{minimum_bands} this task requires"
+                )
+
+        return unmet
+
     def legal_tasks(self, manifest: InputManifest) -> list[str]:
         """Tasks permitted by the input configuration AND the matrix.
 
         Intersecting with the matrix means a task cannot be routed to unless
-        the matrix also declares it legal for this configuration.
+        the matrix also declares it legal for this configuration **and** the
+        manifest satisfies the input requirements the matrix declares for it.
         """
         by_config = CONFIG_TO_LEGAL_TASKS.get(manifest.config, [])
         out = []
@@ -119,8 +202,11 @@ class Router:
                 continue
             required = cfg.requires.config
             allowed = [required] if isinstance(required, str) else list(required)
-            if manifest.config in allowed or "any" in allowed:
-                out.append(task)
+            if manifest.config not in allowed and "any" not in allowed:
+                continue
+            if self.unmet_requirements(task, manifest):
+                continue
+            out.append(task)
         return out
 
     # -- planning --------------------------------------------------------
