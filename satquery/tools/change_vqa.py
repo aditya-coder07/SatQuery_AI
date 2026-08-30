@@ -24,14 +24,17 @@ from satquery.contracts.input_manifest import InputManifest
 from satquery.contracts.tool_result import ToolPayload, ToolResult
 from satquery.ingest.reader import read_canonical_band
 from satquery.tools.base import ToolProtocol
-from satquery.verify.indices import mndwi, ndvi, ndwi
+from satquery.verify.indices import mndwi, ndbi, ndvi, ndwi, swir_free_builtup_proxy
 from satquery.verify.thresholding import adaptive_threshold, apply_threshold
 from satquery.verify.verifier import SUBJECT_TERMS
 
 TOOL_NAME = "change_vqa"
 TOOL_VERSION = "1.0.0-template"
 
-FIXED_PRIORS = {"vegetation": 0.3, "water": 0.0}
+# Priors used when the histogram has no bimodal split to threshold on. The
+# built-up prior is the proxy's own midpoint: unlike an index in [-1, 1] the
+# proxy is already a likelihood in [0, 1], so 0.5 is the neutral cut.
+FIXED_PRIORS = {"vegetation": 0.3, "water": 0.0, "built_up": 0.5}
 
 # Question shapes this path can answer exactly.
 _QUANTITY_RE = re.compile(
@@ -69,6 +72,25 @@ def _index_for(subject: str, meta) -> tuple[np.ndarray, str] | None:
         if {"GREEN", "NIR"} <= bands:
             return ndwi(read_canonical_band(meta, "GREEN"),
                         read_canonical_band(meta, "NIR")), "ndwi"
+    if subject == "built_up":
+        # Added 2026-08-30. The PS's fifth representative query is "Has the
+        # built-up area increased, decreased, or remained unchanged?" and this
+        # function knew only vegetation and water, so that query abstained -
+        # found by rehearsing the demo rather than by any test.
+        #
+        # The subject/index mapping already existed in the verifier
+        # (SUBJECT_INDICES: built_up -> ndbi, builtup_proxy); only this path
+        # had not implemented it. Same ordering, same SWIR-free fallback,
+        # which is Axiom 2: Cartosat-2S has no SWIR, so the proxy is the
+        # operative path on the target sensor rather than a contingency.
+        if {"SWIR1", "NIR"} <= bands:
+            return ndbi(read_canonical_band(meta, "SWIR1"),
+                        read_canonical_band(meta, "NIR")), "ndbi"
+        if {"RED", "NIR"} <= bands:
+            return swir_free_builtup_proxy(
+                read_canonical_band(meta, "RED"),
+                read_canonical_band(meta, "NIR"),
+            ), "builtup_proxy"
     return None
 
 
@@ -108,7 +130,13 @@ def measure_change(subject: str, t1, t2) -> dict | None:
     }
 
 
+# Subject keys are internal identifiers; a demo audience should not read
+# "built_up" in a sentence.
+DISPLAY_NAMES = {"built_up": "built-up"}
+
+
 def phrase(subject: str, m: dict) -> str:
+    subject = DISPLAY_NAMES.get(subject, subject)
     delta = m["delta_fraction"]
     direction = "increased" if delta > 0 else "decreased" if delta < 0 else "did not change"
     if delta == 0:

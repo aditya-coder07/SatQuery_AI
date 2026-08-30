@@ -337,12 +337,26 @@ class TestPSRepresentativeQueries:
         self, controller, msi_6band, msi_6band_t2
     ):
         """The PS asks increased / decreased / unchanged - a three-way
-        direction, not "how much"."""
+        direction, not "how much".
+
+        This assertion was originally `trace.answer.strip()`, which an
+        abstention message satisfies. Rehearsing the demo showed the query
+        abstaining: `change_vqa_v1`'s deterministic path knew vegetation and
+        water and had never implemented built-up, so the PS's own fifth query
+        produced a refusal. Asserting *answered* is what makes the test worth
+        having.
+        """
         trace = controller.run(
             [msi_6band, msi_6band_t2], self.PS_QUERIES["q5"], run_id="fixed_run_id"
         )
         assert trace.routing.selected_task == "TEMPORAL_CHANGE_VQA"
-        assert trace.answer.strip()
+        assert not trace.abstained, f"PS query 5 abstained: {trace.answer[:160]}"
+        answer = trace.answer.lower()
+        assert any(word in answer for word in ("increas", "decreas", "did not change")), (
+            f"no direction in the answer: {trace.answer[:160]}"
+        )
+        # The internal subject key must not reach the audience.
+        assert "built_up" not in trace.answer
 
     def test_a_plain_where_query_still_asks_for_a_map(
         self, controller, msi_6band, msi_6band_t2

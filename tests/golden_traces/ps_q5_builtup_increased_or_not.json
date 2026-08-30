@@ -1,10 +1,10 @@
 {
-  "abstain_limiting_component": "model",
-  "abstain_reason": "combined confidence 0.00 is below the 0.25 threshold; the limiting component is model at 0.00 - the model itself was uncertain; a higher-resolution or less cloudy scene, or a more specific question, is what moves this component",
-  "abstain_resolving_input": "the model itself was uncertain; a higher-resolution or less cloudy scene, or a more specific question, is what moves this component",
-  "abstain_trigger": "low_confidence",
-  "abstained": true,
-  "answer": "combined confidence 0.00 is below the 0.25 threshold; the limiting component is model at 0.00 - the model itself was uncertain; a higher-resolution or less cloudy scene, or a more specific question, is what moves this component",
+  "abstain_limiting_component": null,
+  "abstain_reason": null,
+  "abstain_resolving_input": null,
+  "abstain_trigger": null,
+  "abstained": false,
+  "answer": "The built-up extent increased from 82.2% to 83.6% of the scene (2% relative), a change of about 0.02 km2, measured by NDBI.",
   "artifact_paths": "<volatile>",
   "artifacts": [
     "ndvi",
@@ -15,7 +15,7 @@
   ],
   "code_version": "0.2.0-phase1",
   "confidence": {
-    "band": "LOW",
+    "band": "HIGH",
     "calibration": {
       "T": 1.0,
       "ece_after": -1.0,
@@ -24,9 +24,9 @@
     "components": {
       "agreement": 1.0,
       "input_quality": 1.0,
-      "model": 0.0
+      "model": 0.89
     },
-    "final": 0.0
+    "final": 0.9619
   },
   "execution": [
     {
@@ -177,13 +177,23 @@
       "version": "0.1.0-stub"
     },
     {
-      "confidence": 0.0,
+      "confidence": 1.0,
       "confidence_method": "deterministic",
       "outputs": {
-        "answer": "",
-        "deferred": true,
+        "answer": "The built-up extent increased from 82.2% to 83.6% of the scene (2% relative), a change of about 0.02 km2, measured by NDBI.",
+        "measurement": {
+          "delta_area_km2": 0.0221,
+          "delta_fraction": 0.0135,
+          "fraction_t1": 0.8223,
+          "fraction_t2": 0.8358,
+          "index": "ndbi",
+          "relative_change": 0.0164,
+          "threshold": -0.2723,
+          "threshold_method": "otsu"
+        },
         "path": "<volatile>",
-        "reason": "cannot measure built_up change: the required bands are not present in both images (['BLUE', 'GREEN', 'RED', 'NIR', 'SWIR1', 'SWIR2'] / ['BLUE', 'GREEN', 'RED', 'NIR', 'SWIR1', 'SWIR2'])"
+        "question": "Has the built-up area increased, decreased, or remained unchanged?",
+        "subject": "built_up"
       },
       "params": {
         "answer_mode": "template",
@@ -343,11 +353,12 @@
       "backend": "deterministic",
       "flagged": 0,
       "flagged_detail": [],
-      "retained": 0,
-      "sentences": 0,
+      "retained": 1,
+      "sentences": 1,
       "unverifiable": 0
     },
     "physics_agreement": {
+      "built_up:presence": 1.0,
       "mndwi": 1.0,
       "ndbi": 1.0,
       "ndvi": 1.0,
