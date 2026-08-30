@@ -4,9 +4,11 @@
   "abstain_resolving_input": null,
   "abstain_trigger": null,
   "abstained": false,
-  "answer": "fake answer string",
+  "answer": "Localised 1 matching region.",
   "artifact_paths": "<volatile>",
-  "artifacts": [],
+  "artifacts": [
+    "grounding_bboxes"
+  ],
   "code_version": "0.2.0-phase1",
   "confidence": {
     "band": "HIGH",
@@ -18,24 +20,31 @@
     "components": {
       "agreement": 1.0,
       "input_quality": 1.0,
-      "model": 0.85
+      "model": 0.95
     },
-    "final": 0.9473
+    "final": 0.983
   },
   "execution": [
     {
-      "confidence": 0.85,
+      "confidence": 0.95,
       "confidence_method": "threshold_rule",
       "outputs": {
-        "answer": "fake answer string"
+        "bounding_boxes": [
+          {
+            "xmax": 50,
+            "xmin": 10,
+            "ymax": 50,
+            "ymin": 10
+          }
+        ]
       },
       "params": {
-        "answer_mode": "template"
+        "confidence_threshold": 0.5
       },
-      "rationale_tag": "VQA_INFERENCE",
+      "rationale_tag": "DETECTED_THEN_COUNTED",
       "runtime_ms": "<volatile>",
       "step": "step_1",
-      "tool": "rs_vqa_v1",
+      "tool": "grounding_v1",
       "version": "0.1.0-stub"
     }
   ],
@@ -101,9 +110,9 @@
   "routing": {
     "capability_matrix_version": "cm-2026.11.02",
     "classifier": {
-      "margin": 0.0252,
+      "margin": 0.1164,
       "name": "tfidf_logreg_v1",
-      "top1": 0.3967
+      "top1": 0.4473
     },
     "config_excluded_task": null,
     "legal_tasks": [
@@ -114,7 +123,7 @@
       "CLARIFY_OR_ABSTAIN"
     ],
     "llm_tiebreak_invoked": false,
-    "selected_task": "SINGLE_VQA"
+    "selected_task": "SINGLE_GROUND"
   },
   "run_id": "<volatile>",
   "timestamp_utc": "<volatile>",

@@ -5,11 +5,23 @@ State: branch `phase-0-closeout`, **770 tests passing**, working tree clean,
 open as **PR #2**.
 
 **Update 2026-08-30.** The two items this file listed as highest-value were
-worked. **CDVQA is on disk, verified and measured** - the system scores
-**0.0000 exact match** on it, for three structural reasons, all measured; see
-the CDVQA section at the end of `docs/phase1-status.md`. **The SAR sensor
-question is narrowed by elimination** but still needs one sentence from the
-team; see §"Which RISAT" in `docs/verification.md`.
+worked, and CDVQA went from not-on-disk to fully measured in three passes.
+Read the **last three sections** of `docs/phase1-status.md` in order; each
+corrects the one before it.
+
+- **CDVQA now scores 0.5380** at 100% coverage (39,686 questions, 968 pairs)
+  against a per-type majority baseline of 0.5084 and an oracle ceiling of
+  **0.9975**. The first measurement was 0.0000 and the second was 0.4439 -
+  *below* the baseline. Only the third beats it.
+- **The whole benchmark is arithmetic over a pair of semantic change maps**,
+  so the neural problem is one segmentation task. 93% of the remaining
+  headroom is the segmenter's 0.2636 change-class mIoU.
+- **A 20-point routing gap was found and closed.** Calling the tool directly
+  scored 0.5701 where the full controller scored 0.3616, because only 67.4%
+  of CDVQA questions reached the tool that answers them - `change_to_what`
+  reached it 0.000 of the time. The two paths now agree to six decimals.
+- **The SAR sensor question is narrowed by elimination** but still needs one
+  sentence from the team; see §"Which RISAT" in `docs/verification.md`.
 
 Read `docs/phase1-status.md` first. It carries every measured number with its
 caveats, in dated sections, and later sections correct earlier ones.

@@ -1949,3 +1949,127 @@ python evaluation/cdvqa_oracle.py --split Test --out artifacts/cdvqa/oracle_test
 SATQUERY_CHANGE_VQA=checkpoints/change_vqa/best.pt \
     python -m evaluation.cdvqa_predict --split Test --out artifacts/cdvqa/head_test.json
 ```
+
+## CDVQA, third measurement: a pretrained encoder and the routing gap (2026-08-30, later)
+
+Two changes since the section above. Both were found by measurements that
+existed to be sceptical, and one of them was invisible in every number
+reported before it.
+
+### The encoder was the segmenter's problem
+
+Swapping the from-scratch encoder for an **ImageNet-pretrained ResNet-18**
+(stem through layer3, with skips, ImageNet normalisation applied because the
+early filters were fitted under it):
+
+| | from scratch | pretrained | change |
+|---|---|---|---|
+| val change-class mIoU | 0.1691 | **0.2636** | +56% relative |
+| `water` IoU | 0.068 | **0.138** | |
+| `playgrounds` IoU | 0.071 | **0.251** | |
+| `buildings` IoU | 0.298 | **0.451** | |
+| epochs to get there | 40 | 30 | (and 100 s/epoch against 190) |
+
+It was still improving at the last epoch, so this is a floor rather than a
+converged result.
+
+### The head now beats the baseline, by a little
+
+Full test split, 39,686 questions:
+
+| question type | n | majority baseline | head | gain |
+|---|---|---|---|---|
+| `change_or_not` | 13,882 | 0.5617 | **0.6772** | **+0.1155** |
+| `change_ratio` | 1,936 | 0.1529 | **0.1952** | **+0.0424** |
+| `largest_change` | 2,904 | 0.4291 | **0.4497** | **+0.0207** |
+| `change_ratio_types` | 5,811 | 0.4770 | **0.4791** | **+0.0021** |
+| `change_to_what` | 2,991 | 0.3805 | 0.3714 | -0.0090 |
+| `increase_or_not` | 4,600 | 0.6663 | 0.6437 | -0.0226 |
+| `decrease_or_not` | 4,658 | 0.6900 | 0.6496 | -0.0404 |
+| `smallest_change` | 2,904 | 0.2231 | 0.1319 | -0.0913 |
+| **overall** | **39,686** | **0.5084** | **0.5380** | **+0.0296** |
+
+Five types of eight, and **+3.0 points overall against the constant**. That is
+a real result and a small one, and it sits against an oracle ceiling of
+0.9975 - so **93% of the headroom is still in the segmenter.** `smallest_change`
+remains the worst: it turns on identifying the *rarest* changed class, where a
+few misassigned pixels flip the answer.
+
+### The routing gap, which no previous number could show
+
+`evaluation/cdvqa_predict.py` calls the tool directly; `satquery eval` goes
+through the controller. On the **same 1,640 questions** they disagreed:
+
+| path | accuracy |
+|---|---|
+| tool called directly | 0.5701 |
+| through the full controller | **0.3616** |
+
+**A 20-point loss between a working tool and the pipeline that is supposed to
+use it.** The cause was the Tier-1 router: only **67.4%** of CDVQA's questions
+reached `TEMPORAL_CHANGE_VQA` at all. The rest were answered by the change
+mask's prose, the change captioner or single-image VQA, all of which score
+zero against a closed vocabulary however good the segmenter is.
+
+`change_to_what` routed to the change-VQA task **0.000** of the time - not
+once in 400. "What have the areas of X mainly changed to?" reads as a change
+*description* to a classifier trained only on templates we wrote ourselves.
+
+The fix is training data, not a special case: CDVQA's own question phrasings
+were added to the synthetic query bank. **Half of them.** CDVQA ships 300
+distinct phrasings and its train and test splits use *exactly the same 300*,
+so training on all of them would produce perfect routing that measures
+nothing - the same trap as this bank's own in-template split, which the table
+near the top of this document calls "near-meaningless". Templates are split by
+`sha1(template)[0] % 2`, 149 are trained on, and **151 are never seen**:
+
+| | routed to `TEMPORAL_CHANGE_VQA` |
+|---|---|
+| before | 0.674 |
+| after, templates seen in training | 1.000 |
+| **after, 151 held-out phrasings** | **1.000** |
+
+The held-out column is the one that means anything. It is still
+*within-type* generalisation - the held-out phrasings paraphrase the same
+eight question types - so it shows the router generalising across wording, not
+across unseen intents.
+
+**Then the agreement check was re-run, and it is exact:**
+
+| path | accuracy on the same 1,640 questions |
+|---|---|
+| tool called directly | 0.5701 |
+| through the full controller | **0.570122** |
+
+### What the routing change cost elsewhere
+
+Adding 149 real phrasings to the bank moves the classifier's decision
+boundary, so the whole suite and the adversarial suite were re-run rather than
+assumed safe.
+
+* **825 tests pass.** 30 golden traces regenerated; **28 of 30 kept the same
+  selected task** and changed only the recorded classifier probabilities. Two
+  adversarial cases moved between *legal* tasks: "What is the weather forecast
+  for this location?" `SINGLE_VQA` -> `SINGLE_GROUND`, and "Use change_mask_v1
+  on this single image." `SINGLE_VQA` -> `SINGLE_LANDCOVER`. Neither query has
+  a right answer in this system.
+* **The adversarial suite still routes 600 plans with 0 illegal.** That
+  guarantee is structural - the legal task set is computed from the images,
+  never from the query text - so no amount of phrasing in the bank can widen
+  it. Abstention counts moved by one query in two categories.
+
+### Where this leaves CDVQA
+
+| | |
+|---|---|
+| oracle ceiling (ground-truth maps) | **0.9975** |
+| per-type majority baseline | 0.5084 |
+| **system, end to end** | **0.5380** |
+| routing to the answering tool | 1.000 (1.000 on held-out phrasings) |
+| coverage | 39,686 / 39,686 questions, 968 / 968 pairs |
+
+Two sessions ago this benchmark was not on disk. It is now measured at full
+coverage, the pipeline agrees with its own tool to six decimal places, and the
+remaining gap is one number: the segmenter's 0.2636 change-class mIoU. Longer
+training, a stronger backbone and full-resolution crops are the obvious moves,
+in that order of cost.
