@@ -51,10 +51,16 @@ Current headline status (see `docs/00` §3.1 for the evidence behind each):
 | M7 | Agentic orchestration | **MET** — illegal-plan rate 0/600; routing accuracy weak |
 | M8 | Auditable execution summary | **MET** |
 
-Inputs I1–I6 are all **MET**. Of the three prescribed benchmarks, RSVQA-LR and
-CDVQA are evaluated; **VRSBench is not** (imagery lives in DOTA, not on disk).
-Twelve known limitations are recorded in `docs/00` §3.6 rather than left to be
-discovered.
+| M9 | Combine outputs, estimate confidence, return visual evidence | **VERIFIED** |
+
+Inputs I1–I5 are **VERIFIED**; I6 (large scenes) is built but is **not a PS
+clause**. Of the three prescribed benchmarks, RSVQA-LR and CDVQA are evaluated;
+**VRSBench is not** (imagery lives in DOTA, not on disk). Fifteen known
+limitations are recorded in `docs/00` §3.6 rather than left to be discovered.
+
+The matrix was checked clause-by-clause against
+[`docs/ps-26167.md`](docs/ps-26167.md), the authoritative PS text, on
+2026-08-30.
 
 ## 4. Unverified claims register
 
