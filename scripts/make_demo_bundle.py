@@ -53,6 +53,7 @@ from evaluation.scenes import (  # noqa: E402
 # assembles them - so these are **directories**, not single rasters. Passing
 # the four BAND*.tif files individually is not the same thing: the controller
 # reads that as four separate images and rejects it.
+LEVIR_INDEX = Path("data/levircd/index.json")
 CARTOSAT_MX = Path("data/bhoonidhi/cartosat2s_mx_5132611")
 EOS04_FRS1 = Path("data/bhoonidhi/eos04_frs1_226981731")
 
@@ -164,6 +165,73 @@ def build_benchmark_png(path: Path) -> Path:
     return path
 
 
+def build_change_pair(directory: Path) -> tuple[list[Path], bool, list[str]]:
+    """A bi-temporal pair with change the detector can actually find.
+
+    The synthetic pair does not work for this beat, and the rehearsal is what
+    showed it: `build_msi_6band` and `build_msi_6band_t2` are *different
+    random textures* rather than one area at two dates, so `change_mask_v1` -
+    trained on real building change - reported `changed_fraction 0.0` and the
+    captioner said "there is no difference". A change-analysis demo in which
+    nothing changes is not a demo.
+
+    So the pair comes from **LEVIR-CD** when it is on disk: real bi-temporal
+    imagery, real building change, and the distribution the detector was
+    trained on. The tile is chosen deterministically as the one with the
+    largest labelled change fraction among the first 400 test tiles.
+
+    **Disclosure:** LEVIR-CD tiles ship as ungeoreferenced PNGs. They are
+    written here as GeoTIFFs at LEVIR-CD's nominal 0.5 m GSD with a **stated
+    synthetic origin**, because the map and overlay need a CRS. The location
+    is not real and the manifest says so; the imagery and the change are.
+    """
+    import json
+
+    if not LEVIR_INDEX.exists():
+        optical = build_msi_6band(directory / "optical_t1.tif")
+        optical_t2 = build_msi_6band_t2(directory / "optical_t2.tif")
+        return [optical, optical_t2], False, [
+            "synthetic stand-in: LEVIR-CD not on disk. The trained change "
+            "detector reports no change on synthetic textures, so this beat "
+            "will show 'there is no difference'."
+        ]
+
+    from PIL import Image
+
+    rows = json.loads(LEVIR_INDEX.read_text(encoding="utf-8"))["splits"]["test"]
+    best = max(
+        rows[:400],
+        key=lambda r: float(
+            (np.asarray(Image.open(r["label"]).convert("L")) > 127).mean()
+        ),
+    )
+    changed = float(
+        (np.asarray(Image.open(best["label"]).convert("L")) > 127).mean()
+    )
+
+    paths = []
+    for role, key in (("t1", "a"), ("t2", "b")):
+        rgb = np.asarray(Image.open(best[key]).convert("RGB")).transpose(2, 0, 1)
+        paths.append(write_raster(
+            directory / f"levir_{role}.tif",
+            rgb,
+            band_names=["RED", "GREEN", "BLUE"],
+            gsd=0.5,
+            origin=(500000.0, 2000000.0),
+            tags={
+                "source": f"LEVIR-CD {best['id']}",
+                "labelled_change_fraction": round(changed, 4),
+                "georeferencing": "SYNTHETIC origin; LEVIR-CD ships ungeoreferenced PNGs",
+                "ACQUISITION_DATE": "2026-01-01" if role == "t1" else "2026-06-01",
+            },
+        ))
+    return paths, True, [
+        f"LEVIR-CD {best['id']}, {changed:.1%} of pixels labelled changed",
+        "georeferenced with a SYNTHETIC origin for display; the location is "
+        "not real, the imagery and the change are",
+    ]
+
+
 def build_bundle(out: Path) -> list[DemoInput]:
     out.mkdir(parents=True, exist_ok=True)
     synth = out / "synthetic"
@@ -172,6 +240,7 @@ def build_bundle(out: Path) -> list[DemoInput]:
     optical = build_msi_6band(synth / "optical_t1.tif")
     optical_t2 = build_msi_6band_t2(synth / "optical_t2.tif")
     sar = build_sar_dualpol(synth / "sar_dualpol.tif")
+    change_pair, change_is_real, change_notes = build_change_pair(synth)
 
     cartosat = _cartosat()
     eos04 = _eos04_hh()
@@ -238,19 +307,25 @@ def build_bundle(out: Path) -> list[DemoInput]:
     # 5 - bi-temporal, PS representative query 5.
     inputs.append(DemoInput(
         key="bitemporal_pair",
+        # Real bi-temporal imagery where available - see build_change_pair.
         beat="3:10 - bi-temporal. PS query 5, a three-way direction answer.",
         query="Has the built-up area increased, decreased, or remained unchanged?",
-        images=[optical, optical_t2],
+        images=change_pair,
         expect="TEMPORAL_CHANGE_VQA",
+        real=change_is_real,
+        notes=change_notes,
     ))
 
     # 6 - what changed AND where, PS representative query 3 (limitation L13).
     inputs.append(DemoInput(
         key="change_what_and_where",
+        # Real bi-temporal imagery where available - see build_change_pair.
         beat="3:10 - PS query 3. Must answer both what changed and where.",
         query="What changed between these two dates, and where did the change occur?",
-        images=[optical, optical_t2],
+        images=change_pair,
         expect="TEMPORAL_CHANGE_DESC",
+        real=change_is_real,
+        notes=change_notes,
     ))
 
     # 7 - the abstention the demo closes on.

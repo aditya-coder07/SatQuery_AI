@@ -53,6 +53,15 @@ export default function RunPage() {
   }
 
   const confidence = record.confidence;
+  // An abstained run returned no answer, so a confidence *for that answer* is
+  // not applicable (limitation L18). Rendering "HIGH 0.7937" directly above
+  // "Abstained" reads as a contradiction even though the number is
+  // arithmetically right - it abstained on input validation, not on low
+  // confidence. Presentation only: the combiner is untouched.
+  const abstained = Boolean(record.abstained);
+  const failedChecks = (record.ingest?.checks ?? []).filter(
+    (c: any) => c.status === 'FAIL',
+  );
 
   return (
     <main className="page">
@@ -60,12 +69,24 @@ export default function RunPage() {
       <p className="note">{record.query}</p>
 
       <section className="card">
-        <h3>Answer</h3>
-        <p>{record.answer}</p>
-        {record.abstained && (
-          <p className="caveat">
-            ⚠ Abstained ({record.abstain_trigger}). {record.abstain_resolving_input}
-          </p>
+        <h3>{abstained ? 'Status: Abstained' : 'Answer'}</h3>
+        {abstained ? (
+          <>
+            {failedChecks.length > 0 && (
+              <ul className="checks">
+                {failedChecks.map((c: any, i: number) => (
+                  <li key={i} className="check-FAIL">
+                    Input validation failed: <code>{c.name}</code> — {c.message}
+                  </li>
+                ))}
+              </ul>
+            )}
+            <p className="caveat">
+              Trigger: {record.abstain_trigger}. {record.abstain_resolving_input}
+            </p>
+          </>
+        ) : (
+          <p>{record.answer}</p>
         )}
       </section>
 
@@ -73,9 +94,15 @@ export default function RunPage() {
         <div className="stats">
           <div className="stat">
             <div className="label">confidence</div>
-            <div className="value">{Number(confidence.final).toFixed(4)}</div>
-            <div className="sub">{confidence.band}</div>
+            <div className="value">
+              {abstained ? '—' : Number(confidence.final).toFixed(4)}
+            </div>
+            <div className="sub">
+              {abstained ? 'not applicable — the run abstained' : confidence.band}
+            </div>
           </div>
+          {/* Components stay visible even when abstained: they are the
+              diagnosis of *why*, and input_quality is usually the low one. */}
           {Object.entries(confidence.components ?? {}).map(([k, v]) => (
             <div className="stat" key={k}>
               <div className="label">{k}</div>

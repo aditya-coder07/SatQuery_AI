@@ -66,6 +66,7 @@ export default function Page() {
   const [running, setRunning] = useState(false);
   const [error, setError] = useState<string>('');
   const [runId, setRunId] = useState<string>('');
+  const [abstained, setAbstained] = useState(false);
   const [roles, setRoles] = useState<string[]>([]);
   const traceRef = useRef<HTMLDivElement>(null);
 
@@ -79,6 +80,7 @@ export default function Page() {
 
       setRunning(true);
       setError('');
+    setAbstained(false);
       setEvents([]);
       setAnswer('');
       setTask('');
@@ -111,6 +113,7 @@ export default function Page() {
             setConfidence(event.data);
           } else if (event.name === 'complete') {
             setAnswer(event.data.answer ?? '');
+            setAbstained(Boolean(event.data.abstained));
             if (event.data.abstained && event.data.abstain_reason) {
               setError(event.data.abstain_reason);
             }
@@ -189,10 +192,26 @@ export default function Page() {
           <h2>Confidence</h2>
           {confidence ? (
             <>
-              <div className={`confidence-value band-${confidence.band}`}>
-                {(confidence.final * 100).toFixed(1)}%
-                <span style={{ fontSize: 14, marginLeft: 8 }}>{confidence.band}</span>
-              </div>
+              {/* An abstained run returned no answer, so a confidence *for
+                  that answer* is not applicable (limitation L18). Showing
+                  "79.4% HIGH" above "Abstained" reads as a contradiction even
+                  though the number is right - the run abstained on input
+                  validation, not on low confidence. Presentation only; the
+                  combiner is untouched, and the components stay visible
+                  because they are the diagnosis of why. */}
+              {abstained ? (
+                <div className="confidence-value band-LOW">
+                  —
+                  <span style={{ fontSize: 14, marginLeft: 8 }}>
+                    not applicable — abstained
+                  </span>
+                </div>
+              ) : (
+                <div className={`confidence-value band-${confidence.band}`}>
+                  {(confidence.final * 100).toFixed(1)}%
+                  <span style={{ fontSize: 14, marginLeft: 8 }}>{confidence.band}</span>
+                </div>
+              )}
               <div className="components">
                 <div className="component">
                   <div className="label">Model</div>
