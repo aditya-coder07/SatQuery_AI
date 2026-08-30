@@ -128,6 +128,34 @@ CASES = [
     ("swir_free_vqa", "How many buildings are visible?", ["msi_4band"]),
     ("swir_free_caption", "Describe this image.", ["msi_4band"]),
     ("panchromatic_caption", "Describe this image.", ["pan_1band"]),
+
+    # --- the PS's five representative queries, VERBATIM (limitation L14) ---
+    #
+    # docs/ps-26167.md lists five representative queries. Until 2026-08-30 not
+    # one of them was tested: the 31 goldens above use our own paraphrases,
+    # and docs/00 had recorded the wrong set - two queries that were not the
+    # PS's, and the PS's only grounding query missing entirely.
+    #
+    # These are the exact strings from the PS. They are the closest thing to
+    # the acceptance criteria a judge will use, so they are pinned
+    # byte-for-byte here and asserted semantically in
+    # TestPSRepresentativeQueries below.
+    ("ps_q1_landcover_and_objects",
+     "Describe the land-cover and major objects visible in this image.",
+     ["msi_6band"]),
+    ("ps_q2_highlight_water_body",
+     "Highlight the water body referred to in the query.",
+     ["msi_6band"]),
+    ("ps_q3_what_changed_and_where",
+     "What changed between these two dates, and where did the change occur?",
+     ["msi_6band", "msi_6band_t2"]),
+    ("ps_q4_optical_sar_builtup_water",
+     "Use the optical and SAR images together to identify built-up and "
+     "water-covered regions.",
+     ["msi_6band", "sar_dualpol"]),
+    ("ps_q5_builtup_increased_or_not",
+     "Has the built-up area increased, decreased, or remained unchanged?",
+     ["msi_6band", "msi_6band_t2"]),
 ]
 
 
@@ -173,8 +201,13 @@ class TestGoldenCoverage:
         assert any(name.startswith("abstain") for name, _, _ in CASES)
 
     def test_case_count_is_pinned(self):
-        """Task 3.14 asked for ~30; adding one must be deliberate."""
-        assert len(CASES) == 31
+        """Task 3.14 asked for ~30; adding one must be deliberate.
+
+        31 through Phase 3, plus the PS's five representative queries added
+        2026-08-30 when the traceability matrix was checked against the real
+        problem statement.
+        """
+        assert len(CASES) == 36
 
     def test_case_names_are_unique(self):
         names = [name for name, _, _ in CASES]
@@ -215,3 +248,114 @@ class TestGoldenCoverage:
     def test_adversarial_cases_are_pinned_end_to_end(self):
         adversarial = [n for n, _, _ in CASES if n.startswith("adversarial_")]
         assert len(adversarial) >= 5
+
+
+class TestPSRepresentativeQueries:
+    """The PS's five representative queries, asserted by behaviour.
+
+    The goldens above pin these byte-for-byte, which catches *any* change.
+    These assert what each query has to *do*, which is a different thing: a
+    golden records whatever the system did, including doing the wrong thing
+    consistently. Limitation L13 was exactly that - query 3 answered "where"
+    and not "what" for three phases, and a byte comparison would have pinned
+    the defect rather than reported it.
+
+    Source of truth for the strings: docs/ps-26167.md.
+    """
+
+    PS_QUERIES = {
+        "q1": "Describe the land-cover and major objects visible in this image.",
+        "q2": "Highlight the water body referred to in the query.",
+        "q3": "What changed between these two dates, and where did the change occur?",
+        "q4": (
+            "Use the optical and SAR images together to identify built-up and "
+            "water-covered regions."
+        ),
+        "q5": "Has the built-up area increased, decreased, or remained unchanged?",
+    }
+
+    def test_the_strings_match_the_problem_statement(self):
+        """The cases above must quote the PS, not a paraphrase of it.
+
+        docs/00 drifted precisely here: it recorded a query the PS does not
+        contain and omitted the PS's only grounding query. Comparing against
+        the in-repo PS text makes that drift a test failure.
+        """
+        ps = Path(__file__).parent.parent / "docs" / "ps-26167.md"
+        if not ps.exists():
+            pytest.skip("docs/ps-26167.md not present")
+        text = ps.read_text(encoding="utf-8")
+        for key, query in self.PS_QUERIES.items():
+            assert query in text, f"{key} is not in the problem statement verbatim"
+
+        cased = {q for _, q, _ in CASES}
+        for key, query in self.PS_QUERIES.items():
+            assert query in cased, f"{key} has no golden trace"
+
+    def test_q1_describes_the_scene(self, controller, msi_6band):
+        trace = controller.run([msi_6band], self.PS_QUERIES["q1"], run_id="fixed_run_id")
+        assert trace.routing.selected_task in {"SINGLE_CAPTION", "SINGLE_LANDCOVER"}
+        assert trace.answer.strip()
+
+    def test_q2_routes_to_grounding(self, controller, msi_6band):
+        """The PS's only grounding query. If M3 were satisfied by captioning
+        alone this query would have nothing to route to."""
+        trace = controller.run([msi_6band], self.PS_QUERIES["q2"], run_id="fixed_run_id")
+        assert trace.routing.selected_task == "SINGLE_GROUND"
+
+    def test_q3_answers_both_what_and_where(
+        self, controller, msi_6band, msi_6band_t2
+    ):
+        """L13, as a test.
+
+        The query asks two things. "Where" is the georeferenced mask; "what"
+        is prose. Routing to TEMPORAL_CHANGE_MAP satisfies only the first -
+        its plan has no captioner and its answer is a pointer to the raster.
+        """
+        trace = controller.run(
+            [msi_6band, msi_6band_t2], self.PS_QUERIES["q3"], run_id="fixed_run_id"
+        )
+        tools = {step.tool for step in trace.execution}
+
+        # "where": a georeferenced change artifact.
+        assert "change_mask" in (trace.artifact_paths or {}), "no change mask exported"
+        # "what": a description, produced by a captioner rather than a pointer.
+        assert "change_caption_v1" in tools, (
+            f"no captioner in the plan for a 'what changed' query; tools were {sorted(tools)}"
+        )
+        assert "see the exported raster" not in trace.answer, (
+            "the answer points at the raster instead of describing the change"
+        )
+
+    def test_q4_uses_both_modalities(self, controller, msi_6band, sar_dualpol):
+        trace = controller.run(
+            [msi_6band, sar_dualpol], self.PS_QUERIES["q4"], run_id="fixed_run_id"
+        )
+        assert trace.routing.selected_task == "XMODAL_JOINT_EXTRACT"
+
+    def test_q5_is_answered_as_a_direction_not_a_magnitude(
+        self, controller, msi_6band, msi_6band_t2
+    ):
+        """The PS asks increased / decreased / unchanged - a three-way
+        direction, not "how much"."""
+        trace = controller.run(
+            [msi_6band, msi_6band_t2], self.PS_QUERIES["q5"], run_id="fixed_run_id"
+        )
+        assert trace.routing.selected_task == "TEMPORAL_CHANGE_VQA"
+        assert trace.answer.strip()
+
+    def test_a_plain_where_query_still_asks_for_a_map(
+        self, controller, msi_6band, msi_6band_t2
+    ):
+        """The L13 fix must not swallow TEMPORAL_CHANGE_MAP.
+
+        "Show me where the changes occurred" wants a mask and nothing else.
+        Only a query that *also* asks what changed belongs to the descriptive
+        task, and that distinction is the whole point of the fix.
+        """
+        trace = controller.run(
+            [msi_6band, msi_6band_t2],
+            "Show me where the changes occurred.",
+            run_id="fixed_run_id",
+        )
+        assert trace.routing.selected_task == "TEMPORAL_CHANGE_MAP"

@@ -107,29 +107,41 @@ Tier-1 classifier and, for query 3, the full controller.
 | # | PS query (verbatim) | Routes to | top-1 | Status |
 |---|---|---|---|---|
 | 1 | *"Describe the land-cover and major objects visible in this image."* | `SINGLE_CAPTION` | 0.504 | **VERIFIED** — routes correctly; answer quality is caption BLEU-4 0.2446 |
-| 2 | *"Highlight the water body referred to in the query."* | `SINGLE_GROUND` | 0.758 | **PARTIAL** — routes correctly, and this is the PS's only grounding query, but grounding is at Acc@0.5 **0.0762** |
-| 3 | *"What changed between these two dates, and where did the change occur?"* | `TEMPORAL_CHANGE_MAP` | 0.557 | **PARTIAL** — see below |
+| 2 | *"Highlight the water body referred to in the query."* | `SINGLE_GROUND` | 0.758 | **PARTIAL** — routes correctly, and this is the PS's only grounding query, but grounding is at Acc@0.5 **0.0762**. Routing is asserted; localisation quality is the open weakness |
+| 3 | *"What changed between these two dates, and where did the change occur?"* | `TEMPORAL_CHANGE_DESC` | 0.643 | **VERIFIED** — fixed 2026-08-30, see below |
 | 4 | *"Use the optical and SAR images together to identify built-up and water-covered regions."* | `XMODAL_JOINT_EXTRACT` | 0.973 | **VERIFIED** |
 | 5 | *"Has the built-up area increased, decreased, or remained unchanged?"* | `TEMPORAL_CHANGE_VQA` | 0.699 | **VERIFIED** — three-way answer from a signed area difference against a stated significance threshold |
 
-**Query 3 is the one to fix.** Run end to end on a bi-temporal pair it selects
-`TEMPORAL_CHANGE_MAP`, whose plan is `index_engine_v1 → change_mask_v1` and
-whose answer is *"Produced a change mask; see the exported raster artifact."*
-That answers **where** — a georeferenced mask the analyst can open — and does
-**not** answer **what changed** in prose. The near-paraphrase
-*"Describe what changed between the two images."* routes to
-`TEMPORAL_CHANGE_DESC`, whose plan adds `change_caption_v1` and which returns
-both a description and the same mask.
+**Query 3 was the one to fix, and it is fixed (2026-08-30).** It previously
+selected `TEMPORAL_CHANGE_MAP`, whose plan is `index_engine_v1 →
+change_mask_v1` and whose answer is *"Produced a change mask; see the exported
+raster artifact."* — **where** without **what**. `_CHANGE_MAP` owned every
+"where" phrasing in the query bank, so the PS's "and where" pulled the whole
+query there.
 
-So the capability exists and the routing splits it. This is a **routing
-correction, not a missing feature**: a query asking both "what" and "where"
-should select the task whose plan produces both. Recorded here rather than
-fixed, because changing the router is a separate change with its own
-regression surface — see limitation **L13**.
+The fix is training data, not a special case: eight compound *"what changed
+**and** where"* templates were added to `TEMPORAL_CHANGE_DESC`, whose plan is
+`index_engine_v1 → change_mask_v1 → change_caption_v1` and which therefore
+returns **both** the prose and the same georeferenced mask. **None of the eight
+is the PS string** — the PS query is the acceptance test, and a template equal
+to the test string would prove memorisation rather than generalisation. A plain
+*"Show me where the changes occurred"* still routes to `TEMPORAL_CHANGE_MAP`
+at 0.950, which is the distinction the fix turns on and is asserted in a test.
 
-**None of the PS's five queries is covered verbatim by a golden trace.** The 31
-golden traces use paraphrases. Adding the five verbatim strings as golden
-traces is the cheapest way to make this table self-verifying.
+**What the fix cost, stated plainly.** Raw Tier-1 accuracy on the never-tuned
+CLEAN_HOLDOUT fell **0.6552 → 0.5862** (n=29, three items flipped). All three
+flipped items were **already below the confidence gate** (top1 0.252–0.296
+against a 0.35 threshold) both before and after, which is the band where the
+router ignores the classifier and falls back to the configuration default — so
+**system behaviour on all three is unchanged**. The drop is real on the raw
+metric and does not correspond to a behavioural regression. Illegal-plan rate
+re-measured after the change: still **0 / 600**.
+
+**All five PS queries are now golden traces** (`ps_q1`…`ps_q5`), and
+`TestPSRepresentativeQueries` asserts each one *behaviourally* rather than
+byte-wise — a golden pins whatever the system does, including doing the wrong
+thing consistently, which is exactly how L13 survived three phases. The
+query-3 assertion was verified to fail when the fix is reverted.
 
 ### 3.4 Deliverables
 
@@ -183,14 +195,14 @@ of these should find it already written down.
 | **L4** | **Which RISAT the evaluation set uses is unconfirmed — and the PS says to keep it that way.** `ps-26167.md` states the PS "does not specify the exact RISAT mission/product" and that the project "should not assume a specific RISAT variant... unless independently confirmed", requiring the implementation to "remain **sensor-configurable**". **Reframed 2026-08-30:** the requirement is configurability, which adaptive rather than absolute σ⁰ thresholds satisfy — not identification | `docs/ps-26167.md` §"Authoritative Sensor Note"; `docs/verification.md` §"Which RISAT" | **The narrowing to EOS-04 must not become a baked-in assumption.** It stays as background for the Stage A3 decision only. If SAC confirms RISAT-2B/2BR1, verification item 8 inverts and Stage A3 should be redone against 0.25 m X-band SAR (~2–4 GPU-h + downloads) |
 | **L5** | **Optical–SAR fusion does not beat optical alone.** Complementarity gain **−0.0064** | `checkpoints/optsar_fusion/metrics.json` | M6 is satisfied as a *capability*; the claim that fusion helps is disconfirmed on WHU-OPT-SAR and must not be asserted |
 | **L6** | **The two-track ablation is not comparable.** The two tracks were trained and evaluated on different tasks, so no controlled comparison exists | `docs/assets/ablations/ablations.json`, status `not_comparable` | The two-track design decision is *reasoned*, not *demonstrated*. Do not claim it is proven |
-| **L7** | **Tier-1 routing accuracy is 0.6552** on the never-tuned holdout (n=29) | `satquery/synth/holdout.py`; measured 2026-08-30 | The weakest measured component. The config gate keeps a misroute from becoming an illegal plan, so it degrades rather than fails |
+| **L7** | **Tier-1 routing accuracy is 0.5862** on the never-tuned holdout (n=29), down from 0.6552 as the measured cost of the L13 fix. Every flipped item sits below the confidence gate, where the router already ignores the classifier, so no system behaviour changed | `satquery/synth/holdout.py`; measured 2026-08-30 | The weakest measured component, and n=29 makes it a smoke test rather than a benchmark. The config gate keeps a misroute from becoming an illegal plan, so it degrades rather than fails — re-verified at 0/600 |
 | **L8** | **`landcover_v1` asserts on ~0.25% of decisions** at 91% precision; at threshold 0.5 the head is worse than always predicting negative (0.2064 vs 0.1834) | `configs/thresholds.yaml`, `docs/phase1-status.md` | Correct behaviour for a head with mAP 0.285, but thin for a demo. The narrative synthesiser carries land-cover answers |
 | **L9** | **Tier-2 LLM tie-break is unbuilt.** `llm_tiebreak_invoked` is always `false` | Trace schema | An honest flag on an unbuilt feature; not one of the 14 Phase-3 tasks |
 | **L10** | **CDVQA's remaining headroom is the segmenter.** 0.5380 achieved against a 0.9975 oracle ceiling — **93% of the gap is semantic-change segmentation** (change-class mIoU 0.2636) | `artifacts/cdvqa/`, `checkpoints/change_vqa/metrics.json` | The answer layer contributes no measurable error; further gains are one well-posed segmentation problem |
 | **L11** | **VRSBench is not evaluated.** It ships annotations only; its imagery lives in DOTA, which is not on disk | `docs/verification.md` item 9 | One of three prescribed benchmarks has no number |
 | ~~**L12**~~ | ~~The verbatim PS text is not in the repository.~~ **CLOSED 2026-08-30.** `docs/ps-26167.md` is now the in-repo source of truth and this matrix was checked against it clause-by-clause | `docs/ps-26167.md` | The check found four defects — see §3.0. That is the measured cost of having run on paraphrase for three phases |
-| **L13** | **A "what changed **and where**" query answers only "where".** PS representative query 3 routes to `TEMPORAL_CHANGE_MAP`, whose plan is `index_engine_v1 → change_mask_v1` and whose answer is *"Produced a change mask; see the exported raster artifact."* `change_caption_v1` exists and answers the "what" half, but is not in that task's plan | Measured end to end 2026-08-30, §3.3 | A routing/plan correction, not a missing capability. Untouched here because changing the router carries its own regression surface and this pass was a documentation review |
-| **L14** | **None of the PS's five representative queries is a golden trace.** The 31 golden traces use paraphrases; the verbatim strings are untested as acceptance cases | `tests/golden_traces/`, §3.3 | Cheapest fix in the backlog: add the five verbatim strings as golden traces and this table becomes self-verifying |
+| ~~**L13**~~ | ~~A "what changed and where" query answers only "where".~~ **CLOSED 2026-08-30** by adding compound "what and where" templates to `TEMPORAL_CHANGE_DESC`. Query 3 now runs `index_engine_v1 → change_mask_v1 → change_caption_v1` and returns both | §3.3; `TestPSRepresentativeQueries::test_q3_answers_both_what_and_where` | Cost: raw CLEAN_HOLDOUT accuracy 0.6552 → 0.5862, entirely inside the low-confidence band the router already ignores. Illegal-plan rate still 0/600 |
+| ~~**L14**~~ | ~~None of the PS's five representative queries is a golden trace.~~ **CLOSED 2026-08-30.** All five are now goldens **and** carry behavioural assertions; a test also checks the strings still appear verbatim in `docs/ps-26167.md`, so drift between the matrix and the PS becomes a test failure | `tests/test_golden_traces.py` (50 tests, 36 goldens) | The matrix is now self-verifying on this row |
 | **L15** | **The demonstration is a PS deliverable and does not exist.** *"Codes and models including test and demonstration"* — `scripts/make_demo_bundle.py` has never been run and the 7-minute script has never been rehearsed | §3.4 | The only Phase-4 item the PS actually names. The technical report and model cards, which the plan treated as deliverables, are **not** PS requirements |
 
 ---

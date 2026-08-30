@@ -168,6 +168,36 @@ _CHANGE_DESC = [
     "Write up how the area shifted.",
     "Talk me through the differences across the two passes.",
     "Describe how things developed since the earlier image.",
+
+    # Compound "what AND where" queries (added 2026-08-30, limitation L13).
+    #
+    # PS representative query 3 is "What changed between these two dates, and
+    # where did the change occur?" - it asks for both a description and a
+    # location. It was routing to TEMPORAL_CHANGE_MAP, because _CHANGE_MAP
+    # owns every "where" phrasing ("Show me where the changes occurred"), and
+    # MAP's plan is index_engine -> change_mask: it returns the mask and the
+    # answer "Produced a change mask; see the exported raster artifact."
+    # That answers *where* and not *what*.
+    #
+    # TEMPORAL_CHANGE_DESC's plan is index_engine -> change_mask ->
+    # change_caption, so it already produces **both** the georeferenced mask
+    # and the prose. The compound shape belongs here.
+    #
+    # A plain "show me where" still belongs to MAP and is left there: the
+    # distinction is whether the user asked for a description as well.
+    #
+    # None of these is the PS string verbatim. That is deliberate - the PS
+    # query is an acceptance test in tests/test_golden_traces.py, and a
+    # template equal to the test string would prove memorisation rather than
+    # that the router generalises to the shape.
+    "Tell me what changed and where it happened.",
+    "Which features changed, and in which parts of the scene?",
+    "Describe the changes and point out where they are.",
+    "What is different between the images, and whereabouts?",
+    "Identify what changed and its location.",
+    "Explain the changes and where they occurred in the scene.",
+    "What has altered here, and in which areas?",
+    "Report what changed and the areas affected.",
 ]
 
 _CHANGE_VQA = [

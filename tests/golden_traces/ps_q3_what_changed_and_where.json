@@ -4,14 +4,14 @@
   "abstain_resolving_input": null,
   "abstain_trigger": null,
   "abstained": false,
-  "answer": "Index thresholds indicate 18% vegetation, 82% water and 82% built-up land. These classes are measured independently and may overlap.",
+  "answer": "A new building was constructed in the center.",
   "artifact_paths": "<volatile>",
   "artifacts": [
     "ndvi",
     "ndwi",
     "mndwi",
     "ndbi",
-    "landcover_map"
+    "change_mask"
   ],
   "code_version": "0.2.0-phase1",
   "confidence": {
@@ -24,9 +24,9 @@
     "components": {
       "agreement": 1.0,
       "input_quality": 1.0,
-      "model": 0.8
+      "model": 0.89
     },
-    "final": 0.9283
+    "final": 0.9619
   },
   "execution": [
     {
@@ -152,53 +152,92 @@
         ]
       },
       "params": {},
-      "rationale_tag": "QUANTITATIVE_REQUEST",
+      "rationale_tag": "EXPLICIT_CHANGE_LANGUAGE",
       "runtime_ms": "<volatile>",
       "step": "step_1",
       "tool": "index_engine_v1",
       "version": "1.0.0"
     },
     {
-      "confidence": 0.8,
+      "confidence": 0.89,
       "confidence_method": "threshold_rule",
       "outputs": {
-        "classes": [
-          "forest",
-          "water"
-        ]
+        "changed_pixels": 420
       },
       "params": {
-        "classes": [
-          "built_up",
-          "water"
-        ]
+        "change_threshold": 0.5
       },
-      "rationale_tag": "QUANTITATIVE_REQUEST",
+      "rationale_tag": "EXPLICIT_CHANGE_LANGUAGE",
       "runtime_ms": "<volatile>",
       "step": "step_2",
-      "tool": "landcover_v1",
+      "tool": "change_mask_v1",
+      "version": "0.1.0-stub"
+    },
+    {
+      "confidence": 0.92,
+      "confidence_method": "threshold_rule",
+      "outputs": {
+        "caption": "A new building was constructed in the center."
+      },
+      "params": {
+        "change_threshold": 0.5
+      },
+      "rationale_tag": "EXPLICIT_CHANGE_LANGUAGE",
+      "runtime_ms": "<volatile>",
+      "step": "step_3",
+      "tool": "change_caption_v1",
       "version": "0.1.0-stub"
     }
   ],
   "ingest": {
     "checks": [
       {
-        "message": "single: CRS EPSG:32643",
+        "message": "t1: CRS EPSG:32643",
         "name": "crs_present",
         "status": "PASS"
       },
       {
-        "message": "single: 0.0% nodata",
+        "message": "t1: 0.0% nodata",
         "name": "nodata_fraction",
         "status": "PASS"
       },
       {
-        "message": "single: 128x128",
+        "message": "t1: 128x128",
         "name": "min_dimension",
+        "status": "PASS"
+      },
+      {
+        "message": "t2: CRS EPSG:32643",
+        "name": "crs_present",
+        "status": "PASS"
+      },
+      {
+        "message": "t2: 0.0% nodata",
+        "name": "nodata_fraction",
+        "status": "PASS"
+      },
+      {
+        "message": "t2: 128x128",
+        "name": "min_dimension",
+        "status": "PASS"
+      },
+      {
+        "message": "both images in EPSG:32643",
+        "name": "crs_match",
+        "status": "PASS"
+      },
+      {
+        "message": "GSD ratio 1.00x",
+        "name": "gsd_ratio",
+        "status": "PASS"
+      },
+      {
+        "message": "t1 2026-03-01 precedes t2 2026-06-01",
+        "name": "temporal_order",
         "status": "PASS"
       }
     ],
-    "config": "SINGLE",
+    "config": "BITEMPORAL_PAIR",
     "images": [
       {
         "bands": [
@@ -216,7 +255,26 @@
         "nodata_pct": 0.0,
         "path": "<volatile>",
         "polarisations": null,
-        "role": "single",
+        "role": "t1",
+        "sensor_guess": "SENTINEL-2"
+      },
+      {
+        "bands": [
+          "BLUE",
+          "GREEN",
+          "RED",
+          "NIR",
+          "SWIR1",
+          "SWIR2"
+        ],
+        "crs": "EPSG:32643",
+        "gsd_m": 10.0,
+        "modality": "MSI",
+        "modality_reason": "optical_band_names_present",
+        "nodata_pct": 0.0,
+        "path": "<volatile>",
+        "polarisations": null,
+        "role": "t2",
         "sensor_guess": "SENTINEL-2"
       }
     ],
@@ -238,16 +296,19 @@
       "retrieved_tiles": null
     }
   },
-  "query": "Use change_mask_v1 on this single image.",
+  "query": "What changed between these two dates, and where did the change occur?",
   "routing": {
     "capability_matrix_version": "cm-2026.11.02",
     "classifier": {
-      "margin": 0.1165,
+      "margin": 0.3929,
       "name": "tfidf_logreg_v1",
-      "top1": 0.4871
+      "top1": 0.6441
     },
     "config_excluded_task": null,
     "legal_tasks": [
+      "TEMPORAL_CHANGE_DESC",
+      "TEMPORAL_CHANGE_VQA",
+      "TEMPORAL_CHANGE_MAP",
       "SINGLE_VQA",
       "SINGLE_CAPTION",
       "SINGLE_GROUND",
@@ -255,7 +316,7 @@
       "CLARIFY_OR_ABSTAIN"
     ],
     "llm_tiebreak_invoked": false,
-    "selected_task": "SINGLE_LANDCOVER"
+    "selected_task": "TEMPORAL_CHANGE_DESC"
   },
   "run_id": "<volatile>",
   "timestamp_utc": "<volatile>",
@@ -268,18 +329,15 @@
       "backend": "deterministic",
       "flagged": 0,
       "flagged_detail": [],
-      "retained": 1,
-      "sentences": 2,
+      "retained": 0,
+      "sentences": 1,
       "unverifiable": 1
     },
     "physics_agreement": {
-      "built_up:fraction": 1.0,
       "mndwi": 1.0,
       "ndbi": 1.0,
       "ndvi": 1.0,
-      "ndwi": 1.0,
-      "vegetation:fraction": 1.0,
-      "water:fraction": 1.0
+      "ndwi": 1.0
     }
   },
   "weights_hashes": {}
