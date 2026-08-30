@@ -1,6 +1,49 @@
-# Session handoff — 2026-08-29
+# Session handoff — 2026-08-30 (Phase 4 freeze)
 
-State: branch `phase-0-closeout`, **855 tests passing**, working tree clean,
+**Start here.** The project is at the Phase-4 code freeze. Read
+`docs/phase4-status.md` first, then `docs/code-freeze.md` for what may still
+change. `docs/phase1-status.md` carries every measured number in dated
+sections, and later sections correct earlier ones.
+
+| | |
+|---|---|
+| Branch | `phase-0-closeout`, pushed, **tree clean** |
+| Freeze tag | **`phase-4-freeze`** — resolve with `git rev-list -n1 phase-4-freeze` |
+| Tests | **855 passing**; no-torch CI sim 730 passed / 18 skipped / 0 failed |
+| Illegal plans | **0 / 600** |
+| Demo bundle | **9 / 9 beats**; rehearsals **20 / 20** (10 online, 10 offline) |
+| Open PR | [#2](https://github.com/aditya-coder07/SatQuery_AI/pull/2) — unmerged |
+
+**The freeze is real: bug fixes, evidence and demo material only.**
+`docs/code-freeze.md` §"The bug-fix bar" is the four-point test, and
+§"Explicitly out of scope" lists the six tempting improvements that must not
+be started — the CDVQA segmenter, grounding, refusal, VRSBench,
+`max_coreg_shift_px`, and the router.
+
+---
+
+## What the next session should actually do
+
+Nothing in the codebase is blocking. **All three remaining Phase-4 items need
+a person, not a build:**
+
+1. **Ten narrated rehearsals on the venue laptop, one recorded** (tasks 4.2
+   and 4.6). `python scripts/rehearse.py --runs 10 --offline` checks the
+   system's half and exits non-zero if any beat misbehaves or overruns — run
+   it on the venue machine first. **Plan around this:** the two real-Cartosat
+   beats take ≈56 s each, essentially their whole slot; every other beat is
+   under 3 s. `docs/rehearsal.md` recommends pre-warming them and showing the
+   stored `/runs/{id}` permalinks.
+2. **A licence decision on publishing weights** (task 4.5). The semantic
+   change head is blocked outright — SECOND states *no licence at all*.
+3. **The SIH deadline and submission format** — open since W0 and the only
+   thing that decides whether anything must be cut.
+
+If asked to improve a number instead, point at the freeze.
+
+---
+
+State (superseded detail below): branch `phase-0-closeout`, **855 tests passing**, working tree clean,
 **pushed** to PR #2. **Phase 4 is audited and largely closed — read
 `docs/phase4-status.md` first**: 5 of 8 tasks DONE, 3 PARTIAL, and the missing
 halves are a person in a room (narrated rehearsals on the venue laptop), a
@@ -143,8 +186,10 @@ trees" was checked on vegetation only and the water claim never at all.
 ### Known gaps, deliberately left
 
 - **A flake I could not explain.** `test_swir_free_path_exercised_on_real_cartosat`
-  failed once under the CI simulation and passed on three subsequent full runs.
-  One in four is not "fine"; it is unresolved.
+  has now failed **twice** under the no-torch CI simulation and passed on every
+  other run, including immediately after each failure. Both failing runs were
+  much slower (272 s against ~105 s typical), which *suggests* I/O contention
+  during concurrent Docker builds — a hypothesis, not a diagnosis. Unresolved.
 - **Tier-2 LLM tiebreak unbuilt** — `llm_tiebreak_invoked` is always `false`.
   Not one of the 14 tasks; an unbuilt feature with an honest flag.
 - **`landcover_v1` asserts on ~0.25% of decisions** at 91% precision. Correct
@@ -153,7 +198,11 @@ trees" was checked on vegetation only and the water claim never at all.
   the case the real captioner produces immediately. Adding them to the clean
   suite would burn it.
 - **`artifacts/run_*/` grows unbounded** (gitignored runtime output; the temp
-  uploads *are* bounded).
+  uploads *are* bounded). It reached **46 GB across 7,071 directories** before
+  being cleared on 2026-08-30 — each full-scene run writes ~526 MB of index
+  rasters. The API prunes to 20 runs; CLI and evaluation runs do not prune.
+- **Twenty limitations are catalogued in `docs/00` §3.6** with evidence and
+  consequence — that section, not this list, is the complete record.
 - **3.1's refusal half** — see above.
 
 ---
