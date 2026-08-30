@@ -149,6 +149,16 @@ strongest one.
 
 ---
 
+## Freeze commit
+
+| | |
+|---|---|
+| **SHA** | `cab2d28dbc5013c2bd52899c4fba9a85e24e3aa3` |
+| Short | `cab2d28` |
+| Branch | `phase-0-closeout` |
+| Tag | `phase-4-freeze` |
+| Date | 2026-08-30 |
+
 ## Verification at freeze
 
 | gate | result |
