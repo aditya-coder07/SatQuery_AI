@@ -7,6 +7,7 @@ set (Sentinel-1/2) in band layout, GSD and dtype.
 
 from __future__ import annotations
 
+import math
 from datetime import datetime
 from pathlib import Path
 from typing import Literal
@@ -125,6 +126,29 @@ def read_canonical_band(meta: ImageMeta, band: str) -> np.ndarray:
 # "undefined" for every band, so this refines the ordinary-image case without
 # disturbing the products where positional convention is the only signal.
 _PHOTOMETRIC = {"red": "RED", "green": "GREEN", "blue": "BLUE"}
+
+
+def wgs84_bounds(src) -> tuple[float, float, float, float] | None:
+    """(west, south, east, north) in EPSG:4326, or None if unmeasurable.
+
+    The system already held every ingredient for this - a CRS and an affine
+    transform - and surfaced none of it, so "where is this?" was answered
+    with "satellite imagery does not carry that information" on a GeoTIFF
+    that carried exactly that. Measured from the file, never inferred.
+    """
+    if src.crs is None:
+        return None
+    try:
+        from rasterio.warp import transform_bounds
+
+        west, south, east, north = transform_bounds(
+            src.crs, "EPSG:4326", *src.bounds, densify_pts=21
+        )
+    except Exception:  # noqa: BLE001 - an unprojectable CRS is not a failure
+        return None
+    if not all(map(math.isfinite, (west, south, east, north))):
+        return None
+    return (round(west, 6), round(south, 6), round(east, 6), round(north, 6))
 
 
 def photometric_bands(src) -> tuple[list[int], list[str | None], bool]:
@@ -266,4 +290,5 @@ def read_image(
             look_count_est=layout.metadata.get("equivalent_looks"),
             container_format=src.driver,
             georeferenced=src.crs is not None,
+            lonlat_bounds=wgs84_bounds(src),
         )

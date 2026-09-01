@@ -256,6 +256,83 @@ class TestSpecialistRoutesAreUnchanged:
         assert "optsar_fusion_v1" in {s.tool for s in plan.steps}
 
 
+class TestLocationIsAnsweredFromTheManifest:
+    """"Where is this?" was answered with a falsehood.
+
+    `rs_vqa_v1` declines location questions with "Satellite imagery does not
+    carry that information." On a GeoTIFF that is simply untrue - the file
+    carries a CRS and an affine transform, which is exactly that information -
+    and the adapter cannot know the difference, because it never sees the
+    georeferencing. Measured on a real Cartosat crop whose header puts it at
+    20.32N, 85.84E: the answer still said the information was not there.
+
+    The correction is made from the manifest, and only when the question was
+    about location, the tool declined, AND the input is georeferenced.
+    """
+
+    REFUSAL = (
+        "I cannot answer that from this image. Satellite imagery does not "
+        "carry that information."
+    )
+
+    def test_the_manifest_measures_the_geographic_extent(self, msi_6band):
+        image = ingest([msi_6band]).images[0]
+        assert image.lonlat_bounds is not None
+        west, south, east, north = image.lonlat_bounds
+        assert -180 <= west < east <= 180
+        assert -90 <= south < north <= 90
+
+    def test_an_ungeoreferenced_png_has_no_extent(self, tmp_path):
+        image = ingest([_write_plain_image(tmp_path / "s.png", "PNG")]).images[0]
+        assert image.lonlat_bounds is None
+
+    @pytest.mark.parametrize(
+        "query",
+        ["What place is this?", "Which city is this?", "Where is this?",
+         "What are the coordinates of this scene?", "Which country is this?"],
+    )
+    def test_a_location_refusal_is_corrected_with_measured_coordinates(
+        self, msi_6band, query
+    ):
+        from satquery.controller.executor import _location_disclosure
+
+        manifest = ingest([msi_6band])
+        disclosure = _location_disclosure(query, self.REFUSAL, manifest)
+        assert disclosure is not None
+        assert "location IS known" in disclosure
+        # The honest half: coordinates are measured, a place NAME is not.
+        assert "gazetteer" in disclosure
+
+    def test_the_false_claim_is_dropped_rather_than_argued_with(self):
+        """Appending a correction after a falsehood leaves both on screen."""
+        from satquery.controller.executor import _drop_false_location_claim
+
+        cleaned = _drop_false_location_claim(self.REFUSAL)
+        assert "does not carry that information" not in cleaned
+        # The true half survives: the PIXELS really do not carry the location.
+        assert "cannot answer that from this image" in cleaned
+
+    def test_the_decline_stands_when_there_is_no_georeferencing(self, tmp_path):
+        """For a PNG the model's decline is TRUE, so it must not be overridden."""
+        from satquery.controller.executor import _location_disclosure
+
+        manifest = ingest([_write_plain_image(tmp_path / "s.png", "PNG")])
+        assert _location_disclosure("Where is this?", self.REFUSAL, manifest) is None
+
+    def test_a_non_location_question_is_untouched(self, msi_6band):
+        from satquery.controller.executor import _location_disclosure
+
+        manifest = ingest([msi_6band])
+        assert _location_disclosure("Are there buildings?", self.REFUSAL, manifest) is None
+
+    def test_an_answered_question_is_untouched(self, msi_6band):
+        """Only a decline is corrected; a real answer is left alone."""
+        from satquery.controller.executor import _location_disclosure
+
+        manifest = ingest([msi_6band])
+        assert _location_disclosure("Where is this?", "urban", manifest) is None
+
+
 class TestAbstentionIsNotWeakened:
     """PS item 10, and the constraint the whole change is bounded by.
 

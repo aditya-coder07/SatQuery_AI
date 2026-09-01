@@ -189,6 +189,12 @@
         "crs": "EPSG:32643",
         "georeferenced": true,
         "gsd_m": 1.6,
+        "lonlat_bounds": [
+          75.0,
+          18.0869,
+          75.0019,
+          18.0887
+        ],
         "modality": "MSI",
         "modality_reason": "optical_band_names_present",
         "nodata_pct": 0.0,
