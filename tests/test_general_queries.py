@@ -363,6 +363,71 @@ class TestPlainImageFormats:
         assert trace.ingest.images[0]["gsd_m"] is None
         assert trace.ingest.images[0]["georeferenced"] is False
 
+    def test_an_rgba_png_does_not_advertise_ndvi_from_its_alpha_channel(
+        self, tmp_path
+    ):
+        """A 4-channel PNG is RGB + opacity, not RGB + near-infrared.
+
+        Band-count inference called it MSI and the positional fallback named
+        band 4 NIR, so `index_availability` advertised ndvi and ndwi as
+        computable - from an opacity channel. Screenshots and any export with
+        transparency are 4-channel, so this is the common case, not an edge
+        one.
+        """
+        path = tmp_path / "rgba.png"
+        rgb = (np.random.default_rng(4).random((3, 128, 128)) * 255).astype("uint8")
+        rgba = np.concatenate([rgb, np.full((1, 128, 128), 255, dtype="uint8")])
+        with rasterio.open(
+            path, "w", driver="PNG", height=128, width=128, count=4, dtype="uint8"
+        ) as dst:
+            dst.write(rgba)
+
+        manifest = ingest([path])
+        image = manifest.images[0]
+        assert image.bands == ["RED", "GREEN", "BLUE"]
+        assert manifest.index_availability["ndvi"] is False
+        assert manifest.index_availability["ndwi"] is False
+        # Dropping a channel is disclosed, not silent.
+        assert image.modality_evidence.get("alpha_band_dropped") is True
+
+    def test_a_png_reaches_the_model_with_its_channels_in_order(self, tmp_path):
+        """The image the model sees must be the image that was uploaded.
+
+        GDAL reports band 1 of a PNG as `red`, but with no band descriptions
+        the fallback assumed the GeoTIFF convention [BLUE, GREEN, RED], so
+        `to_rgb_preview` looked "RED" up at index 3 and handed the VQA model a
+        channel-reversed picture. Measured before the fix: the preview's red
+        channel correlated +1.000 with the source's BLUE.
+        """
+        from satquery.tools.imaging import to_rgb_preview
+
+        # Three distinguishable, non-flat channels. Flat ones are stretched to
+        # mid-grey, which would hide a swap rather than expose it.
+        ramp_x = np.tile(np.linspace(0, 255, 128, dtype="uint8"), (128, 1))
+        ramp_y = ramp_x.T
+        middle = np.tile(np.linspace(60, 90, 128, dtype="uint8"), (128, 1))
+
+        path = tmp_path / "probe.png"
+        with rasterio.open(
+            path, "w", driver="PNG", height=128, width=128, count=3, dtype="uint8"
+        ) as dst:
+            dst.write(np.stack([ramp_x, middle, ramp_y]))
+
+        image = ingest([path]).images[0]
+        assert image.bands == ["RED", "GREEN", "BLUE"]
+
+        preview, provenance = to_rgb_preview(image)
+        rendered = np.array(preview).astype(float)
+        assert provenance["bands_shown"] == ["RED", "GREEN", "BLUE"]
+
+        for channel, source in enumerate([ramp_x, middle, ramp_y]):
+            correlation = np.corrcoef(
+                rendered[:, :, channel].ravel(), source.astype(float).ravel()
+            )[0, 1]
+            assert correlation > 0.99, (
+                f"preview channel {channel} does not match its source band"
+            )
+
     def test_geotiff_handling_is_unchanged(self, msi_6band):
         manifest = ingest([msi_6band], mode=IngestMode.OPERATIONAL)
         image = manifest.images[0]

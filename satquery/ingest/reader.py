@@ -120,6 +120,50 @@ def read_canonical_band(meta: ImageMeta, band: str) -> np.ndarray:
     return np.ma.filled(arr.astype("float64"), np.nan)
 
 
+# GDAL's per-band photometric declaration, when it makes one. PNG and JPEG
+# report ("red", "green", "blue"[, "alpha"]); the vendor GeoTIFFs report
+# "undefined" for every band, so this refines the ordinary-image case without
+# disturbing the products where positional convention is the only signal.
+_PHOTOMETRIC = {"red": "RED", "green": "GREEN", "blue": "BLUE"}
+
+
+def photometric_bands(src) -> tuple[list[int], list[str | None], bool]:
+    """(1-based band indices to keep, their names, whether alpha was dropped).
+
+    Two bugs came from ignoring this, both on the ordinary PNG/JPEG path that
+    PS-26167 opened up, and both measured rather than supposed:
+
+    * **Alpha read as NIR.** A 4-channel RGBA PNG - a screenshot, or any
+      export with transparency - has band 4 declared `alpha`. Band-count
+      inference called it MSI and the positional fallback named the fourth
+      band NIR, so `index_availability` advertised **ndvi and ndwi as
+      computable from an opacity channel**. That is exactly the false
+      capability claim the ingest checks exist to prevent.
+
+    * **Red and blue swapped.** GDAL reports band 1 of a PNG as `red`, but
+      with no descriptions the fallback assumed the GeoTIFF convention
+      [BLUE, GREEN, RED]. `to_rgb_preview` then looked "RED" up at index 3
+      and handed the model a channel-reversed image. Measured on a pure-red
+      PNG: every preview channel came back flat, rendering mid-grey.
+
+    Returns indices rather than mutating anything, so the caller keeps the
+    mapping from canonical name to raster band index intact.
+    """
+    try:
+        interp = [ci.name.lower() for ci in src.colorinterp]
+    except Exception:  # noqa: BLE001 - a driver that declines is not a failure
+        return list(range(1, src.count + 1)), [None] * src.count, False
+
+    keep = [i for i, name in enumerate(interp) if name != "alpha"]
+    dropped = len(keep) != len(interp)
+    # Only trust the names when the container actually declared them; an
+    # all-"undefined" raster must keep falling through to the conventional
+    # ordering, which is what the vendor products rely on.
+    named = any(interp[i] in _PHOTOMETRIC for i in keep)
+    names = [_PHOTOMETRIC.get(interp[i]) if named else None for i in keep]
+    return [i + 1 for i in keep], names, dropped
+
+
 def read_image(
     path: str | Path,
     role: Literal["single", "optical", "sar", "t1", "t2"] = "single",
@@ -137,9 +181,18 @@ def read_image(
         tags = dict(src.tags())
         descriptions = list(src.descriptions)
 
+        # Drop any alpha channel and take the photometric names the container
+        # declared, before anything infers a modality from the band count.
+        keep_indices, photometric, dropped_alpha = photometric_bands(src)
+        descriptions = [descriptions[i - 1] for i in keep_indices]
+        for position, name in enumerate(photometric):
+            if name and not descriptions[position]:
+                descriptions[position] = name
+        band_count = len(keep_indices)
+
         # Vendor band/polarisation names beat the raster header, which for
         # these products is empty.
-        if layout.band_names and len(layout.band_names) == src.count:
+        if layout.band_names and len(layout.band_names) == band_count:
             descriptions = list(layout.band_names)
 
         # Surface vendor metadata as tags so modality inference can see the
@@ -153,12 +206,20 @@ def read_image(
         sample = _read_sample(src)
 
         modality, evidence = infer_modality(
-            band_count=src.count,
+            band_count=band_count,
             dtype=src.dtypes[0],
             tags=tags,
             band_descriptions=descriptions,
             sample=sample,
         )
+
+        # Dropping a channel changes what every downstream index can be
+        # computed from, so it is disclosed rather than done silently.
+        if dropped_alpha:
+            evidence["alpha_band_dropped"] = True
+            evidence["signals"] = list(evidence.get("signals", [])) + [
+                "alpha_channel_excluded_not_spectral"
+            ]
 
         # Carry vendor-level limitations into the evidence dict so the
         # checks can name the real reason a product is unusable, rather than
