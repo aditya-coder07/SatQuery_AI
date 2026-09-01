@@ -299,6 +299,14 @@ def _prune_run_dirs(keep: int = MAX_RETAINED_RUNS) -> None:
     for stale in dirs[keep:]:
         shutil.rmtree(stale, ignore_errors=True)
 
+    # The uploads were bounded here; the index rasters the run wrote into
+    # `artifacts/<run_id>` were not, and they are the larger half - ~526 MB
+    # for a full scene. Same retention count, same "named directories are
+    # never touched" rule; see satquery/controller/retention.py.
+    from satquery.controller.retention import auto_prune
+
+    auto_prune(keep=keep)
+
 
 def _sse(event: str, data: dict | list) -> str:
     return f"event: {event}\ndata: {json.dumps(data, default=str)}\n\n"

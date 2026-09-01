@@ -31,7 +31,9 @@ from typing import Any
 from satquery.contracts.input_manifest import InputManifest
 from satquery.contracts.tool_result import ToolPayload, ToolResult
 from satquery.tools.base import ToolProtocol
+from satquery.tools.provenance import record
 from satquery.tools.imaging import to_rgb_preview
+from satquery.tools.sidecars import readable_safetensors
 
 TOOL_NAME = "rs_vqa"
 TOOL_VERSION = "1.0.0-qlora"
@@ -96,6 +98,13 @@ class _ModelHandle:
         self.model.eval()
         self.adapter_path = str(adapter)
         self.base_path = str(base)
+        # The adapter only, not the base. The adapter is what this project
+        # trained and what changes between runs; the base is gigabytes of
+        # third-party weights whose digest is already recorded in
+        # configs/model_lock.json by scripts/fetch_models.py. Hashing it on
+        # every cold start would restate a number that is already on disk and
+        # cost the demo its warm-up budget.
+        record("rs_vqa_v1", adapter)
 
     @classmethod
     def get(cls, base: Path, adapter: Path) -> "_ModelHandle":
@@ -116,6 +125,12 @@ def is_available() -> tuple[bool, str]:
         return False, f"base model not found: {base}"
     if not Path(adapter).exists():
         return False, f"adapter not found: {adapter}"
+    # Readable, not merely present. The recovered adapter was 99.99% NUL and
+    # this function answered "ready", so the tool was selected and then died
+    # inside the loader. See satquery/tools/sidecars.py.
+    ok, reason = readable_safetensors(Path(adapter))
+    if not ok:
+        return False, reason
     for module in ("torch", "peft", "transformers"):
         try:
             __import__(module)

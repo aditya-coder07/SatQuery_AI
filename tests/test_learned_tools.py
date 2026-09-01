@@ -29,12 +29,27 @@ def has_ckpt(path: str, needs: str = "vocab.json") -> bool:
     `needs` differs per tool: the caption/grounding models ship a vocab.json,
     the Track A head ships band_stats.json. Requiring vocab.json for all of
     them silently skipped the land-cover tests.
+
+    The sidecar must be **readable**, not merely present. Restoring
+    `checkpoints/` from a volume shadow copy on 2026-08-31 returned
+    `caption/vocab.json` and `grounding/vocab.json` as NUL bytes - the file
+    sizes reached the volume, the contents did not - and this gate let three
+    tests through to die inside the loader with a `JSONDecodeError`. A model
+    whose vocabulary cannot be read is not a model these tests can evaluate,
+    so they skip and name the reason, the same way they skip when the
+    checkpoint is absent entirely. `satquery/tools/sidecars.py` applies the
+    identical rule to `is_available()`, which is what stops the registry
+    selecting such a tool at runtime.
     """
     try:
         import torch  # noqa: F401
     except ImportError:
         return False
-    return Path(path).exists() and (Path(path) / needs).exists()
+    if not Path(path).exists():
+        return False
+    from satquery.tools.sidecars import readable_json
+
+    return readable_json(Path(path) / needs, expect=dict)[0]
 
 
 def has_track_a() -> bool:

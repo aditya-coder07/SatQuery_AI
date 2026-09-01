@@ -35,6 +35,18 @@ from satquery.controller.calibration import load_registry, method_label
 HIGH_BAND = 0.75
 MEDIUM_BAND = 0.45
 
+# The ceiling on a run whose answer came from a placeholder rather than a
+# model. Chosen to sit just below MEDIUM_BAND, so `band()` returns LOW through
+# the ordinary comparison, and comfortably above the 0.25 abstention
+# threshold, so a stubbed run still ANSWERS - which is what CI and the lite
+# profile depend on - it simply cannot claim to be confident.
+#
+# Why a cap and not a zero component: a stub reporting 0.0 into the geometric
+# mean collapses the score to 0.0, which trips abstention, and every stubbed
+# run in the suite then refuses instead of answering. Measured 2026-09-01:
+# 36 tests failed that way. The cap keeps the abstention policy untouched.
+STUB_CONFIDENCE_CAP = 0.44
+
 # Per-check penalties applied to the input-quality component.
 WARN_PENALTY = 0.15
 FAIL_PENALTY = 0.5
@@ -77,11 +89,15 @@ def geometric_mean(*values: float, weights: tuple[float, ...] | None = None) -> 
     Weights are supported (task 3.4) but ship EQUAL, and the reason is worth
     stating rather than leaving as an apparent oversight: fitting them needs a
     labelled set of (components -> was the answer actually correct) pairs, and
-    no such set exists. Every learned tool is still a stub or reports a
-    quantity that is not a probability of correctness - the same gap recorded
-    under tasks 3.3 and 3.6 - so any fitted weight would be fitted to nothing.
-    Equal weights are the honest default; the mechanism is here so the fit is
-    a config change rather than a code change once the data exists.
+    no such set exists. Corrected 2026-08-30 - the earlier wording said "every
+    learned tool is still a stub", which stopped being true in Phase 2. The
+    gap is narrower and unchanged in effect: the learned tools are real, and
+    not one of them reports a probability of *correctness*, which is what a
+    weight would have to be fitted against. See
+    CALIBRATABLE_CONFIDENCE_METHODS for what each confidence method actually
+    measures. Equal weights are the honest default; the mechanism is here so
+    the fit is a config change rather than a code change once the data
+    exists.
     """
     if not values:
         return 0.0
@@ -156,6 +172,7 @@ def compute_confidence(
     manifest: InputManifest,
     agreements: dict[str, float],
     head: str | None = None,
+    stubbed: bool = False,
 ) -> ConfidenceTrace:
     """Combine the three components into the reported confidence.
 
@@ -165,6 +182,12 @@ def compute_confidence(
     keeps the uncalibrated sentinel in the trace, because recalibrating a
     number that did not come from the fitted head would be worse than not
     calibrating at all.
+
+    `stubbed` says that at least one tool in the plan was a placeholder rather
+    than a trained model. The score is then capped at `STUB_CONFIDENCE_CAP`,
+    so it can never be reported as HIGH: a stub measures nothing, and the
+    combined number would otherwise describe input quality and physics
+    agreement alone while reading as a model result.
     """
     raw_model = max(0.0, min(1.0, float(model_confidence)))
 
@@ -175,6 +198,8 @@ def compute_confidence(
     agreement = physics_agreement(agreements)
     quality = input_quality(manifest)
     final = geometric_mean(model, agreement, quality, weights=load_weights())
+    if stubbed:
+        final = min(final, STUB_CONFIDENCE_CAP)
 
     return ConfidenceTrace(
         final=round(final, 6),

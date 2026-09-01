@@ -288,6 +288,12 @@ class TestRuntimeRegistry:
             # per-answer probability to fit. What describes that head's
             # reliability is the segmenter's mIoU.
             "segmentation_derived",
+            # Added 2026-09-01 for the placeholder tools. Decided NOT
+            # calibratable, and the strongest case of the six: a stub runs no
+            # model at all, so there is nothing to fit a transform to. It
+            # reports 0.0, is excluded from the model component, and caps the
+            # final score at STUB_CONFIDENCE_CAP.
+            "stub",
         }
         for method in allowed:
             assert method not in CALIBRATABLE_CONFIDENCE_METHODS, method

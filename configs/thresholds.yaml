@@ -27,9 +27,16 @@ abstention:
 #
 # These are EQUAL and that is deliberate, not an oversight. Fitting them needs
 # a labelled set of (components -> was the answer actually correct) pairs, and
-# none exists: every learned tool is still a stub or reports a quantity that
-# is not a probability of correctness, the same gap recorded under tasks 3.3
-# and 3.6. A weight fitted against that would be fitted to nothing.
+# none exists.
+#
+# Corrected 2026-08-30: this said "every learned tool is still a stub", which
+# stopped being true in Phase 2. The learned tools are real; what none of them
+# reports is a probability of CORRECTNESS, which is the quantity a weight
+# would have to be fitted against. `sharpness` measures decisiveness,
+# `logprob` measures fluency, `mean_asserted_probability` is an aggregate over
+# a threshold-selected subset, and `segmentation_derived` is a stated
+# constant. A weight fitted against any of those would be fitted to nothing.
+# The same gap is recorded under tasks 3.3 and 3.6.
 #
 # The mechanism is here so that fitting them later is a config change rather
 # than a code change. Set them from a real labelled run, not by intuition.

@@ -12,6 +12,7 @@ test tree or growing a second copy that drifts.
 
 from __future__ import annotations
 
+import os
 import sys
 from pathlib import Path
 
@@ -32,6 +33,7 @@ from evaluation.scenes import (  # noqa: E402
     build_msi_6band_t2,
     build_no_crs_raster,
     build_pan_1band,
+    build_rgb_3band,
     build_sar_dualpol,
     build_tiny_raster,
     structured_scene,
@@ -44,10 +46,42 @@ __all__ = ["write_raster", "structured_scene"]
 _structured_scene = structured_scene
 
 
+@pytest.fixture(scope="session", autouse=True)
+def no_automatic_artifact_prune():
+    """Stop the suite from pruning the developer's real `artifacts/` tree.
+
+    `satquery ask` and `satquery eval` prune old `artifacts/run_*` directories
+    after a run, and several tests invoke those entry points for real from the
+    repository root. The first suite run after retention landed reclaimed
+    **12.29 GB** as a side effect. Nothing protected was touched - all 78 named
+    evidence directories survived, which is the guarantee working exactly as
+    designed - but a test run that silently deletes a developer's output is a
+    surprise, and this project has already paid for one of those.
+
+    Only the *implicit* prune is disabled. `prune_run_artifacts` itself still
+    runs, so `tests/test_retention.py` exercises the real thing against
+    `tmp_path`, and `satquery prune` typed by a human still prunes.
+    """
+    from satquery.controller.retention import ENV_NO_AUTO_PRUNE
+
+    previous = os.environ.get(ENV_NO_AUTO_PRUNE)
+    os.environ[ENV_NO_AUTO_PRUNE] = "1"
+    yield
+    if previous is None:
+        os.environ.pop(ENV_NO_AUTO_PRUNE, None)
+    else:
+        os.environ[ENV_NO_AUTO_PRUNE] = previous
+
+
 @pytest.fixture
 def msi_4band(tmp_path):
     """4-band VNIR optical, the assumed Cartosat-2S MX layout (no SWIR)."""
     return build_msi_4band(tmp_path / "msi_4band.tif")
+
+
+@pytest.fixture
+def rgb_3band(tmp_path):
+    return build_rgb_3band(tmp_path / "rgb_3band.tif")
 
 
 @pytest.fixture

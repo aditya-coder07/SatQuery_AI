@@ -31,15 +31,24 @@ from __future__ import annotations
 
 import argparse
 import json
+import sys
 import time
 from collections import Counter, defaultdict
 from pathlib import Path
 
-from satquery.ingest import ingest
-from satquery.tools import change_vqa
-from satquery.verify.semantic_change import answer
+# The docstring above documents `python evaluation/cdvqa_predict.py ...`, and
+# that invocation raised `ImportError: attempted relative import with no known
+# parent package` before this line existed: run as a script, `evaluation` is
+# not a package, so `from .cdvqa_oracle import ...` cannot resolve. Same
+# pattern as evaluation/adversarial.py, which is the runnable sibling that got
+# it right.
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from .cdvqa_oracle import load_split
+from satquery.ingest import ingest  # noqa: E402
+from satquery.tools import change_vqa  # noqa: E402
+from satquery.verify.semantic_change import answer  # noqa: E402
+
+from evaluation.cdvqa_oracle import load_split  # noqa: E402
 
 
 def run(annotations: Path, second: Path, split: str, limit: int | None) -> dict:

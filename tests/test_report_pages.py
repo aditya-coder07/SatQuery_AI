@@ -110,7 +110,43 @@ class TestModelRegistry:
         return model_registry()
 
     def test_checkpoints_are_listed(self, registry):
+        """Each trained checkpoint directory becomes one registry entry.
+
+        Skips when the tree holds none. This asserted a **precondition of the
+        machine** - that somebody's trained weights are on disk - rather than
+        a behaviour of the code, and on 2026-08-30 that precondition stopped
+        holding: `checkpoints/` was deleted and could not be recovered
+        (`docs/00` §3.6 L26). Fabricating a checkpoint to keep the assertion
+        green would make the registry page look populated when it is empty,
+        which is the opposite of what this page is for. The behaviour that
+        matters when there are none is asserted below instead.
+        """
+        from satquery.report.registry import CHECKPOINT_DIR
+
+        on_disk = [p for p in CHECKPOINT_DIR.glob("*") if p.is_dir()] \
+            if CHECKPOINT_DIR.exists() else []
+        if not on_disk:
+            pytest.skip(
+                f"no checkpoint directories under {CHECKPOINT_DIR} - the "
+                "registry has nothing to list (docs/00 §3.6 L26)"
+            )
+
         assert registry["checkpoints"]
+        for entry in registry["checkpoints"]:
+            assert entry["name"] and "metrics" in entry and "training" in entry
+
+    def test_an_empty_checkpoint_tree_yields_an_empty_list_not_an_error(
+        self, tmp_path
+    ):
+        """The state the system is actually in, and it must not be a failure.
+
+        `/models` renders empty rather than 500-ing, and says nothing it
+        cannot read off disk.
+        """
+        from satquery.report.registry import checkpoint_entries
+
+        assert checkpoint_entries(tmp_path) == []
+        assert checkpoint_entries(tmp_path / "absent") == []
 
     def test_metrics_are_json_serialisable(self, registry):
         """Training metrics contain NaN for classes with no positives."""

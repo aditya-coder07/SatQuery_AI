@@ -39,6 +39,8 @@ import numpy as np
 from satquery.contracts.input_manifest import InputManifest
 from satquery.contracts.tool_result import ToolPayload, ToolResult
 from satquery.tools.base import ToolProtocol
+from satquery.tools.provenance import record
+from satquery.tools.sidecars import readable_json
 from satquery.tools.imaging import to_rgb_preview
 
 TOOL_NAME = "caption"
@@ -74,11 +76,16 @@ def is_available() -> tuple[bool, str]:
     # Checkpoint contents first, environment second: a missing vocab.json is a
     # mistake in the path the operator just supplied, and naming it is more
     # useful than "torch is not installed" when both are true.
-    if not (Path(path) / "vocab.json").exists():
-        # The vocabulary is built from the training captions and saved beside
-        # the weights. Without it the token ids decode to nothing, which would
-        # surface as an empty caption rather than an obvious failure.
-        return False, f"vocab.json not found beside {path}"
+    # Readable, not merely present. A vocab.json that exists but cannot be
+    # parsed made this function answer "ready" and the loader raise
+    # JSONDecodeError - the tool reported available and then failed, which is
+    # exactly what the registry's stub fallback exists to prevent. Measured
+    # 2026-08-31, when a shadow-copy restore returned this file as 28,130
+    # bytes of NUL. The vocabulary is built from the training captions and
+    # saved beside the weights; without it the token ids decode to nothing.
+    ok, reason = readable_json(Path(path) / "vocab.json", expect=dict)
+    if not ok:
+        return False, reason
     try:
         import torch  # noqa: F401
     except ImportError:
@@ -117,6 +124,10 @@ class _Handle:
         self.model = model.to(self.device).eval()
         self.torch = torch
         self.path = str(latest)
+        # The bytes that are now in memory, hashed once per process, so
+        # `Trace.weights_hashes` names the weights that produced the answer
+        # rather than being empty. See satquery/tools/provenance.py.
+        record("caption_v1", latest)
 
     @classmethod
     def get(cls, checkpoint: Path) -> "_Handle":

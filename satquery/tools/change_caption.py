@@ -43,6 +43,8 @@ import numpy as np
 from satquery.contracts.input_manifest import InputManifest
 from satquery.contracts.tool_result import ToolPayload, ToolResult
 from satquery.tools.base import ToolProtocol
+from satquery.tools.provenance import record
+from satquery.tools.sidecars import readable_json
 from satquery.tools.imaging import to_rgb_preview
 
 TOOL_NAME = "change_caption"
@@ -61,8 +63,10 @@ def is_available() -> tuple[bool, str]:
     if not Path(path).exists():
         return False, f"checkpoint not found: {path}"
     # Checkpoint contents before environment - see caption.py.
-    if not (Path(path) / "vocab.json").exists():
-        return False, f"vocab.json not found beside {path}"
+    # Readable, not merely present - see caption.py.
+    ok, reason = readable_json(Path(path) / "vocab.json", expect=dict)
+    if not ok:
+        return False, reason
     try:
         import torch  # noqa: F401
     except ImportError:
@@ -98,6 +102,10 @@ class _Handle:
         self.model = model.to(self.device).eval()
         self.torch = torch
         self.path = str(latest)
+        # The bytes that are now in memory, hashed once per process, so
+        # `Trace.weights_hashes` names the weights that produced the answer
+        # rather than being empty. See satquery/tools/provenance.py.
+        record("change_caption_v1", latest)
 
     @classmethod
     def get(cls, checkpoint: Path) -> "_Handle":

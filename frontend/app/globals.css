@@ -420,3 +420,61 @@ ul.checks li {
 }
 .mapview .ol-control button:hover { background: var(--bg); }
 .mapview .ol-attribution { display: none; }
+
+/* Site navigation (see app/Nav.tsx). Sticky so the evidence pages, which are
+   long, stay one click away while scrolling. */
+.nav {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  flex-wrap: wrap;
+  padding: 10px 24px;
+  background: var(--panel);
+  border-bottom: 1px solid var(--border);
+}
+
+.nav-brand {
+  font-weight: 600;
+  color: var(--text);
+  text-decoration: none;
+  letter-spacing: 0.02em;
+}
+
+.nav ul {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.nav a {
+  color: var(--muted);
+  text-decoration: none;
+  font-size: 13px;
+  padding: 4px 2px;
+  border-bottom: 2px solid transparent;
+}
+
+.nav a:hover {
+  color: var(--text);
+}
+
+.nav a.active {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+}
+
+/* The permalink to a completed run. The rehearsal notes recommend showing
+   the stored /runs/{id} page rather than re-running a 56 s beat, so the link
+   has to exist somewhere the presenter can reach it. */
+.permalink {
+  display: inline-block;
+  margin-top: 8px;
+  font-size: 13px;
+  color: var(--accent);
+}

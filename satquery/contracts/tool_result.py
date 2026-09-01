@@ -34,6 +34,14 @@ class ToolResult(BaseModel):
     # per-answer probability is available from an argmax over class logits.
     # It is a fixed conservative constant, named so that nobody mistakes it
     # for a measured one.
+    #
+    # `stub` was added 2026-09-01 for the placeholder tools the registry falls
+    # back to when a learned tool is unavailable. They previously reported
+    # `threshold_rule` with values of 0.80-0.95, which is what allowed a
+    # stubbed answer to reach the user as "0.9473 HIGH". A stub measures
+    # nothing, so it now reports 0.0 under a name that says so - and because
+    # the combiner takes a *geometric* mean, a zero component collapses the
+    # final score to 0.0 and the band to LOW without any special case.
     confidence_method: Literal[
         "logprob",
         "sharpness",
@@ -41,6 +49,7 @@ class ToolResult(BaseModel):
         "threshold_rule",
         "deterministic",
         "segmentation_derived",
+        "stub",
     ]
     model_card: str
     runtime_ms: int

@@ -24,6 +24,7 @@ from satquery.contracts.input_manifest import InputManifest
 from satquery.contracts.tool_result import ToolPayload, ToolResult
 from satquery.ingest.reader import read_canonical_band
 from satquery.tools.base import ToolProtocol
+from satquery.tools.provenance import record
 from satquery.verify.indices import mndwi, ndbi, ndvi, ndwi, swir_free_builtup_proxy
 from satquery.verify.thresholding import adaptive_threshold, apply_threshold
 from satquery.verify.verifier import SUBJECT_TERMS
@@ -295,6 +296,10 @@ class _SemanticHandle:
         self.model = model.to(self.device).eval()
         self.torch = torch
         self.path = str(checkpoint)
+        # See satquery/tools/provenance.py. Recorded only on the semantic
+        # path: the template path loads no weights, and giving it a digest
+        # would claim bytes that were never read.
+        record("change_vqa_v1", checkpoint)
 
     @classmethod
     def get(cls, checkpoint: Path) -> "_SemanticHandle":

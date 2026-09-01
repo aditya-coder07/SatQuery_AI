@@ -1,4 +1,5 @@
 import './globals.css';
+import Nav from './Nav';
 
 export const metadata = {
   title: 'SatQuery AI',
@@ -12,7 +13,13 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body>{children}</body>
+      <body>
+        {/* One navigation for every route. Without it /models and
+            /benchmarks - the two pages that carry the measured evidence -
+            were reachable only by typing their URLs. */}
+        <Nav />
+        {children}
+      </body>
     </html>
   );
 }

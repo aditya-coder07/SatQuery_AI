@@ -84,19 +84,23 @@ class Controller:
         missing from the streamed answer - which is the path the frontend
         actually uses. One method, one behaviour.
         """
-        plan = self.router.route(query, manifest)
-        prediction = getattr(self.router, "last_prediction", None)
-        if manifest.blocking_failures:
-            # Routing was decided by the input checks, not the classifier.
-            prediction = None
+        # `decide`, not `route`: the prediction and the config-excluded task
+        # come back with the plan instead of being read off the router
+        # afterwards. One Router is shared by every request the API serves,
+        # and /runs/stream runs each request on its own thread, so reading
+        # `router.last_*` here could pick up another run's values - which
+        # would put another user's "this input cannot support X" notice into
+        # this answer with nothing in the trace to show for it.
+        decision = self.router.decide(query, manifest)
+        plan = decision.plan
 
         if tool_params:
             plan = self._apply_tool_params(plan, tool_params)
 
         return self.executor.execute(
-            plan, manifest, query, prediction=prediction,
+            plan, manifest, query, prediction=decision.prediction,
             on_event=on_event,
-            config_excluded=getattr(self.router, "last_config_excluded", None),
+            config_excluded=decision.config_excluded,
         )
 
     def _apply_tool_params(self, plan: Plan, tool_params: dict) -> Plan:

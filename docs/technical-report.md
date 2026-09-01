@@ -159,12 +159,78 @@ as a failure of the system.
 | soak, 120 iterations, 20 warm-up excluded | +0.0239 MB/query |
 | median runtime | 134.1 ms |
 | offline suite, sockets blocked | 13 tests pass |
-| tests | **855 pass** |
-| no-torch CI simulation | 730 pass, 18 skip, 0 fail |
+| tests | **855 pass** (at the freeze) |
+| no-torch CI simulation | 730 pass, 18 skip, 0 fail (at the freeze) |
 
 The plan asked for a 20-iteration soak. At 20 the figure is +0.2445 MB/query —
 a false leak alarm produced entirely by warm-up. The reported number is 120
 iterations with warm-up excluded.
+
+**Re-measured 2026-08-30, after the post-freeze audit.** The two test figures
+above are the freeze-time measurements and stand as recorded; these are the
+current ones, and they are **not comparable** to them, because the suite grew
+by 141 tests and the trained checkpoints were deleted and then restored (§"Model availability"
+below, and `docs/00` §3.6 L26).
+
+| measurement | value |
+|---|---|
+| tests | **1070 pass, 0 fail, 0 skip**, 456.8 s |
+| no-torch CI simulation | **851 pass, 32 skip, 0 fail**, 153.3 s |
+| illegal-plan rate | **0 / 600**, re-verified after the router change |
+
+All nine skips in the full run name a missing checkpoint. Before the loss the
+suite skipped nothing, because the checkpoints were on the machine; the tests
+that exercised them now skip with the checkpoint they wanted in the message,
+which is the same gate the suite has always used for real-model tests. The
+no-torch run skips 34: the same nine, plus the 14 training scripts whose
+module-scope `import torch` cannot resolve without the `train` extra, plus
+the 11 that already skipped at the freeze.
+
+The no-torch simulation is also, as of this date, **reproducible**:
+`scripts/ci_no_torch_sim.py` blocks torch, peft, transformers, bitsandbytes,
+accelerate and datasets at import time in a subprocess and writes
+`docs/assets/ci/no_torch.json`. The freeze's bug-fix bar has always named this
+check; until now it had no script and was run by hand.
+
+### 2.8b Model availability — 2026-08-31 (recovered)
+
+**The trained checkpoints were deleted on 2026-08-30 and restored on
+2026-08-31** from a Windows volume shadow copy taken six hours forty minutes
+before the deletion: **4.542 GB, 136 files, 18 directories**. The restore is
+bit-exact where it can be proven — `change_mask/ckpt_step_1780.pt` returned the
+SHA-256 recorded from the live file before the deletion — all 61 `.pt` files
+load, and every `metrics.json` reproduces the numbers printed in this report.
+
+Twelve small JSON sidecars (42,104 bytes, 0.00093% of the tree) restored as
+NUL bytes. **The three that mattered were repaired on 2026-08-31**, each
+validated by reproducing a published metric: the caption vocabulary returned
+BLEU-4 0.24460787515482577 against the published 0.24460787515482577, the
+grounding vocabulary reproduced Acc@0.5 and Acc@0.7 bit-exactly, and the
+regenerated multires band statistics reproduced mAP to 17 significant digits
+at all four GSD levels. ~~All eight learned tools load.~~ **RESTORED 2026-09-01** by retraining Track B - see the v2 section of `docs/model-cards.md`; `rsvqa_lr` 0.6473 (v2) against 0.6425 (v1) on the identical 534-example split, with the refusal metrics reproduced to four decimals. **CORRECTED 2026-09-01: seven of eight load, not eight.** The Track B QLoRA adapter is destroyed - `adapter_model.safetensors` is 148,712,776 bytes of which the first 148,701,184 are NUL (99.9922%), and the same is true of all eleven adapter files, 1.636 GB in total. The earlier claim came from a verification that loaded the 61 `.pt` files and only *hashed* the safetensors, so a whole model's weights were reported as recovered without ever being opened. Re-verified by loading every weight file: **64 load (10.784 GB), 11 fail (1.636 GB)**, the failures being exactly the adapters. See `docs/00` section 3.6 **L32**. Nine reporting-only
+sidecars remain zeroed; `docs/00` §3.6 L29 lists them.
+
+**No number in this report was re-derived, re-estimated or adjusted at any
+point** — not during the loss, and not during the recovery. They were read
+from the `metrics.json` each training run wrote, they are reproduced in
+`docs/model-cards.md`, `docs/phase1-status.md` and `docs/assets/`, and the
+restored files were checked against them rather than the other way round.
+
+### 2.8c Model availability — 2026-08-30 (superseded, kept for the record)
+
+**The trained checkpoints are not on disk.** They were deleted during the
+post-freeze audit and could not be recovered; the inventory, the recovery
+attempt and the root cause are `docs/00` §3.6 **L26** and **L27**.
+
+Every number in this report was read from the `metrics.json` the training run
+wrote, and every one of those numbers is reproduced here, in
+`docs/model-cards.md`, in `docs/phase1-status.md` and in the JSON reports under
+`docs/assets/`, all of which are in git and untouched. **Nothing in this report
+has been re-derived, re-estimated or adjusted, and no number was removed.**
+What cannot be done today is *reloading a head to reproduce one*, and the
+`/models` registry page renders empty because it reads its numbers from inside
+the deleted directories. Retraining is a separate decision that has not been
+made.
 
 ### 2.9 Ablations
 

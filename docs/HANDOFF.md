@@ -1,297 +1,157 @@
-# Session handoff — 2026-08-30 (Phase 4 freeze)
+# Session handoff — 2026-08-30 (post-freeze audit, and a data loss)
 
-**Start here.** The project is at the Phase-4 code freeze. Read
-`docs/phase4-status.md` first, then `docs/code-freeze.md` for what may still
-change. `docs/phase1-status.md` carries every measured number in dated
-sections, and later sections correct earlier ones.
+**Start here.** The project is past the Phase-4 code freeze and has since had a
+full-repository audit. Read `docs/phase4-status.md` first — its last section,
+§"Post-freeze audit", is the newest state — then `docs/code-freeze.md` for what
+may still change. `docs/phase1-status.md` carries every measured number in
+dated sections, and later sections correct earlier ones.
 
 | | |
 |---|---|
-| Branch | `phase-0-closeout`, pushed, **tree clean** |
+| Branch | `phase-0-closeout`, **uncommitted audit changes in the working tree** |
 | Freeze tag | **`phase-4-freeze`** — resolve with `git rev-list -n1 phase-4-freeze` |
-| Tests | **855 passing**; no-torch CI sim 730 passed / 18 skipped / 0 failed |
-| Illegal plans | **0 / 600** |
+| Tests | **1070 passed, 0 failed, 0 skipped**, 456.8 s (2026-09-01, after the stub-confidence cap) |
+| No-torch CI simulation | **851 passed, 32 skipped, 0 failed** — `docs/assets/ci/no_torch.json` |
+| Illegal plans | **0 / 600**, re-verified after the router change |
 | Demo bundle | **9 / 9 beats**; rehearsals **20 / 20** (10 online, 10 offline) |
+| Trained checkpoints | **RECOVERED 2026-08-31** — 4.542 GB, 136 files, bit-exact; three zeroed sidecars repaired and validated. All 8 tools load |
 | Open PR | [#2](https://github.com/aditya-coder07/SatQuery_AI/pull/2) — unmerged |
 
-**The freeze is real: bug fixes, evidence and demo material only.**
-`docs/code-freeze.md` §"The bug-fix bar" is the four-point test, and
-§"Explicitly out of scope" lists the six tempting improvements that must not
-be started — the CDVQA segmenter, grounding, refusal, VRSBench,
-`max_coreg_shift_px`, and the router.
+**The freeze still holds: bug fixes, evidence and demo material only.** The
+six items in `docs/code-freeze.md` §"Explicitly out of scope" — the CDVQA
+segmenter, grounding, refusal, VRSBench, `max_coreg_shift_px`, the router —
+must not be started.
 
 ---
 
-## What the next session should actually do
+## 1. Read this first: the checkpoints were lost, then recovered
 
-Nothing in the codebase is blocking. **All three remaining Phase-4 items need
-a person, not a build:**
+`training/run_checkpoint_test.py` hardcoded `ckpt_dir = "checkpoints"`, called
+`shutil.rmtree` on it unconditionally, and had **no argument parser** — so
+passing `--help` to check whether it ran did not print help, it ran the
+program. Every trained checkpoint was destroyed on 2026-08-30 during the audit.
+`make test-resume` reached the same code.
 
-1. **Ten narrated rehearsals on the venue laptop, one recorded** (tasks 4.2
-   and 4.6). `python scripts/rehearse.py --runs 10 --offline` checks the
-   system's half and exits non-zero if any beat misbehaves or overruns — run
-   it on the venue machine first. **Plan around this:** the two real-Cartosat
-   beats take ≈56 s each, essentially their whole slot; every other beat is
-   under 3 s. `docs/rehearsal.md` recommends pre-warming them and showing the
-   stored `/runs/{id}` permalinks.
-2. **A licence decision on publishing weights** (task 4.5). The semantic
-   change head is blocked outright — SECOND states *no licence at all*.
-3. **The SIH deadline and submission format** — open since W0 and the only
+**Recovered on 2026-08-31** from a Windows volume shadow copy taken at 13:23
+that day, about six hours forty minutes before the deletion:
+
+* **4.542 GB, 136 files, 18 directories** restored, and **bit-exact**:
+  `change_mask/ckpt_step_1780.pt` came back as
+  `sha256:02b060ff…4c168`, the digest recorded from the live file before the
+  deletion during the L21 provenance work.
+* **All 61 `.pt` files load**, and every `metrics.json` matches the published
+  numbers (Track A mAP 0.285365, grounding Acc@0.5 0.076249, fusion gain
+  −0.006376, CDVQA change-class mIoU 0.263639). **No number was ever
+  re-derived or adjusted.**
+* A manifest of every file, size and SHA-256 is at
+  `checkpoints_restored/RECOVERY_MANIFEST.json`, beside a **preserved copy
+  that must not be modified**. `C:\shadow_ro` is the read-only mount of the
+  snapshot; it can be removed once you are satisfied.
+* **Twelve small JSON sidecars did not survive** — 42,104 bytes, restored as
+  their correct size in NUL bytes because the data was still in the write
+  cache when the snapshot froze the volume. **The three that mattered were
+  repaired on 2026-08-31**, each validated by reproducing a published metric:
+  the caption vocabulary (BLEU-4 exact to 17 digits), the grounding vocabulary
+  (Acc@0.5 and Acc@0.7 bit-exact) and the multires band statistics (mAP
+  identical at all four GSD levels). ~~All eight learned tools load.~~ **RESTORED 2026-09-01: all eight load again** after the Track B retrain (`checkpoints/track_b_v2`, rsvqa_lr 0.6473 against v1's 0.6425 on the identical split).~~ **CORRECTED 2026-09-01: seven of eight load, not eight.** The Track B QLoRA adapter is destroyed - `adapter_model.safetensors` is 148,712,776 bytes of which the first 148,701,184 are NUL (99.9922%), and the same is true of all eleven adapter files, 1.636 GB in total. The earlier claim came from a verification that loaded the 61 `.pt` files and only *hashed* the safetensors, so a whole model's weights were reported as recovered without ever being opened. Re-verified by loading every weight file: **64 load (10.784 GB), 11 fail (1.636 GB)**, the failures being exactly the adapters. See `docs/00` section 3.6 **L32**. Nine
+  reporting-only sidecars remain zeroed. `docs/00` §3.6 **L29**.
+* **The hole is closed**: the harness now defaults to a scratch path under
+  `artifacts/`, refuses `checkpoints/` by name, refuses any directory holding
+  files it did not write, and has a parser. `tests/test_script_entrypoints.py`
+  fails if **any** `__main__` script lacks an argument parser (L27). And
+  `is_available()` now parses its sidecars rather than checking they exist,
+  which is what let a zeroed vocabulary report "ready" (L30).
+
+**Back up `checkpoints/` off this volume.** It is gitignored by design and had
+no backup at all; the only reason 4.5 GB came back is that System Protection
+happened to have taken a snapshot that morning. That is luck, not a strategy.
+
+---
+
+## 2. What the audit changed
+
+Eight defects, each measured before it was touched, each with a regression
+test, all recorded as `docs/00` §3.6 **L21–L28**:
+
+| | Defect | Fix |
+|---|---|---|
+| L21 | `Trace.weights_hashes` always `{}` while real checkpoints loaded | `satquery/tools/provenance.py` — SHA-256 of the artifact each tool loaded. **Stubs get no hash** |
+| L22 | Router state leaked between concurrent runs — **97/800** contaminated reads pre-fix | `Router.decide()` returns a `RouteDecision`; the controller carries it |
+| L23 | A `worker` compose service that printed one line and exited | Removed. `docs/adr/002-no-async-worker.md` |
+| L24 | Frontend image ran `npm run dev`; no page linked to `/models` or `/benchmarks` | Multi-stage production image (non-root), shared `Nav`, run permalink |
+| L25 | `artifacts/` unbounded — 23 GB / 1,133 directories at audit time | `satquery/controller/retention.py`, `satquery prune` |
+| L26 | **The checkpoint loss** | Not recoverable — see above |
+| L27 | The resume harness deleted `checkpoints/` unconditionally | Scratch default, two refusals, an argument parser |
+| L28 | `evaluation/cdvqa_predict.py` could not be run as its docstring documents | `sys.path` pattern from `evaluation/adversarial.py` |
+
+Also new: `scripts/ci_no_torch_sim.py`, which makes the freeze's own no-torch
+verification reproducible for the first time — it was quoted in four documents
+and had no script.
+
+**Three things were deliberately not built**, and the reasons are scientific:
+runtime calibration stays inactive because no tool reports a probability of
+correctness; the confidence weights stay equal because no labelled set exists
+to fit them against; the Tier-2 LLM tiebreak stays unbuilt because the PS does
+not ask for one (L9).
+
+---
+
+## 3. What the next session should actually do
+
+Nothing in the codebase is blocking. **The four remaining items need a person
+or a decision, not a build:**
+
+1. **Ten narrated rehearsals on the venue laptop, one recorded** (tasks 4.2 and
+   4.6). `python scripts/rehearse.py --runs 10 --offline` checks the system's
+   half and exits non-zero if any beat misbehaves or overruns — run it on the
+   venue machine first. **Plan around this:** the two real-Cartosat beats take
+   ≈56 s each, essentially their whole slot; every other beat is under 3 s.
+   `docs/rehearsal.md` recommends pre-warming them and showing the stored
+   `/runs/{id}` permalinks — which the query page now links to directly.
+3. **A licence decision on publishing weights** (task 4.5). The semantic change
+   head is blocked outright — SECOND states *no licence at all*. The weights
+   exist again, so this decision is live rather than moot.
+4. **The SIH deadline and submission format** — open since W0 and the only
    thing that decides whether anything must be cut.
 
 If asked to improve a number instead, point at the freeze.
 
----
-
-State (superseded detail below): branch `phase-0-closeout`, **855 tests passing**, working tree clean,
-**pushed** to PR #2. **Phase 4 is audited and largely closed — read
-`docs/phase4-status.md` first**: 5 of 8 tasks DONE, 3 PARTIAL, and the missing
-halves are a person in a room (narrated rehearsals on the venue laptop), a
-licence decision (publishing weights), and a screen recording (the backup
-video). Nothing else is blocking.
-
-New in Phase 4: `docs/technical-report.md`, `docs/model-cards.md`,
-`docs/deck.md`, `docs/judge-qa.md`, `docs/rehearsal.md`, `docs/code-freeze.md`,
-`docs/phase4-status.md`, and `docs/ps-26167.md` — the authoritative PS text,
-now in git, which is what made the traceability check possible.
-
-**Update 2026-08-30.** The two items this file listed as highest-value were
-worked, and CDVQA went from not-on-disk to fully measured in three passes.
-Read the **last three sections** of `docs/phase1-status.md` in order; each
-corrects the one before it.
-
-- **CDVQA now scores 0.5380** at 100% coverage (39,686 questions, 968 pairs)
-  against a per-type majority baseline of 0.5084 and an oracle ceiling of
-  **0.9975**. The first measurement was 0.0000 and the second was 0.4439 -
-  *below* the baseline. Only the third beats it.
-- **The whole benchmark is arithmetic over a pair of semantic change maps**,
-  so the neural problem is one segmentation task. 93% of the remaining
-  headroom is the segmenter's 0.2636 change-class mIoU.
-- **A 20-point routing gap was found and closed.** Calling the tool directly
-  scored 0.5701 where the full controller scored 0.3616, because only 67.4%
-  of CDVQA questions reached the tool that answers them - `change_to_what`
-  reached it 0.000 of the time. The two paths now agree to six decimals.
-- **The SAR sensor question is narrowed by elimination** but still needs one
-  sentence from the team; see §"Which RISAT" in `docs/verification.md`.
-
-Read `docs/phase1-status.md` first. It carries every measured number with its
-caveats, in dated sections, and later sections correct earlier ones.
-`docs/verification.md` tracks the 12-item gate (**6 resolved**).
+**The working tree is not committed.** `git status` shows the audit's changes;
+review and commit them deliberately.
 
 ---
 
-## What happened this session
-
-Phase 3 was built end to end (all 14 tasks addressed, 13 complete), then
-audited for correctness, security, packaging and completeness. The audit found
-more than the build did.
-
-### Phase 3 headline results
-
-| result | number |
-|---|---|
-| agent vs monolith — impossible plans | **148/600 (24.7%) ungated, 0/600 gated** |
-| land-cover head at threshold 0.5 | **worse than always predicting negative** (0.2064 vs 0.1834) |
-| E-AURC: router vs land-cover | 0.0405 vs 0.0966 (raw AURC makes them look equal) |
-| entailment gate, clean suite, hybrid | **96%**, all 9 contradictions caught |
-| deterministic gate cost | **+1.9 ms/query**; NLI **+2,625 ms** (22× the pipeline) |
-| change-mask calibration | ECE 0.0668 → **0.0034** (affine, not temperature) |
-
-### Task 3.1 is the one incomplete task
-
-Track B retrained on a 5,340-example mix (1,654 SAR, 4.57% refusals).
-**VQA improved with no regression** — `rsvqa_lr` exact match 0.4510 → 0.6373 on
-the distribution both models trained on.
-
-**Refusal is a negative result.** Recall 0.4118 decomposes into **5/5 (100%)
-on lexical refusals** and **2/12 (16.7%) on the image-conditional one**. The
-model learned to refuse when the *question* is impossible on its face and did
-not learn to refuse when the *image* is the reason. That is the harder half.
-Loss plateaued from step ~45 over ~half an epoch; refusal fraction, epoch count
-and learning rate are three candidate causes and this run separates none.
-
----
-
-## The habit that mattered
-
-Four measurement artifacts were caught **in my own work**, and they are the
-reason to trust the rest:
-
-1. The first hybrid entailment gate scored **identically** to deterministic
-   alone — the precedence rule meant NLI was never consulted on the six cases
-   that mattered.
-2. The verifier ablation first reported **+440 ms/query** for the gate. That was
-   cold-start cost attributed to the verifier. With warm-up: +1.9 ms.
-3. The soak test at the plan's **20 iterations** reports +0.2445 MB/query; at
-   120 with warm-up excluded it is +0.0239. The plan's own number would have
-   produced a false leak alarm.
-4. A confidence stressor wrote zeros without setting the raster's nodata value,
-   so it moved the wrong component — a bug in the *measurement* that read as a
-   failure of the *system*.
-
-Where a suite was used to change the design, it is marked burnt and a fresh one
-written (`TUNED_CASES` vs `CLEAN_CASES` in `evaluation/entailment_bench.py`).
-**Before concluding a model failed, check the split can answer the question.**
-
----
-
-## Audit findings (all fixed)
-
-**Security** — four defects reachable by an unauthenticated caller: unbounded
-uploads; temp directories never deleted; the blanket handler converting a
-deliberate 413 into a 500; and the **SSE path reaching past the controller**,
-which had drifted so streamed answers silently lost the task-3.8 exclusion
-notice — the path the frontend uses.
-
-**Packaging** — both Docker images **could not build** (`python:3.11-slim` while
-rasterio 1.5.1 declares `requires_python >=3.12`, verified against PyPI).
-Compose set `PROFILE` where the loader reads `SATQUERY_PROFILE`. Pillow was
-undeclared despite being a direct runtime import. `reportlab` was missing from
-pyproject, which CI installs from. Added a `train` extra — the whole GPU stack
-was undeclared.
-
-**Completeness** — Phase 2 tasks 2.5, 2.7, 2.8 were incomplete: the models were
-trained and their metrics published, and **no tool module existed**, so three
-checkpoint directories were unreachable from a query. Now wired.
-
-Wiring them exposed a **verifier defect**: `extract_claims` returned only the
-*first* subject in a sentence, so "a bridge is over a river with some green
-trees" was checked on vegetation only and the water claim never at all.
-
----
-
-## Open — in priority order
-
-1. **Confirm which SAR sensor ISRO/SAC will use.** Still open, but
-   **narrowed by elimination on 2026-08-30** (§"Which RISAT" in
-   `docs/verification.md`): of the four candidates, RISAT-1 was decommissioned
-   in 2017, RISAT-1B/EOS-09 failed at launch in 2025, and RISAT-2B/2BR1 are
-   X-band but carry "data not ordinarily available to the public" and appear
-   nowhere in Bhoonidhi's civil catalogue - leaving **EOS-04 as the only
-   RISAT that is both operational and openly served**. The counter-argument
-   is honest: Cartosat-2S at 0.65-1.6 m pairs better with RISAT-2B's 0.35 m
-   than with EOS-04's 2.5 m, and SAC can reach restricted data. One sentence
-   from the team still decides it. Verification item 8 is resolved to a *no*:
-   high-res SAR is freely available and permissively licensed, but Umbra,
-   Capella and SpaceNet 6 are all **X-band** (9.69 GHz measured from a real
-   product) while EOS-04 is **C-band** (5.40 GHz) — a 1.79× wavelength ratio
-   against the 0.09% Sentinel-1 match. **If the sensor is RISAT-2B/2BR1 instead,
-   those are X-band and this inverts** — Stage A3 should then be redone against
-   0.25 m SAR rather than the optical-only arm that shipped.
-2. **Verification item 10** — SIH deadline and submission format. Needs the team.
-3. **The Cartosat priced-data risk** — for the team lead.
-4. **Review and merge [PR #2](https://github.com/aditya-coder07/SatQuery_AI/pull/2)** - PR #1 is already merged; the handoff's
-   instruction to merge it was stale.
-
-### Known gaps, deliberately left
-
-- **A flake I could not explain.** `test_swir_free_path_exercised_on_real_cartosat`
-  has now failed **twice** under the no-torch CI simulation and passed on every
-  other run, including immediately after each failure. Both failing runs were
-  much slower (272 s against ~105 s typical), which *suggests* I/O contention
-  during concurrent Docker builds — a hypothesis, not a diagnosis. Unresolved.
-- **Tier-2 LLM tiebreak unbuilt** — `llm_tiebreak_invoked` is always `false`.
-  Not one of the 14 tasks; an unbuilt feature with an honest flag.
-- **`landcover_v1` asserts on ~0.25% of decisions** at 91% precision. Correct
-  behaviour for a head with mAP 0.285, stated in `configs/thresholds.yaml`.
-- **The entailment bench has no multi-subject sentences**, so it cannot exercise
-  the case the real captioner produces immediately. Adding them to the clean
-  suite would burn it.
-- **`artifacts/run_*/` grows unbounded** (gitignored runtime output; the temp
-  uploads *are* bounded). It reached **46 GB across 7,071 directories** before
-  being cleared on 2026-08-30 — each full-scene run writes ~526 MB of index
-  rasters. The API prunes to 20 runs; CLI and evaluation runs do not prune.
-- **Twenty limitations are catalogued in `docs/00` §3.6** with evidence and
-  consequence — that section, not this list, is the complete record.
-- **3.1's refusal half** — see above.
-
----
-
-## Environment
+## 4. Environment
 
 - Local RTX 4050 with CUDA, torch 2.13+cu126, bitsandbytes, peft, accelerate.
-  `training/track_b_vlm_qlora.py`'s "cannot run here" docstring was stale and is
-  corrected — it runs locally.
 - `gh` is installed but not on the Git Bash PATH: call it as
   `"/c/Program Files/GitHub CLI/gh.exe"`.
 - Gitignored but on disk: BigEarthNet shards, WHU-OPT-SAR, LEVIR-CD/MCI, RSICD,
-  DIOR-RSVG, the Bhoonidhi products, **CDVQA** (`data/cdvqa/` - annotations,
-  72 extracted image pairs and ~2.4 GB of mirror shards), `checkpoints/`,
-  `models/` (including the 370 MB MNLI checkpoint for the gate's NLI backend).
+  DIOR-RSVG, the Bhoonidhi products, CDVQA (`data/cdvqa/`), `models/`
+  (`qwen25_vl_3b` and `nli_deberta_mnli`, digests in
+  `configs/model_lock.json`), and `checkpoints/` — **restored 2026-08-31**,
+  4.542 GB, with the three exceptions in L29.
 - Learned tools are all **opt-in by environment variable** and fall back to
-  stubs, which is what keeps CI green: `SATQUERY_CAPTION`, `SATQUERY_GROUNDING`,
+  stubs, which is what keeps CI green and what kept the system working while
+  no checkpoint existed: `SATQUERY_CAPTION`, `SATQUERY_GROUNDING`,
   `SATQUERY_CHANGE_CAPTION`, `SATQUERY_LANDCOVER`, `SATQUERY_CHANGE_MASK`,
   `SATQUERY_FUSION`, `SATQUERY_NLI`, `SATQUERY_VQA_BASE`/`_ADAPTER`.
 - `make report` regenerates every evaluation artifact under `docs/assets/`.
-- **CI has no torch.** Verify with the block-import simulation before claiming a
-  green CI — it caught a module-scope import that made the whole package
-  unimportable, which the normal suite could not.
+  **Do not run it casually** — it overwrites published reports, and any number
+  it changes belongs in a new dated section rather than in an edit.
+- **CI has no torch.** Verify with `python scripts/ci_no_torch_sim.py` before
+  claiming a green CI — it caught a module-scope import that made the whole
+  package unimportable, which the normal suite could not.
+- `satquery prune --dry-run` reports the reclaimable artifact backlog; at the
+  audit it was 1,129 directories and 12.29 GB, and nothing was deleted.
 
 ---
 
-# Problem-statement traceability (checked 2026-08-29)
+## 5. Longer history
 
-The PS text was re-read against the code. Mandatory scope is covered; the gaps
-are in the **prescribed evaluation datasets**, which is how the PS says the
-work will be scored.
-
-## Mandatory functional scope — covered
-
-| PS requirement | status |
-|---|---|
-| RS adaptation of a visual/VL component | Track A on BigEarthNet imagery, Track B QLoRA on the instruct mix |
-| Single-image VQA (mandatory) | `rs_vqa_v1` + deterministic `change_vqa_v1` |
-| **Plus** captioning **or** grounding | **both** wired (`caption_v1`, `grounding_v1`) |
-| Change description **or** change VQA (mandatory) | both (`change_caption_v1`, `change_vqa_v1`) |
-| Spatial change map (optional) | `change_mask_v1`, georeferenced COG |
-| Cross-modal optical–SAR extraction | `optsar_fusion_v1`, triad mode, complementarity now in the trace |
-| Agentic orchestration | router + capability matrix + validated plans; **0/600 illegal plans** |
-| GUI / web app | Next.js: run view, comparators, map, `/models`, `/benchmarks`, `/runs/{id}` |
-| Visual evidence, confidence, execution summary, downloadable report | map + evidence pack, three-component confidence, full trace, PDF |
-| GeoTIFF/TIFF, **PNG/JPEG for benchmarks** | fixed 2026-08-29 — see below |
-
-## Gaps against the PS — ordered by evaluation risk
-
-1. ~~**CDVQA is not on disk and never evaluated.**~~ **Resolved 2026-08-30 -
-   and the answer is a zero.** The official annotations are Apache-2.0 and
-   `curl`-able; imagery came from a webdataset mirror that
-   `training/prepare/cdvqa.py` verifies against them sample by sample. First
-   measurement: **0.0000 exact match on all eight question types**, 2,900
-   questions, 34.5% coverage. Checked for a scoring artifact and it is not one
-   - a deliberately lenient rescoring gives 0.0076. The causes are structural:
-   CDVQA imagery is **RGB, so all four classical indices are unavailable**;
-   seven of eight question types need a **semantic change head that does not
-   exist**; and the one class-agnostic type never reaches the change mask's
-   measured percentage because tools do not see each other's outputs. Full
-   write-up, including what would move it and what should not, at the end of
-   `docs/phase1-status.md`.
-2. **BigEarthNet.txt (the image–text corpus) was never used.** The PS Background
-   calls it "the primary dataset for adapting image–text representations". We
-   adapted on BigEarthNet *imagery + 19 labels* instead. The Mandatory Scope
-   says "BigEarthNet.txt **or any open source training data**", so this is
-   defensible — but it is a stated expectation, and a judge may ask. Decide
-   whether to run an adaptation pass on it or to justify the substitution in
-   the report.
-3. **VRSBench evaluation is partial.** Item 9: it ships annotations only, with
-   imagery in DOTA and DIOR. DIOR is on disk, DOTA is not.
-4. **`landcover_v1` asserts on ~0.25% of decisions.** Fine for honesty, thin for
-   a demo. The narrative synthesiser carries land-cover answers.
-
-## Fixed while checking
-
-**PNG/JPEG benchmark inputs were rejected outright.** The PS admits them "only
-for the prescribed public benchmark datasets", and those are ungeoreferenced by
-construction — RSVQA and VRSBench ship plain rasters. `check_crs_present`
-FAILed them in every mode, so **no prescribed benchmark image could enter the
-pipeline at all**. In `IngestMode.BENCHMARK` a missing CRS is now a WARN: the
-answer is valid, nothing downstream can georeference or co-register, and the
-trace says so. Operational mode still refuses. Verified end to end on a
-PNG (`SINGLE_VQA`, no abstention, WARN recorded).
-
-## Evaluation-set note
-
-The ISRO/SAC set is **pre-georeferenced, co-registered Cartosat-2S + RISAT
-pairs**. Two measured facts bear on it: EOS-04 is C-band at 5.40 GHz (item 5),
-and the cross-sensor test found vegetation agreement collapsing from +0.476 at
-10 m to **-0.135 at native 1.6 m** — resolution, not bands, is the dominant
-gap, which is why Stage A2/A3 exist.
+Everything before this session — the Phase 1–3 results, the CDVQA correction
+from 0.0000 to 0.4439 to 0.5380, the 20-point routing gap that was found and
+closed, the RISAT narrowing, the twenty limitations catalogued with evidence —
+is in `docs/phase1-status.md`, `docs/verification.md` and `docs/00` §3.6, in
+dated sections. Nothing there has been deleted or rewritten; later sections
+correct earlier ones, which is why the CDVQA history is still readable.

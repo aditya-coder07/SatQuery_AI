@@ -98,7 +98,27 @@ async function basemapReachable(): Promise<boolean> {
 
 type Overlay = { key: string; available: boolean };
 
-export default function MapView({ runId }: { runId: string }) {
+/**
+ * `ready` gates the overlay request on the run being queryable.
+ *
+ * The run id arrives on the `run_started` SSE event, but the API only
+ * persists the trace when the run finishes - `list_overlays` answers 404
+ * while `record["trace"]` is absent, which is correct behaviour, not a bug.
+ * Mounting this component on `run_started` therefore fetched `/overlays`
+ * immediately and painted "Error: HTTP 404" over a run that was progressing
+ * normally. The map still mounts early (the basemap probe is slow and worth
+ * starting), it simply does not ask for overlays until there are any.
+ *
+ * Defaults to true so the run permalink page, which only ever renders a
+ * completed run, needs no change.
+ */
+export default function MapView({
+  runId,
+  ready = true,
+}: {
+  runId: string;
+  ready?: boolean;
+}) {
   const container = useRef<HTMLDivElement>(null);
   const mapRef = useRef<Map | null>(null);
   const [basemap, setBasemap] = useState<Basemap>('probing');
@@ -118,17 +138,33 @@ export default function MapView({ runId }: { runId: string }) {
   }, []);
 
   useEffect(() => {
+    // Clear whatever the previous run left behind, so a new run never shows
+    // the last one's layers while it waits.
+    setOverlays([]);
+    setActive(null);
+    setError(null);
+    if (!ready) return;
+
+    let cancelled = false;
     fetch(`${API}/runs/${runId}/overlays`)
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`))))
       .then((d) => {
+        if (cancelled) return;
         const usable: Overlay[] = (d.overlays ?? []).filter(
           (o: Overlay) => o.available,
         );
         setOverlays(usable);
         setActive((current) => current ?? usable[0]?.key ?? null);
       })
-      .catch((e) => setError(String(e)));
-  }, [runId]);
+      // Still surfaced: once the run is complete, a 404 here is a real
+      // failure and must not be swallowed.
+      .catch((e) => {
+        if (!cancelled) setError(String(e));
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [runId, ready]);
 
   useEffect(() => {
     if (!container.current || basemap === 'probing' || mapRef.current) return;
@@ -227,7 +263,10 @@ export default function MapView({ runId }: { runId: string }) {
             {o.key}
           </button>
         ))}
-        {overlays.length === 0 && !error && (
+        {!ready && (
+          <span className="mapview-note">preparing map overlays…</span>
+        )}
+        {ready && overlays.length === 0 && !error && (
           <span className="mapview-note">no georeferenced artifacts</span>
         )}
       </div>

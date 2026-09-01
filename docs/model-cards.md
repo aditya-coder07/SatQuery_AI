@@ -10,12 +10,88 @@ poor, and the card says so rather than reporting only the flattering figure.
 A reviewer who finds a weakness we did not disclose has learned something
 about our reporting, not about the model.
 
+## Weight availability — 2026-08-31 (recovered)
+
+**The checkpoints described below are on disk again.** They were deleted on
+2026-08-30 and **restored in full on 2026-08-31** from a volume shadow copy —
+4.542 GB, 136 files, bit-exact against a digest recorded before the deletion.
+Every `.pt` file loads and every `metrics.json` matches the numbers printed in
+these cards.
+
+~~Every component listed below now loads.~~ **CORRECTED 2026-09-01: seven of eight load, not eight.** The Track B QLoRA adapter is destroyed - `adapter_model.safetensors` is 148,712,776 bytes of which the first 148,701,184 are NUL (99.9922%), and the same is true of all eleven adapter files, 1.636 GB in total. The earlier claim came from a verification that loaded the 61 `.pt` files and only *hashed* the safetensors, so a whole model's weights were reported as recovered without ever being opened. Re-verified by loading every weight file: **64 load (10.784 GB), 11 fail (1.636 GB)**, the failures being exactly the adapters. See `docs/00` section 3.6 **L32**.
+
+**`rs_vqa_v1` (Track B) cannot be loaded and cannot be published.** Its card below records a run that happened; the weights behind it no longer exist. Twelve small JSON sidecars came
+back from the shadow copy as NUL bytes; the three that mattered were repaired
+on 2026-08-31, each validated by reproducing a published metric rather than by
+inspection (`docs/00` §3.6 L29):
+
+| Sidecar | Repair | Validation |
+|---|---|---|
+| `caption/vocab.json` | regenerated from `data/rsicd`, 1,781 tokens | BLEU-4 **0.24460787515482577** vs published **0.24460787515482577**; `n` 1093, `unique_captions` 146 — all exact |
+| `grounding/vocab.json` | regenerated from `data/dior_rsvg`, 85 tokens | Acc@0.5 and Acc@0.7 bit-exact; mIoU to 4.2e-9 |
+| `track_a_full_multires/band_stats.json` | `compute_stats(sample=2000, seed=0)` over 60,000 patches | multires mAP identical to 17 digits at all four GSD levels |
+
+The recovered NUL files are kept beside their replacements as
+`*.zeroed-2026-08-30`, and **all 61 `.pt` digests were re-verified unchanged**
+after the repairs. The regenerated `band_stats.json` is not claimed as a
+byte-identical restoration — its statistics are identical, its provenance
+string records the regeneration.
+
+**Nine sidecars remain zeroed** and are reporting files only: two
+`metrics.json` (`track_a_full_multires`, `track_a_dropout`), one
+`cross_sensor.json`, one `run_metadata.json`, and four `adapter_config.json`
+under the `killtest`, `smoke` and `track_b_v1/adapter_step_275` scratch runs.
+Their numbers are published in this document. The consequence is cosmetic: the
+`/models` page shows 18 checkpoints, 13 of them carrying metrics.
+
+**Every number in these cards was already verified against the restored
+`metrics.json` files and none of them changed.**
+
+---
+
+## Weight availability — 2026-08-30 (superseded, kept for the record)
+
+**The checkpoint files described in these cards are no longer on disk.** On
+2026-08-30 `training/run_checkpoint_test.py` deleted `checkpoints/` and the
+weights could not be recovered from any source; the full account is `docs/00`
+§3.6 **L26**, and the root cause and its containment are **L27**.
+
+What this does and does not mean:
+
+* **Every number in these cards stands.** They were read from the
+  `metrics.json` and `run_metadata.json` each training run wrote, and they are
+  reproduced here, in `docs/phase1-status.md`, in `docs/technical-report.md`
+  and in the JSON reports under `docs/assets/`. Those files are in git and are
+  untouched. **Nothing below has been re-derived, re-estimated or adjusted.**
+* **The `Checkpoint` row in each card is a historical path, not a claim that
+  the file is present.** Every one of them is currently missing. Do not read
+  these cards as an inventory of what can be loaded today.
+* **`/models` renders empty.** The registry page reads `metrics.json` and
+  `run_metadata.json` from inside those directories, so it has nothing to show
+  until checkpoints exist again. This is the accurate state, not a bug in the
+  page.
+* **No learned tool can be enabled.** Every `SATQUERY_*` checkpoint variable
+  points at a path that no longer exists, so the registry serves stubs and the
+  deterministic index engine — the configuration CI has always run, the test
+  suite exercises, and the demo bundle was verified under.
+* **The third-party base models survived.** `models/qwen25_vl_3b` and
+  `models/nli_deberta_mnli` are intact and their digests are in
+  `configs/model_lock.json`. What was lost from Track B is the **QLoRA
+  adapter**, which was under `checkpoints/track_b_v1/adapter_final`.
+
+**Retraining is a separate decision and has not been made.** It costs
+GPU-hours; it cannot reproduce a previous run bit-for-bit; and under
+`docs/code-freeze.md` any number it produced would have to be published as a
+new dated section rather than as an edit to the numbers below.
+
+---
+
 ## Publication status — read before distributing anything
 
 | Component | Weights publishable? | Why |
 |---|---|---|
 | `change_vqa_v1` semantic head | **BLOCKED** | Trained on **SECOND**, which states **no licence at all** — not a restrictive one, none. See `docs/verification.md` §"NEW RISK — SECOND states no licence". |
-| Everything else | **Undecided — do not publish yet** | Each was trained on an openly licensed corpus, but no licence has been chosen for our own weights and no per-dataset redistribution check has been done. |
+| Everything else | **Undecided — do not publish yet**, and as of 2026-08-30 **not available to publish** (see the availability note above) | Each was trained on an openly licensed corpus, but no licence has been chosen for our own weights and no per-dataset redistribution check has been done. The licence question is unchanged by the loss and still has to be answered before any future weights are distributed. |
 
 The PS's deliverable is *"codes and models including test and demonstration"*.
 Code and tests are in the repository. **Weights are not published**, and the
@@ -89,7 +165,54 @@ not because the data was unavailable.
 | Checkpoint | `checkpoints/track_b_v1/adapter_final` |
 | Base | Qwen2.5-VL-3B-Instruct, 4-bit |
 | Training data | 4,806-example RS instruction mix, lr 1e-4, effective batch 8, 300 steps, seed 42 |
-| **`rsvqa_lr` exact match** | **0.6425** (n=207) |
+
+### Retrain, 2026-09-01 — v2
+
+The v1 weights were destroyed (`docs/00` §3.6 **L32**) and no intact copy
+existed anywhere: 22 candidates across two trees, git history, LFS, the
+remote, the HF cache, Docker images and archives, **0 loadable**. Retraining
+was authorised by the team lead and is recorded as Unfreeze 1 in
+`docs/code-freeze.md`.
+
+**The recipe was not redesigned.** Every field of `run_metadata.json` is
+identical to v1's: `models/qwen25_vl_3b`, `data/instruct_mix`, 4,806 examples,
+300 steps, lr 1e-4, effective batch 8, seed 42, LoRA r=16 / α=32 /
+dropout=0.05 over the same seven target modules.
+
+| | v1 (2026-08-29) | v2 (2026-09-01) | Δ |
+|---|---|---|---|
+| **`rsvqa_lr` exact match** | **0.6425120773** | **0.6473429952** | **+0.0048** |
+| `whu_opt_sar` exact match | 0.2064516129 | 0.2000000000 | −0.0065 |
+| overall exact match | 0.3810444874 | 0.3791102515 | −0.0019 |
+| refusal recall | 0.4118 | 0.4117647059 | ±0 |
+| false-refusal rate | 0.0077 | 0.0077369439 | ±0 |
+| lexical-shortcut probe | 0.1667 | 0.1666666667 | ±0 |
+
+Both rows are scored on the **identical** 534-example `val` split, with the
+same 207 `rsvqa_lr` rows. Artifacts: `docs/assets/refusal/track_b_fullval.json`
+(v1, untouched) and `docs/assets/refusal/track_b_v2_fullval.json` (v2).
+
+**Read the deltas as reproduction, not improvement.** +0.0048 on 207 examples
+is one extra correct answer; it is not evidence that v2 is better. The three
+refusal metrics reproducing to four decimals is the more interesting result:
+it says the recipe is reproducible under its seed, and it means **L3 stands
+unchanged** - refusal recall is still 0.4118, still decomposing into 100% on
+lexical refusals and 16.7% on the image-conditional ones. The retrain restored
+the capability; it did not fix the known negative result, and was not expected
+to.
+
+| | |
+|---|---|
+| Checkpoint | `checkpoints/track_b_v2/adapter_final` |
+| sha256 | `10f4830141237846a439f9166acc21eef0be050c5580381e2e66256cf7041174` |
+| Integrity | 696 tensors, 0.34% NUL (the corrupted v1 files were 99.9922%) |
+| Wall time | 6 h 26 m on an RTX 4050 Laptop (6 GiB), 4-bit NF4 |
+| Final loss | 6.63 at step 300, flat from ~step 45 - the plateau L3 already records |
+
+The eleven corrupted v1 adapters remain on disk as evidence and must not be
+deleted.
+
+| **`rsvqa_lr` exact match** | **v1: 0.6425** (n=207, 2026-08-29) · **v2: 0.6473** (n=207, 2026-09-01 retrain) |
 | Full held-out val, exact match | 0.3810 (n=534) |
 | Full held-out val, token F1 | 0.7913 |
 

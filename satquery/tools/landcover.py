@@ -63,6 +63,8 @@ import numpy as np
 from satquery.contracts.input_manifest import InputManifest
 from satquery.contracts.tool_result import ToolPayload, ToolResult
 from satquery.tools.base import ToolProtocol
+from satquery.tools.provenance import record
+from satquery.tools.sidecars import readable_json
 
 TOOL_NAME = "landcover"
 TOOL_VERSION = "1.0.0"
@@ -135,12 +137,15 @@ def is_available() -> tuple[bool, str]:
     # prevent. Per-image standardisation instead of the training statistics
     # produced a head that asserted class 0 on every patch at 0.9 confidence
     # and was wrong every time - confidently, silently wrong.
-    if not (Path(path) / "band_stats.json").exists():
+    # Readable, not merely present. `track_a_full_multires/band_stats.json`
+    # came back from a shadow-copy restore as 1,156 bytes of NUL on
+    # 2026-08-31, and an existence check would have declared that head ready.
+    ok, reason = readable_json(Path(path) / "band_stats.json", expect=dict)
+    if not ok:
         return False, (
-            f"band_stats.json not found beside {path}; regenerate it with "
-            "training.track_a_full.compute_stats over the training shards. "
-            "The head cannot be normalised without it and will emit "
-            "confident nonsense."
+            f"{reason}; regenerate it with training.track_a_full.compute_stats "
+            "over the training shards. The head cannot be normalised without "
+            "it and will emit confident nonsense."
         )
     try:
         import torch  # noqa: F401
@@ -206,6 +211,10 @@ class _Handle:
         self.checkpoint = checkpoint
         self.torch = torch
         self.path = str(latest)
+        # The bytes that are now in memory, hashed once per process, so
+        # `Trace.weights_hashes` names the weights that produced the answer
+        # rather than being empty. See satquery/tools/provenance.py.
+        record("landcover_v1", latest)
 
     @classmethod
     def get(cls, checkpoint: Path) -> "_Handle":

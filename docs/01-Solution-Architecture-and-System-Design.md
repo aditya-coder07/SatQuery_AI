@@ -554,7 +554,7 @@ Two additional pages, both cheap and both strong demo surfaces: a **Model Regist
 
 ### Packaging and deployment
 
-Docker Compose with three services (`api`, `worker`, `web`) and a **pre-baked model volume**. Write `scripts/fetch_models.py` to download and **hash-verify** every checkpoint into `./models`, commit the manifest, and run routinely with `HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1`. On demo day the system must come up with the network cable unplugged.
+Docker Compose with ~~three services (`api`, `worker`, `web`)~~ **two services (`api`, `web`) — corrected 2026-08-30**: the `worker` was never wired to a queue and was removed rather than implemented, which is what the *Jobs and streaming* note above already argued for. See `docs/adr/002-no-async-worker.md` and a **pre-baked model volume**. Write `scripts/fetch_models.py` to download and **hash-verify** every checkpoint into `./models`, commit the manifest, and run routinely with `HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1`. On demo day the system must come up with the network cable unplugged.
 
 Two runtime profiles selected by environment variable: **`full`** (real checkpoints on GPU) and **`lite`** (smallest viable models, CPU-tolerable, degraded but never failing). Test `lite` genuinely, not nominally. When the demo laptop's GPU misbehaves at 2 a.m., `lite` is what saves the submission.
 
@@ -575,7 +575,11 @@ satquery-ai/
 │   └── make_demo_bundle.py         # stage the 8 curated demo inputs
 ├── configs/
 │   ├── capability_matrix.yaml       # VERSION CONTROLLED — the auditable artifact
-│   ├── tools.yaml                   # registry: versions, vram budgets, weights hashes
+│   │   # tools.yaml was created empty and never read; removed 2026-08-30.
+│   │   # The registry is satquery/tools/stubs.py REGISTRY, the permitted
+│   │   # parameters are configs/capability_matrix.yaml, the VRAM budgets are
+│   │   # router.TOOL_VRAM_MB, and the weights hashes are computed at load
+│   │   # time by satquery/tools/provenance.py.
 │   ├── thresholds.yaml              # overlap, coreg, abstention, index thresholds
 │   └── profiles/{full.yaml,lite.yaml}
 ├── satquery/

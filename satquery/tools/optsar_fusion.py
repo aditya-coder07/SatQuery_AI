@@ -52,6 +52,7 @@ from rasterio.enums import Resampling
 from satquery.contracts.input_manifest import InputManifest
 from satquery.contracts.tool_result import ToolPayload, ToolResult
 from satquery.tools.base import ToolProtocol
+from satquery.tools.provenance import record
 
 TOOL_NAME = "optsar_fusion"
 TOOL_VERSION = "1.0.0-triad"
@@ -96,6 +97,10 @@ class _Handle:
         self.model = model.to(self.device).eval()
         self.torch = torch
         self.path = str(latest)
+        # The bytes that are now in memory, hashed once per process, so
+        # `Trace.weights_hashes` names the weights that produced the answer
+        # rather than being empty. See satquery/tools/provenance.py.
+        record("optsar_fusion_v1", latest)
 
     @classmethod
     def get(cls, checkpoint: Path) -> "_Handle":

@@ -114,6 +114,25 @@ def build_msi_4band(path: Path):
     )
 
 
+def build_rgb_3band(path: Path):
+    """3-band RGB optical: no NIR and no SWIR, so no standard index applies.
+
+    The prescribed public benchmarks ship exactly this - RSVQA and VRSBench
+    are plain RGB rasters - and it is the configuration in which a claimed
+    NDWI substitution is a claim about a band that is not there.
+    """
+    scene = structured_scene(128, 128, seed=1)
+    return write_raster(
+        path,
+        np.stack([scene * 800 + 200, scene * 900 + 250, scene * 700 + 180]).astype(
+            "uint16"
+        ),
+        band_names=["BLUE", "GREEN", "RED"],
+        gsd=1.6,
+        tags={"SATELLITE": "RGB-ONLY"},
+    )
+
+
 def build_msi_6band(path: Path):
     """6-band optical including SWIR - enables MNDWI and NDBI."""
     scene = structured_scene(128, 128, seed=2)

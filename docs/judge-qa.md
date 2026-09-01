@@ -189,6 +189,79 @@ not a diagnosis. One in four is not "fine", and it is listed as unresolved.
 
 ---
 
+### "Can you load the models you have just described?"
+
+**Mostly yes — and the exception is worth hearing.** On 2026-08-30 a Phase-0
+test harness deleted `checkpoints/`; on 2026-08-31 the tree was restored from a
+volume shadow copy, 4.542 GB, verified bit-exact against a SHA-256 recorded
+before the deletion. Six of eight learned tools load and answer:
+`landcover_v1`, `change_mask_v1`, `change_caption_v1`, `optsar_fusion_v1`, the
+semantic `change_vqa_v1`, and the Track B adapter.
+
+**Seven of eight, and the eighth is the honest part of the answer.** **CORRECTED 2026-09-01: seven of eight load, not eight.** The Track B QLoRA adapter is destroyed - `adapter_model.safetensors` is 148,712,776 bytes of which the first 148,701,184 are NUL (99.9922%), and the same is true of all eleven adapter files, 1.636 GB in total. The earlier claim came from a verification that loaded the 61 `.pt` files and only *hashed* the safetensors, so a whole model's weights were reported as recovered without ever being opened. Re-verified by loading every weight file: **64 load (10.784 GB), 11 fail (1.636 GB)**, the failures being exactly the adapters. See `docs/00` section 3.6 **L32**.
+
+We found it by running a real image through the system rather than by trusting the recovery report, which is the same habit that caught the four measurement artifacts in section 'The habit that mattered'. Twelve small JSON
+sidecars came back as NUL bytes: the snapshot captured their size but not
+their contents. Three of them were load-bearing — the caption and grounding
+vocabularies and the multires band statistics — and a vocabulary of zeros
+decodes every token id to nothing, so we would rather have had an error than a
+silent empty caption. The availability check now parses its sidecars instead
+of checking they exist.
+
+We regenerated all three from the project's own code and the datasets on disk,
+and **validated each by reproducing a published number rather than by looking
+at it**: the caption evaluation returned BLEU-4 **0.24460787515482577** against
+the published **0.24460787515482577**; grounding reproduced Acc@0.5 and Acc@0.7
+bit-exactly; and the multires evaluation, which recomputes those statistics
+independently, returned mAP identical to seventeen significant digits at all
+four GSD levels. A vocabulary of the right size but the wrong order would load
+without complaint and decode different words — that is exactly why the test is
+the metric and not the file.
+
+**No measured number changed through any of this.** They were read from the
+`metrics.json` each run wrote; those files restored intact and were checked
+against the published figures rather than the reverse.
+
+---
+
+### "Can you load the models you have just described?"
+
+**No, and the reason is on the record.** On 2026-08-30 a Phase-0 test harness,
+`training/run_checkpoint_test.py`, deleted `checkpoints/`. It hardcoded that
+directory, called `shutil.rmtree` on it unconditionally, and had no argument
+parser — so passing `--help` to check whether it ran did not print help, it ran
+the program. At least 2.75 GB of trained weights were destroyed, and recovery
+failed everywhere it could be attempted without administrator rights.
+
+What that does and does not mean:
+
+* **Every measured number in this deck and in the technical report survives.**
+  They were read from the `metrics.json` each training run wrote, and they are
+  in `docs/assets/`, `docs/phase1-status.md` and `docs/model-cards.md`, all in
+  git. **Nothing was re-derived, re-estimated or quietly adjusted.** If any
+  number in front of you had been affected, this answer would say so.
+* **What you are seeing run is the stub-and-index configuration** — the same
+  one CI has always used, the same one the 958-test suite exercises, and the
+  same one the demo bundle was verified under at 9 / 9 beats. The deterministic
+  index engine, the router, the plan validator, the verifier, the abstention
+  policy, the confidence combiner and the evidence pack are all real and all
+  independent of the lost weights.
+* **The `/models` page is empty**, because it reads its numbers off disk rather
+  than carrying its own copy — which is the property that page was built for.
+  An empty registry is the page telling the truth.
+* **What is genuinely unavailable is a live neural answer** from the captioner,
+  the grounder, the change captioner, the semantic change head, the land-cover
+  head, the fusion head or the Track B adapter.
+
+We would rather be asked this than have it discovered. The failure was ours,
+the containment is in the repository — the harness now refuses `checkpoints/`
+by name, refuses any directory holding files it did not write, and a test fails
+if **any** runnable script lacks an argument parser — and the lesson worth
+stating is the one the incident actually teaches: `checkpoints/` was gitignored
+and had no backup, so a single `rmtree` was terminal.
+
+---
+
 ## Two questions we want to be asked
 
 **"Why is your land-cover head asserting on only 0.25% of decisions?"**
