@@ -201,3 +201,110 @@ class TestRunStore:
         assert record["status"] == "failed"
         assert record["error"] == "boom"
         store.close()
+
+
+class TestOverlayRendering:
+    """A mask must not be rendered as a photograph (limitation L19).
+
+    Measured before the fix: `GET /runs/{id}/overlay/change_mask` returned
+    alpha=255 on every pixel and RGB (0,0,0) wherever nothing had changed, so
+    a mostly-unchanged mask painted an opaque black rectangle over the
+    basemap. The alpha channel was carrying nodata correctly; the bug was that
+    "unchanged" is data, not nodata.
+
+    The fix must keep the evidence. Making the whole raster transparent would
+    remove the black box and the change with it, so these tests assert both
+    halves: background disappears **and** changed pixels stay opaque.
+    """
+
+    def _mask_run(self, tmp_path, value_map):
+        """A stored run whose change_mask holds the given 2-D array."""
+        import numpy as np
+        import rasterio
+        from rasterio.transform import from_origin
+
+        path = tmp_path / "mask.tif"
+        array = np.asarray(value_map, dtype="uint8")
+        with rasterio.open(
+            path, "w", driver="GTiff", height=array.shape[0], width=array.shape[1],
+            count=1, dtype="uint8", crs="EPSG:32643",
+            transform=from_origin(500000.0, 2000000.0, 10.0, 10.0), nodata=255,
+        ) as dst:
+            dst.write(array, 1)
+        return path
+
+    def _render(self, client, tmp_path, value_map, monkeypatch):
+        from satquery.api import main
+
+        path = self._mask_run(tmp_path, value_map)
+        store = main.get_store()
+        run_id = "run_overlaytest"
+        store.create(run_id, "q")
+        record = {"trace": {"artifact_paths": {"change_mask": str(path)}}}
+        monkeypatch.setattr(store, "get", lambda _rid, _r=record: _r)
+        return client.get(f"/runs/{run_id}/overlay/change_mask")
+
+    def test_a_binary_mask_renders_categorically(self, client, tmp_path, monkeypatch):
+        response = self._render(client, tmp_path, [[0, 1], [1, 0]], monkeypatch)
+        assert response.status_code == 200
+        assert response.headers["X-Overlay-Rendering"] == "categorical"
+
+    def test_unchanged_pixels_are_transparent_and_changed_ones_are_not(
+        self, client, tmp_path, monkeypatch
+    ):
+        """Both halves of the fix, in one assertion pair."""
+        import io
+
+        import numpy as np
+        from PIL import Image
+
+        response = self._render(client, tmp_path, [[0, 1], [1, 0]], monkeypatch)
+        rgba = np.asarray(Image.open(io.BytesIO(response.content)).convert("RGBA"))
+        alpha = rgba[..., 3]
+
+        assert alpha.min() == 0, "no pixel is transparent - the mask still paints"
+        assert alpha.max() >= 200, "changed pixels are not opaque - evidence lost"
+        # The changed pixels must carry colour, not black.
+        changed = rgba[alpha > 0][:, :3]
+        assert changed.size and changed.max() > 0, "changed pixels rendered black"
+
+    def test_an_all_unchanged_mask_is_fully_transparent(
+        self, client, tmp_path, monkeypatch
+    ):
+        """The exact case that produced the black rectangle: nothing changed,
+        so nothing should be drawn - and the basemap stays visible."""
+        import io
+
+        import numpy as np
+        from PIL import Image
+
+        response = self._render(client, tmp_path, [[0, 0], [0, 0]], monkeypatch)
+        rgba = np.asarray(Image.open(io.BytesIO(response.content)).convert("RGBA"))
+        assert rgba[..., 3].max() == 0
+
+    def test_a_continuous_raster_still_uses_the_stretch(
+        self, client, tmp_path, monkeypatch
+    ):
+        """Index rasters are not masks and must keep their grayscale
+        rendering - the fix has to be narrow."""
+        import numpy as np
+        import rasterio
+        from rasterio.transform import from_origin
+
+        from satquery.api import main
+
+        path = tmp_path / "ndvi.tif"
+        array = np.linspace(-1, 1, 64, dtype="float32").reshape(8, 8)
+        with rasterio.open(
+            path, "w", driver="GTiff", height=8, width=8, count=1, dtype="float32",
+            crs="EPSG:32643", transform=from_origin(500000.0, 2000000.0, 10.0, 10.0),
+        ) as dst:
+            dst.write(array, 1)
+
+        store = main.get_store()
+        store.create("run_ndvitest", "q")
+        record = {"trace": {"artifact_paths": {"ndvi": str(path)}}}
+        monkeypatch.setattr(store, "get", lambda _rid, _r=record: _r)
+        response = client.get("/runs/run_ndvitest/overlay/ndvi")
+        assert response.status_code == 200
+        assert response.headers["X-Overlay-Rendering"] == "continuous"

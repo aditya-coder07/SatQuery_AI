@@ -100,6 +100,25 @@ MODELS: list[Model] = [
             "ground. Same trust_remote_code caveat as InternVL3."
         ),
     ),
+    Model(
+        key="nli_deberta_mnli",
+        name="DeBERTa-v3-base-mnli-fever-anli",
+        hf_repo="MoritzLaurer/DeBERTa-v3-base-mnli-fever-anli",
+        used_for="Entailment gate NLI backend (task 3.5), via SATQUERY_NLI",
+        licence="MIT",
+        approx_size="~370 MB",
+        verified=True,
+        notes=(
+            "Loads with trust_remote_code=False - DeBERTa-v2/v3 is native to "
+            "transformers, so no third-party Python is executed, which is the "
+            "same bar Florence-2 failed in task 2.7. Trained on MNLI + FEVER + "
+            "ANLI; FEVER in particular is fact-verification data, which is "
+            "closer to checking a sentence against a measured premise than "
+            "plain MNLI. Chosen over roberta-large-mnli and bart-large-mnli "
+            "because it is ~4x smaller for comparable accuracy, which matters "
+            "for the lite profile (3.10) and the 6 GB demo laptop."
+        ),
+    ),
 ]
 
 BY_KEY = {m.key: m for m in MODELS}

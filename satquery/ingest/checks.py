@@ -18,6 +18,12 @@ GSD_RATIO_WARN = 4.0
 GSD_RATIO_FAIL = 20.0
 MIN_DIMENSION_PX = 32
 
+# Below this the two images cannot be describing the same place at all, and
+# any joint answer is about two different scenes. The per-task requirement is
+# stricter and lives in the capability matrix (`min_overlap_pct`); this is the
+# floor at which the pair itself is invalid rather than merely poor.
+OVERLAP_FAIL_PCT = 10.0
+
 
 def _pass(name: str, message: str, value=None) -> CheckResult:
     return CheckResult(name=name, status="PASS", value=value, message=message)
@@ -35,9 +41,52 @@ def _fail(name: str, message: str, value=None, threshold=None) -> CheckResult:
     )
 
 
-def check_crs_present(img: ImageMeta) -> CheckResult:
+# Container formats that cannot carry a CRS at all. A missing CRS in one of
+# these is a property of the format, not a defect in the product.
+NON_GEOSPATIAL_FORMATS = {"PNG", "JPEG", "JPEG2000", "GIF", "BMP", "WEBP"}
+
+
+def check_crs_present(img: ImageMeta, benchmark: bool = False) -> CheckResult:
+    """Georeferencing check, relaxed for benchmark inputs.
+
+    The problem statement admits PNG and JPEG "only for the prescribed public
+    benchmark datasets", and those are ungeoreferenced by construction - RSVQA
+    and VRSBench ship plain rasters with no CRS. Failing them blocked every
+    prescribed benchmark image from entering the pipeline at all, which is a
+    mandatory-scope gap, not a strictness setting.
+
+    In benchmark mode a missing CRS is a WARN: the answer is still valid, but
+    nothing downstream can georeference an output or co-register a pair, and
+    the trace has to say so rather than let a reader assume the mask is
+    placeable. In operational mode it stays a hard failure.
+    """
     if img.crs and img.crs != "UNKNOWN":
         return _pass("crs_present", f"{img.role}: CRS {img.crs}", img.crs)
+    if (img.container_format or "").upper() in NON_GEOSPATIAL_FORMATS:
+        # A PNG or JPEG the user uploaded to ask an ordinary visual question.
+        # Failing it here refused the whole query, which is the wrong trade:
+        # the vision model can answer "is this urban or rural?" from pixels
+        # alone. What is NOT available is anything geospatial - the outputs
+        # cannot be georeferenced, GSD and sensor are unknown, and the index
+        # engine has no calibrated bands to work from - so this WARNs and
+        # says so rather than passing silently. The distinction from the
+        # branch below is deliberate: a GeoTIFF with no CRS is a defective
+        # product and still fails.
+        return _warn(
+            "crs_present",
+            f"{img.role}: {img.container_format} carries no geospatial "
+            "metadata - visual questions can be answered from the pixels, but "
+            "CRS, GSD and sensor are unknown, outputs cannot be georeferenced, "
+            "and no geospatial index is available",
+            img.crs,
+        )
+    if benchmark:
+        return _warn(
+            "crs_present",
+            f"{img.role}: no CRS - accepted because this is a benchmark input, "
+            "but outputs cannot be georeferenced or co-registered",
+            img.crs,
+        )
     return _fail(
         "crs_present",
         f"{img.role}: no CRS - cannot georeference outputs or co-register",
@@ -108,6 +157,79 @@ def check_gsd_ratio(a: ImageMeta, b: ImageMeta) -> CheckResult:
     return _pass("gsd_ratio", f"GSD ratio {ratio:.2f}x", round(ratio, 3))
 
 
+def footprint_overlap_pct(a: ImageMeta, b: ImageMeta) -> float | None:
+    """Percentage of the smaller footprint covered by the larger.
+
+    Measured in the reference image's CRS. Returns None when either image is
+    ungeoreferenced, because "no overlap" and "overlap unknown" are different
+    answers and only the first is a defect in the pair.
+
+    Ratio-of-the-smaller rather than intersection-over-union: a 1.6 m Cartosat
+    scene inside a much larger EOS-04 ScanSAR swath is a *valid* pair whose IoU
+    is tiny. What matters is whether the smaller image is covered.
+    """
+    import rasterio
+    from rasterio.warp import transform_bounds
+
+    try:
+        with rasterio.open(a.path) as src_a, rasterio.open(b.path) as src_b:
+            if src_a.crs is None or src_b.crs is None:
+                return None
+            bounds_a = src_a.bounds
+            bounds_b = (
+                src_b.bounds
+                if src_b.crs == src_a.crs
+                else transform_bounds(src_b.crs, src_a.crs, *src_b.bounds)
+            )
+    except Exception:  # noqa: BLE001 - an unreadable raster is another check's job
+        return None
+
+    left = max(bounds_a[0], bounds_b[0])
+    bottom = max(bounds_a[1], bounds_b[1])
+    right = min(bounds_a[2], bounds_b[2])
+    top = min(bounds_a[3], bounds_b[3])
+    if right <= left or top <= bottom:
+        return 0.0
+
+    intersection = (right - left) * (top - bottom)
+    area_a = (bounds_a[2] - bounds_a[0]) * (bounds_a[3] - bounds_a[1])
+    area_b = (bounds_b[2] - bounds_b[0]) * (bounds_b[3] - bounds_b[1])
+    smaller = min(area_a, area_b)
+    if smaller <= 0:
+        return None
+    return min(100.0, intersection / smaller * 100.0)
+
+
+def check_footprint_overlap(a: ImageMeta, b: ImageMeta) -> CheckResult:
+    """Do the two images describe the same place?
+
+    Added 2026-08-30 (limitation L16). The capability matrix had declared
+    `min_overlap_pct` since Phase 0 and **nothing read it**, so an optical and
+    a SAR scene 60 km apart were fused into a single confident answer. The
+    matrix's per-task threshold is enforced by the router; this check supplies
+    the measurement it gates on, and fails outright below OVERLAP_FAIL_PCT
+    where no task could accept the pair anyway.
+    """
+    overlap = footprint_overlap_pct(a, b)
+    if overlap is None:
+        return _warn(
+            "footprint_overlap",
+            "footprint overlap could not be measured - an image is "
+            "ungeoreferenced, so co-registration cannot be verified",
+        )
+    if overlap < OVERLAP_FAIL_PCT:
+        return _fail(
+            "footprint_overlap",
+            f"footprint overlap {overlap:.0f}% - the images do not cover the "
+            f"same area, so no joint answer is meaningful",
+            round(overlap, 2),
+            OVERLAP_FAIL_PCT,
+        )
+    return _pass(
+        "footprint_overlap", f"footprint overlap {overlap:.0f}%", round(overlap, 2)
+    )
+
+
 def check_crossmodal_pairing(images: list[ImageMeta]) -> CheckResult:
     mods = {img.modality for img in images}
     has_sar = "SAR" in mods
@@ -157,14 +279,16 @@ def check_geocoding(img: ImageMeta) -> CheckResult | None:
     )
 
 
-def run_checks(images: list[ImageMeta], config: str) -> list[CheckResult]:
+def run_checks(
+    images: list[ImageMeta], config: str, benchmark: bool = False
+) -> list[CheckResult]:
     """Run every check applicable to this input configuration."""
     results: list[CheckResult] = []
     for img in images:
         geocoding = check_geocoding(img)
         if geocoding is not None:
             results.append(geocoding)
-        results.append(check_crs_present(img))
+        results.append(check_crs_present(img, benchmark=benchmark))
         results.append(check_nodata(img))
         results.append(check_dimensions(img))
 
@@ -172,6 +296,7 @@ def run_checks(images: list[ImageMeta], config: str) -> list[CheckResult]:
         a, b = images
         results.append(check_crs_match(a, b))
         results.append(check_gsd_ratio(a, b))
+        results.append(check_footprint_overlap(a, b))
         if config == "CROSSMODAL_PAIR":
             results.append(check_crossmodal_pairing(images))
         elif config == "BITEMPORAL_PAIR":

@@ -74,6 +74,25 @@ def subject_of(fragment: str) -> str | None:
     return None
 
 
+def subjects_in(fragment: str) -> list[str]:
+    """EVERY subject mentioned, in declaration order.
+
+    `subject_of` returns only the first, and `extract_claims` used it for
+    presence claims - so a sentence asserting several classes was checked on
+    exactly one of them. The trained captioner exposed this immediately: "a
+    bridge is over a river with some green trees on both sides" produced a
+    single vegetation claim, and the water assertion was never verified at
+    all. Returning every subject means each assertion in the sentence gets a
+    verdict.
+    """
+    lowered = fragment.lower()
+    return [
+        subject
+        for subject, terms in SUBJECT_TERMS.items()
+        if any(t in lowered for t in terms)
+    ]
+
+
 def nearest_subject(sentence: str, position: int) -> str | None:
     """Subject term that a percentage at `position` refers to.
 
@@ -125,8 +144,8 @@ def extract_claims(answer: str) -> list[Claim]:
                           sentence.strip())
                 )
         if not _PERCENT_RE.search(sentence):
-            subject = subject_of(sentence)
-            if subject:
+            # One claim per subject mentioned, not just the first.
+            for subject in subjects_in(sentence):
                 claims.append(Claim("presence", subject, None, sentence.strip()))
     return claims
 

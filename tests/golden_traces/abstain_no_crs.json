@@ -1,7 +1,11 @@
 {
-  "abstain_reason": "input validation failed (crs_present) - resolve the input before a reliable answer is possible",
+  "abstain_limiting_component": "input_quality",
+  "abstain_reason": "input validation failed (crs_present) - no reliable answer is possible from these inputs - supply inputs that pass those checks; each check's own message is in the trace under ingest.checks",
+  "abstain_resolving_input": "supply inputs that pass those checks; each check's own message is in the trace under ingest.checks",
+  "abstain_trigger": "input_validation",
   "abstained": true,
-  "answer": "input validation failed (crs_present) - resolve the input before a reliable answer is possible",
+  "answer": "input validation failed (crs_present) - no reliable answer is possible from these inputs - supply inputs that pass those checks; each check's own message is in the trace under ingest.checks",
+  "artifact_paths": "<volatile>",
   "artifacts": [],
   "code_version": "0.2.0-phase1",
   "confidence": {
@@ -9,7 +13,7 @@
     "calibration": {
       "T": 1.0,
       "ece_after": -1.0,
-      "method": "uncalibrated"
+      "method": "uncalibrated (score is not a calibratable probability)"
     },
     "components": {
       "agreement": 1.0,
@@ -45,8 +49,10 @@
           "GREEN",
           "RED"
         ],
+        "container_format": "GTiff",
         "crs": "UNKNOWN",
-        "gsd_m": 1.0,
+        "georeferenced": false,
+        "gsd_m": null,
         "modality": "OPTICAL",
         "modality_reason": "band_count_lt_4_no_names_assumed_optical",
         "nodata_pct": 0.0,
@@ -82,6 +88,7 @@
       "name": "not_invoked",
       "top1": 0.0
     },
+    "config_excluded_task": null,
     "legal_tasks": [
       "SINGLE_VQA",
       "SINGLE_CAPTION",
@@ -99,9 +106,13 @@
     "complementarity": {},
     "conflicts": [],
     "entailment_gate": {
+      "action": "none",
+      "backend": "deterministic",
       "flagged": 0,
+      "flagged_detail": [],
       "retained": 0,
-      "sentences": 0
+      "sentences": 0,
+      "unverifiable": 0
     },
     "physics_agreement": {}
   },

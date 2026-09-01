@@ -29,8 +29,12 @@ from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response, StreamingResponse
 
+from satquery.contracts.trace import Trace
 from satquery.controller.pipeline import Controller
 from satquery.api.store import RunStore
+# Product filename patterns, so the upload path groups a vendor product the
+# same way `discover` assembles it rather than keeping a second copy of the rule.
+from satquery.ingest.product import _BAND_FILE_RE, _POL_FILE_RE
 
 app = FastAPI(title="SatQuery AI API", version="0.2.0-phase1")
 
@@ -61,7 +65,58 @@ _controller: Controller | None = None
 _store: RunStore | None = None
 _lock = threading.Lock()
 
+# Logical *images*, not files. A vendor product ships one file per band - a
+# Cartosat-2S MX scene is four BAND*.tif plus BAND_META.txt - and all five
+# together are one image. Counting files here rejected the target sensor's own
+# product format with "expected 1 to 2 images, got 4" (limitation L17), so the
+# upload path groups files into products first and applies this limit to the
+# groups.
 MAX_IMAGES = 2
+
+# Files per request. Bounds the request independently of the image count: a
+# ScanSAR product legitimately carries several polarisation rasters plus
+# sidecars, and an unbounded count is a denial-of-service surface however
+# small each file is.
+MAX_UPLOAD_FILES = int(os.getenv("SATQUERY_MAX_UPLOAD_FILES", 32))
+
+# Per-file upload cap. Without one, `shutil.copyfileobj` writes whatever the
+# client sends, so a single request can fill the disk - and neither Starlette
+# nor uvicorn imposes a default. 256 MB comfortably clears a full Cartosat-2E
+# scene (7687x7640 px, 4 bands, uint16 ~ 470 MB uncompressed but far less as a
+# compressed GeoTIFF) while bounding the damage.
+MAX_UPLOAD_BYTES = int(os.getenv("SATQUERY_MAX_UPLOAD_BYTES", 256 * 1024 * 1024))
+
+# Total across the request. The per-file cap alone bounds one file at 256 MB;
+# with a raised file count that is 8 GB per request, so the request needs its
+# own ceiling.
+MAX_TOTAL_UPLOAD_BYTES = int(
+    os.getenv("SATQUERY_MAX_TOTAL_UPLOAD_BYTES", 1024 * 1024 * 1024)
+)
+UPLOAD_CHUNK = 1024 * 1024
+
+# How many completed run directories to keep. Each holds the uploaded rasters
+# and the artifacts the run produced, and nothing deleted them: a demo session
+# grew the temp directory without bound and kept user-supplied imagery on disk
+# indefinitely. They cannot be deleted immediately - /runs/{id}/preview and
+# /runs/{id}/report.pdf both read from them - so the fix is bounded retention,
+# oldest evicted first.
+MAX_RETAINED_RUNS = int(os.getenv("SATQUERY_MAX_RETAINED_RUNS", 20))
+
+# Overlay colours for categorical rasters, class 1 upward. Chosen to stay
+# legible over an OSM basemap, whose greens, greys and blues would swallow a
+# muted palette. Class 0 is background and is never drawn.
+_MASK_PALETTE = (
+    (220, 38, 38),    # 1 - red, the conventional "changed" colour
+    (37, 99, 235),    # 2 - blue
+    (217, 119, 6),    # 3 - amber
+    (147, 51, 234),   # 4 - purple
+    (5, 150, 105),    # 5 - green
+    (219, 39, 119),   # 6 - pink
+    (14, 165, 233),   # 7 - cyan
+)
+# Slightly translucent so the basemap underneath stays readable for
+# orientation, while the changed pixels remain unmistakable.
+MASK_ALPHA = 235
 # Sentinel that closes the SSE stream from the worker thread.
 _DONE = object()
 
@@ -84,19 +139,173 @@ def get_store() -> RunStore:
     return _store
 
 
+def _safe_segment(segment: str) -> str:
+    """One path segment, stripped of anything that could escape a directory.
+
+    Client-supplied names are never trusted: `Path(...).name` discards any
+    directory part, and the result is rejected if it is empty or a relative
+    marker, so "../../etc/passwd" cannot become a path component.
+    """
+    cleaned = Path(segment.replace("\\", "/")).name.strip()
+    return "" if cleaned in ("", ".", "..") else cleaned
+
+
+def group_uploads(filenames: list[str]) -> list[list[int]]:
+    """Group uploaded filenames into logical images, returning their indices.
+
+    A vendor product is one image spread over several files, so the request's
+    file count is not its image count. Two grouping signals, in order:
+
+    1. **A client-supplied directory.** A browser directory picker
+       (`webkitdirectory`) sends names like `5132611/BAND1.tif`. The first
+       segment groups the files, which is the only signal that can separate
+       *two* products in one request.
+    2. **A recognised vendor filename.** Flat uploads carry no directory, so
+       if any file matches a known product layout - `BAND<n>.tif` for Cartosat
+       MX, `imagery_<POL>.tif` for EOS-04 - the whole upload is taken as one
+       product. Sidecars like `BAND_META.txt` travel with it, which matters
+       because `discover` reads them for the acquisition date and bit depth.
+
+    Otherwise each file is its own image, which is the ordinary case of
+    uploading one or two GeoTIFFs.
+
+    **Known boundary:** two flat-uploaded vendor products cannot be told
+    apart - both are `BAND1.tif`, `BAND2.tif`, ... with no directory to
+    separate them. Upload them through a directory picker, or use the CLI.
+    """
+    if not filenames:
+        return []
+
+    directories = [
+        Path(name.replace("\\", "/")).parent.as_posix() for name in filenames
+    ]
+    if any(d not in ("", ".") for d in directories):
+        groups: dict[str, list[int]] = {}
+        for index, directory in enumerate(directories):
+            groups.setdefault(directory, []).append(index)
+        return list(groups.values())
+
+    names = [Path(n.replace("\\", "/")).name for n in filenames]
+    if any(_BAND_FILE_RE.match(n) or _POL_FILE_RE.search(n) for n in names):
+        return [list(range(len(filenames)))]
+
+    return [[index] for index in range(len(filenames))]
+
+
+def _validate_upload_shape(images: list[UploadFile]) -> None:
+    """Reject a malformed request before any bytes are written to disk.
+
+    The image count is the count of *logical images* after grouping, not of
+    files: a Cartosat-2S MX product is four BAND*.tif plus a metadata sidecar
+    and is one image. Counting files here is what made the target sensor's own
+    product format unuploadable (limitation L17).
+    """
+    if len(images) > MAX_UPLOAD_FILES:
+        raise HTTPException(
+            400, f"expected at most {MAX_UPLOAD_FILES} files, got {len(images)}"
+        )
+    groups = group_uploads([f.filename or "" for f in images])
+    if not 1 <= len(groups) <= MAX_IMAGES:
+        raise HTTPException(
+            400,
+            f"expected 1 to {MAX_IMAGES} images, got {len(groups)} "
+            f"(from {len(images)} file(s))",
+        )
+
+
 def _save_uploads(files: list[UploadFile], dest: Path) -> list[Path]:
-    """Persist uploads under `dest`, using sanitised names."""
+    """Persist uploads under `dest`, grouped into logical images.
+
+    Returns one path per image: a **file** when the image is a single raster,
+    and a **directory** when it is a multi-file vendor product, which is what
+    `satquery.ingest.discover` expects in order to assemble the bands.
+    """
     dest.mkdir(parents=True, exist_ok=True)
+    groups = group_uploads([f.filename or "" for f in files])
+    total_written = 0
     paths: list[Path] = []
-    for i, upload in enumerate(files):
-        # Never trust a client-supplied filename for a path: take the basename
-        # only, so "../../etc/passwd" cannot escape the upload directory.
-        safe = Path(upload.filename or f"image_{i}").name
-        target = dest / f"{i:02d}_{safe}"
-        with target.open("wb") as fh:
-            shutil.copyfileobj(upload.file, fh)
-        paths.append(target)
+
+    for group_index, indices in enumerate(groups):
+        multi = len(indices) > 1
+        group_dir = dest / f"image_{group_index:02d}" if multi else dest
+        group_dir.mkdir(parents=True, exist_ok=True)
+
+        for i in indices:
+            upload = files[i]
+            # Never trust a client-supplied filename for a path: take the
+            # basename only, so "../../etc/passwd" cannot escape the upload
+            # directory.
+            safe = _safe_segment(upload.filename or "") or f"image_{i}"
+            # A multi-file product must keep its real names - `discover`
+            # matches BAND1.tif and imagery_HH.tif by pattern - so only the
+            # single-file case gets an index prefix to avoid collisions.
+            target = group_dir / (safe if multi else f"{i:02d}_{safe}")
+            written = 0
+            # Copied in chunks with a running total rather than in one call:
+            # the point is to stop BEFORE the disk fills, so the limit has to
+            # be enforced during the write, not checked afterwards.
+            with target.open("wb") as fh:
+                while chunk := upload.file.read(UPLOAD_CHUNK):
+                    written += len(chunk)
+                    total_written += len(chunk)
+                    if written > MAX_UPLOAD_BYTES:
+                        fh.close()
+                        shutil.rmtree(dest, ignore_errors=True)
+                        raise HTTPException(
+                            413,
+                            f"{safe} exceeds the {MAX_UPLOAD_BYTES // (1024 * 1024)} "
+                            f"MB per-file upload limit",
+                        )
+                    if total_written > MAX_TOTAL_UPLOAD_BYTES:
+                        fh.close()
+                        shutil.rmtree(dest, ignore_errors=True)
+                        raise HTTPException(
+                            413,
+                            f"request exceeds the "
+                            f"{MAX_TOTAL_UPLOAD_BYTES // (1024 * 1024)} MB total "
+                            f"upload limit",
+                        )
+                    fh.write(chunk)
+
+        paths.append(group_dir if multi else group_dir / f"{indices[0]:02d}_"
+                     f"{_safe_segment(files[indices[0]].filename or '') or f'image_{indices[0]}'}")
+
     return paths
+
+
+def _prune_run_dirs(keep: int = MAX_RETAINED_RUNS) -> None:
+    """Delete the oldest run directories beyond `keep`.
+
+    Best-effort and never fatal: failing to reclaim disk must not fail the run
+    that just succeeded. A directory still being read by an in-flight preview
+    request will refuse to delete on Windows, which is the correct outcome -
+    it is simply retried on the next run.
+    """
+    root = Path(tempfile.gettempdir())
+    try:
+        dirs = sorted(
+            # Both prefixes: /runs creates satquery_run_*, and
+            # /runs/{id}/report.pdf creates satquery_report_*. The second was
+            # leaking too.
+            (
+                p for p in root.iterdir()
+                if p.is_dir() and p.name.startswith(("satquery_run_", "satquery_report_"))
+            ),
+            key=lambda p: p.stat().st_mtime,
+            reverse=True,
+        )
+    except OSError:
+        return
+    for stale in dirs[keep:]:
+        shutil.rmtree(stale, ignore_errors=True)
+
+    # The uploads were bounded here; the index rasters the run wrote into
+    # `artifacts/<run_id>` were not, and they are the larger half - ~526 MB
+    # for a full scene. Same retention count, same "named directories are
+    # never touched" rule; see satquery/controller/retention.py.
+    from satquery.controller.retention import auto_prune
+
+    auto_prune(keep=keep)
 
 
 def _sse(event: str, data: dict | list) -> str:
@@ -129,8 +338,7 @@ async def create_run(
     images: list[UploadFile] = File(...),
 ):
     """Run the pipeline synchronously and return the complete trace."""
-    if not 1 <= len(images) <= MAX_IMAGES:
-        raise HTTPException(400, f"expected 1 to {MAX_IMAGES} images, got {len(images)}")
+    _validate_upload_shape(images)
 
     run_id = f"run_{uuid.uuid4().hex[:12]}"
     work_dir = Path(tempfile.mkdtemp(prefix=f"satquery_{run_id}_"))
@@ -140,11 +348,18 @@ async def create_run(
     try:
         paths = _save_uploads(images, work_dir)
         trace = get_controller().run(paths, query, run_id=run_id)
+    except HTTPException as exc:
+        # A deliberate status - 413 for an oversized upload - must survive.
+        # The blanket handler below was converting it to a 500, which told the
+        # client "server error" for what is squarely a client error.
+        store.fail(run_id, exc.detail)
+        raise
     except Exception as exc:  # noqa: BLE001 - reported, not swallowed
         store.fail(run_id, str(exc))  # full detail retained server-side
         raise HTTPException(500, _client_safe_error(exc)) from exc
 
     store.complete(run_id, trace)
+    _prune_run_dirs()
     return json.loads(trace.model_dump_json())
 
 
@@ -154,8 +369,7 @@ async def stream_run(
     images: list[UploadFile] = File(...),
 ):
     """Run the pipeline and stream trace stages as server-sent events."""
-    if not 1 <= len(images) <= MAX_IMAGES:
-        raise HTTPException(400, f"expected 1 to {MAX_IMAGES} images, got {len(images)}")
+    _validate_upload_shape(images)
 
     run_id = f"run_{uuid.uuid4().hex[:12]}"
     work_dir = Path(tempfile.mkdtemp(prefix=f"satquery_{run_id}_"))
@@ -171,14 +385,13 @@ async def stream_run(
 
             controller = get_controller()
             manifest = ingest_fn(paths, run_id=run_id)
-            plan = controller.router.route(query, manifest)
-            prediction = (
-                None
-                if manifest.blocking_failures
-                else getattr(controller.router, "last_prediction", None)
-            )
-            trace = controller.executor.execute(
-                plan, manifest, query, prediction=prediction,
+            # Through the controller, not around it. Reaching into
+            # router/executor here duplicated the pipeline and the copies
+            # drifted - config_excluded was never passed, so the streamed
+            # answer silently lost the task 3.8 exclusion notice.
+            trace = controller.run_on_manifest(
+                manifest,
+                query,
                 on_event=lambda name, data: events.put((name, data)),
             )
             store.complete(run_id, trace)
@@ -190,6 +403,7 @@ async def stream_run(
             )
         finally:
             events.put(_DONE)
+            _prune_run_dirs()
 
     threading.Thread(target=worker, daemon=True).start()
 
@@ -253,6 +467,209 @@ def get_preview(run_id: str, role: str, max_edge: int = 512):
         content=buffer.getvalue(),
         media_type="image/png",
         headers={"Cache-Control": "public, max-age=3600"},
+    )
+
+
+@app.get("/runs/{run_id}/overlay/{key}")
+def get_overlay(run_id: str, key: str, max_edge: int = 1024):
+    """A run artifact as a web-map overlay (plan task 1.6).
+
+    Returns a PNG **already reprojected to EPSG:3857** together with its
+    extent in the `X-Extent` header. Reprojecting server-side is what lets the
+    frontend place the layer exactly without carrying proj4 and a projection
+    registry for every UTM zone an Indian scene might land in - the Cartosat
+    sample alone is zone 45N.
+
+    The alpha channel encodes nodata, so a mask overlays the basemap instead
+    of covering it with a black rectangle.
+    """
+    import io
+
+    import numpy as np
+    import rasterio
+    from PIL import Image
+    from rasterio.warp import transform_bounds
+    from rasterio.vrt import WarpedVRT
+
+    record = get_store().get(run_id)
+    if record is None or not record.get("trace"):
+        raise HTTPException(404, f"no such run: {run_id}")
+
+    trace = record["trace"]
+    paths = trace.get("artifact_paths") or {}
+    if key not in paths:
+        raise HTTPException(
+            404, f"no artifact {key!r}; available: {sorted(paths)}"
+        )
+    path = Path(paths[key])
+    if not path.exists():
+        raise HTTPException(410, "the artifact is no longer on disk")
+
+    try:
+        with rasterio.open(path) as src:
+            if src.crs is None:
+                raise HTTPException(
+                    422, f"{key} has no CRS and cannot be placed on a map"
+                )
+            with WarpedVRT(src, crs="EPSG:3857") as vrt:
+                scale = min(1.0, max_edge / max(vrt.width, vrt.height))
+                width = max(1, int(vrt.width * scale))
+                height = max(1, int(vrt.height * scale))
+                count = min(vrt.count, 3)
+                data = vrt.read(
+                    list(range(1, count + 1)),
+                    out_shape=(count, height, width),
+                    masked=True,
+                ).astype("float32")
+                bounds = transform_bounds(
+                    src.crs, "EPSG:3857", *src.bounds, densify_pts=21
+                )
+    except HTTPException:
+        raise
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(500, _client_safe_error(exc)) from exc
+
+    valid = np.ma.getmaskarray(data)
+    finite = data.compressed() if hasattr(data, "compressed") else data.ravel()
+    finite = finite[np.isfinite(finite)]
+    if finite.size == 0:
+        raise HTTPException(422, f"{key} contains no valid pixels")
+
+    # A binary or small-categorical raster is a *mask*, and a mask must not be
+    # rendered as a photograph. Stretching one to grayscale gave alpha=255 and
+    # RGB (0,0,0) on every unchanged pixel - a black rectangle laid over the
+    # basemap (limitation L19). The alpha channel was already carrying nodata,
+    # but "unchanged" is data, not nodata, so it painted.
+    #
+    # Categorical rendering keeps the evidence and drops only the background:
+    # class 0 becomes transparent, every asserted class keeps full opacity in
+    # a distinct colour. A mask with real change is *more* legible than
+    # before, not less - the changed pixels now sit in colour against the map
+    # instead of inside a black square.
+    distinct = np.unique(finite)
+    categorical = (
+        np.issubdtype(np.asarray(finite).dtype, np.floating) is False
+        or np.allclose(distinct, np.round(distinct))
+    ) and distinct.size <= len(_MASK_PALETTE) + 1 and float(distinct.min()) >= 0
+
+    if categorical:
+        codes = np.asarray(data.filled(0))[0].round().astype("int32")
+        rgb = np.zeros((3, height, width), dtype="uint8")
+        for value in distinct:
+            code = int(round(float(value)))
+            if code <= 0:
+                continue
+            colour = _MASK_PALETTE[(code - 1) % len(_MASK_PALETTE)]
+            selected = codes == code
+            for channel in range(3):
+                rgb[channel][selected] = colour[channel]
+        # Transparent where the class is background OR the pixel is nodata.
+        alpha = np.where((codes > 0) & (~valid[0]), MASK_ALPHA, 0).astype("uint8")
+        rendering = "categorical"
+    else:
+        # Percentile stretch, matching the preview endpoint: a single hot pixel
+        # or a nodata sentinel would otherwise flatten the image to black.
+        low, high = np.percentile(finite, [2, 98])
+        if high <= low:
+            high = low + 1.0
+        scaled = np.clip((np.asarray(data.filled(low)) - low) / (high - low), 0, 1)
+        scaled = (scaled * 255).astype("uint8")
+
+        if scaled.shape[0] == 1:
+            rgb = np.repeat(scaled, 3, axis=0)
+        else:
+            rgb = np.zeros((3, height, width), dtype="uint8")
+            rgb[: scaled.shape[0]] = scaled[:3]
+        alpha = (~valid[0] * 255).astype("uint8")
+        rendering = "continuous"
+
+    rgba = np.concatenate([rgb, alpha[None, ...]], axis=0)
+    image = Image.fromarray(np.transpose(rgba, (1, 2, 0)), mode="RGBA")
+
+    buffer = io.BytesIO()
+    image.save(buffer, format="PNG")
+    return Response(
+        content=buffer.getvalue(),
+        media_type="image/png",
+        headers={
+            # minx,miny,maxx,maxy in EPSG:3857, which is what ol needs to
+            # place a Static image source.
+            "X-Extent": ",".join(f"{v:.3f}" for v in bounds),
+            "X-Projection": "EPSG:3857",
+            # Which of the two rendering paths ran. A client can style a mask
+            # differently from an index, and a test can assert that a binary
+            # mask did not silently fall back to the grayscale stretch that
+            # produced the opaque black rectangle of limitation L19.
+            "X-Overlay-Rendering": rendering,
+            "Access-Control-Expose-Headers": (
+                "X-Extent,X-Projection,X-Overlay-Rendering"
+            ),
+            "Cache-Control": "public, max-age=3600",
+        },
+    )
+
+
+@app.get("/runs/{run_id}/overlays")
+def list_overlays(run_id: str):
+    """Which artifacts of a run can be drawn on a map."""
+    record = get_store().get(run_id)
+    if record is None or not record.get("trace"):
+        raise HTTPException(404, f"no such run: {run_id}")
+    paths = (record["trace"].get("artifact_paths") or {})
+    return {
+        "run_id": run_id,
+        "overlays": [
+            {"key": k, "available": Path(v).exists()}
+            for k, v in sorted(paths.items())
+            if Path(v).suffix.lower() in {".tif", ".tiff"}
+        ],
+    }
+
+
+@app.get("/models")
+def get_model_registry():
+    """Model registry page data (task 3.12).
+
+    Read-only and assembled from what the training runs wrote. Registered
+    before /runs/{run_id} would matter only if the paths collided; they do
+    not, but the ordering is kept explicit anyway.
+    """
+    from satquery.report.registry import model_registry
+
+    return model_registry()
+
+
+@app.get("/benchmarks")
+def get_benchmarks():
+    """Benchmark page data (task 3.12): every Phase 3 measurement."""
+    from satquery.report.registry import benchmarks
+
+    return benchmarks()
+
+
+@app.get("/runs/{run_id}/report.pdf")
+def get_run_report(run_id: str):
+    """Render a completed run to a PDF (task 3.12)."""
+    from fastapi.responses import FileResponse
+
+    from satquery.report.pdf_report import export_pdf
+
+    record = get_store().get(run_id)
+    if record is None or not record.get("trace"):
+        raise HTTPException(404, f"no completed run {run_id}")
+
+    trace = Trace.model_validate(
+        record["trace"] if isinstance(record["trace"], dict)
+        else json.loads(record["trace"])
+    )
+    out_dir = Path(tempfile.mkdtemp(prefix=f"satquery_report_{run_id}_"))
+    try:
+        pdf = export_pdf(trace, out_dir / f"{run_id}.pdf")
+    except RuntimeError as exc:
+        # reportlab is optional; say so rather than returning a 500.
+        raise HTTPException(503, str(exc)) from exc
+    return FileResponse(
+        pdf, media_type="application/pdf", filename=f"{run_id}.pdf"
     )
 
 

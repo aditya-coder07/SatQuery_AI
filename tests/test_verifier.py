@@ -185,3 +185,56 @@ class TestPercentageAttribution:
     def test_falls_back_to_a_preceding_subject(self):
         claims = extract_claims("The vegetation covers 42%")
         assert claims[0].subject == "vegetation"
+
+
+class TestEverySubjectIsChecked:
+    """A sentence naming several classes must be verified on all of them.
+
+    `extract_claims` used `subject_of`, which returns only the FIRST subject,
+    so a presence sentence got exactly one claim however many classes it
+    asserted. The trained captioner exposed it at once: "a bridge is over a
+    river with some green trees on both sides" produced a single vegetation
+    claim and the water assertion was never checked.
+    """
+
+    def test_a_multi_subject_sentence_yields_a_claim_per_subject(self):
+        from satquery.verify.verifier import extract_claims
+
+        claims = extract_claims(
+            "a bridge is over a river with some green trees on both sides"
+        )
+        assert {c.subject for c in claims} == {"water", "vegetation"}
+        assert all(c.kind == "presence" for c in claims)
+
+    def test_an_unchecked_subject_can_now_be_flagged(self):
+        """The behaviour the bug suppressed."""
+        from satquery.verify.entailment import DeterministicBackend, build_premises
+
+        payload = {
+            "indices": {
+                "ndvi": {"fraction_above_threshold": 0.18},
+                "ndwi": {"fraction_above_threshold": 0.01},
+            }
+        }
+        verdict = DeterministicBackend().judge(
+            "a bridge is over a river with some green trees on both sides",
+            build_premises(payload),
+            payload,
+        )
+        assert verdict.status == "flagged"
+        assert "water" in verdict.reason
+
+    def test_a_single_subject_sentence_is_unchanged(self):
+        """The fix must not alter the single-subject path the bench measures."""
+        from satquery.verify.verifier import extract_claims
+
+        claims = extract_claims("The scene is dominated by vegetation.")
+        assert [c.subject for c in claims] == ["vegetation"]
+
+    def test_percentage_attribution_is_untouched(self):
+        """Fraction claims already handled multiple subjects correctly."""
+        from satquery.verify.verifier import extract_claims
+
+        claims = extract_claims("65% vegetation, 28% water and 14% built-up land")
+        assert {c.subject for c in claims} == {"vegetation", "water", "built_up"}
+        assert all(c.kind == "fraction" for c in claims)

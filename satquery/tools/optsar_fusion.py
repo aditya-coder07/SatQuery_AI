@@ -17,6 +17,24 @@ spatial (SAR seeing through cloud, separating water from shadow), so
 demonstrating it needs a per-pixel segmentation head, which is task 2.9/3.x
 work. The triad machinery here is correct and reports the honest number;
 the number is currently ~zero.
+
+Confidence is the mean fused probability over the classes the tool actually
+asserted - those at or above `PRESENCE_THRESHOLD` - reported as
+`confidence_method="mean_asserted_probability"`. Unlike the change mask's
+sharpness this genuinely is a probability: it is the head's own estimate of
+its precision over the positive predictions it made. It is still not a
+calibratable P(correct) for this answer, for two reasons worth keeping
+straight:
+
+* it is conditioned on `p >= PRESENCE_THRESHOLD`, so it describes only the
+  asserted subset and says nothing about classes the tool stayed silent on;
+* it is an aggregate. A fitted calibration is a *nonlinear* map, so applying
+  it to a mean of probabilities is not the same as calibrating each class and
+  then averaging. Calibrating this head means transforming `p_fused`
+  per class before this line, not transforming the number it produces.
+
+Until Phase 3 this was labelled `softmax_temp_scaled`; nothing was ever
+temperature-scaled.
 """
 
 from __future__ import annotations
@@ -34,6 +52,7 @@ from rasterio.enums import Resampling
 from satquery.contracts.input_manifest import InputManifest
 from satquery.contracts.tool_result import ToolPayload, ToolResult
 from satquery.tools.base import ToolProtocol
+from satquery.tools.provenance import record
 
 TOOL_NAME = "optsar_fusion"
 TOOL_VERSION = "1.0.0-triad"
@@ -78,6 +97,10 @@ class _Handle:
         self.model = model.to(self.device).eval()
         self.torch = torch
         self.path = str(latest)
+        # The bytes that are now in memory, hashed once per process, so
+        # `Trace.weights_hashes` names the weights that produced the answer
+        # rather than being empty. See satquery/tools/provenance.py.
+        record("optsar_fusion_v1", latest)
 
     @classmethod
     def get(cls, checkpoint: Path) -> "_Handle":
@@ -195,7 +218,7 @@ class OptSARFusionTool(ToolProtocol):
         return ToolResult(
             tool=TOOL_NAME, version=TOOL_VERSION, payload=payload, artifacts=[],
             confidence=float(np.mean([p_fused[i] for i in asserted])) if asserted else 0.0,
-            confidence_method="softmax_temp_scaled",
+            confidence_method="mean_asserted_probability",
             model_card=f"optical-SAR triad ({Path(handle.path).name})",
             runtime_ms=int((time.perf_counter() - started) * 1000),
             warnings=(

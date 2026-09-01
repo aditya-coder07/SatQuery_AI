@@ -27,6 +27,14 @@ class ImageMeta(BaseModel):
     sensor_guess: str | None
     polarisations: list[str] | None
     look_count_est: float | None
+    # GDAL driver of the container the pixels came out of, and whether
+    # that container actually carried georeferencing. A PNG or JPEG
+    # cannot carry a CRS at all, which is a different fact from a
+    # GeoTIFF that was written without one - the first is a format
+    # limitation to disclose, the second is a defective product to
+    # reject. Defaulted so existing constructions stay valid.
+    container_format: str | None = None
+    georeferenced: bool = True
 
 class CheckResult(BaseModel):
     name: str

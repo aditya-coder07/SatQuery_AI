@@ -299,8 +299,12 @@ class ToolResult(BaseModel):
     version: str
     payload: dict                 # STRUCTURED FACTS ONLY - never free prose
     artifacts: list[Artifact]
-    confidence: float             # calibrated [0,1]
-    confidence_method: Literal["logprob","softmax_temp_scaled","threshold_rule","deterministic"]
+    confidence: float             # [0,1]; see confidence_method for what it IS
+    # What the number actually measures. Only `logprob` and
+    # `mean_asserted_probability` are probabilities at all, and neither is
+    # P(correct) - so none of these is calibratable today. See
+    # CALIBRATABLE_CONFIDENCE_METHODS in satquery/controller/calibration.py.
+    confidence_method: Literal["logprob","sharpness","mean_asserted_probability","threshold_rule","deterministic"]
     model_card: str               # name, weights sha256, training data summary
     runtime_ms: int
     warnings: list[str]
@@ -458,7 +462,7 @@ The PS requires "an auditable execution summary containing the selected task, mo
     {"step":"s2","tool":"optsar_fusion_v1","version":"0.9.1",
      "params":{"fusion_mode":"cross_attn","target_gsd_m":1.6,"classes":["built_up","water"],"mode":"triad"},
      "outputs":{"mask_optical":"art/lc_opt.tif","mask_sar":"art/lc_sar.tif","mask_fused":"art/lc_fused.tif"},
-     "confidence":0.78,"confidence_method":"softmax_temp_scaled","runtime_ms":2140},
+     "confidence":0.78,"confidence_method":"mean_asserted_probability","runtime_ms":2140},
     {"step":"s3","tool":"rs_vqa_v1","version":"0.8.0",
      "params":{"max_new_tokens":128,"adapter":"caption_lora_v4"},
      "confidence":0.71,"confidence_method":"logprob","runtime_ms":1890}
@@ -550,7 +554,7 @@ Two additional pages, both cheap and both strong demo surfaces: a **Model Regist
 
 ### Packaging and deployment
 
-Docker Compose with three services (`api`, `worker`, `web`) and a **pre-baked model volume**. Write `scripts/fetch_models.py` to download and **hash-verify** every checkpoint into `./models`, commit the manifest, and run routinely with `HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1`. On demo day the system must come up with the network cable unplugged.
+Docker Compose with ~~three services (`api`, `worker`, `web`)~~ **two services (`api`, `web`) — corrected 2026-08-30**: the `worker` was never wired to a queue and was removed rather than implemented, which is what the *Jobs and streaming* note above already argued for. See `docs/adr/002-no-async-worker.md` and a **pre-baked model volume**. Write `scripts/fetch_models.py` to download and **hash-verify** every checkpoint into `./models`, commit the manifest, and run routinely with `HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1`. On demo day the system must come up with the network cable unplugged.
 
 Two runtime profiles selected by environment variable: **`full`** (real checkpoints on GPU) and **`lite`** (smallest viable models, CPU-tolerable, degraded but never failing). Test `lite` genuinely, not nominally. When the demo laptop's GPU misbehaves at 2 a.m., `lite` is what saves the submission.
 
@@ -571,7 +575,11 @@ satquery-ai/
 │   └── make_demo_bundle.py         # stage the 8 curated demo inputs
 ├── configs/
 │   ├── capability_matrix.yaml       # VERSION CONTROLLED — the auditable artifact
-│   ├── tools.yaml                   # registry: versions, vram budgets, weights hashes
+│   │   # tools.yaml was created empty and never read; removed 2026-08-30.
+│   │   # The registry is satquery/tools/stubs.py REGISTRY, the permitted
+│   │   # parameters are configs/capability_matrix.yaml, the VRAM budgets are
+│   │   # router.TOOL_VRAM_MB, and the weights hashes are computed at load
+│   │   # time by satquery/tools/provenance.py.
 │   ├── thresholds.yaml              # overlap, coreg, abstention, index thresholds
 │   └── profiles/{full.yaml,lite.yaml}
 ├── satquery/

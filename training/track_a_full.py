@@ -288,6 +288,28 @@ def main() -> int:
     criterion = nn.BCEWithLogitsLoss()
     state, _ = maybe_resume(args.ckpt_dir, model, optimizer, enabled=args.resume)
 
+    # The band statistics are part of the model: inference MUST apply the same
+    # transform, and recomputing them needs the training shards, which a
+    # deployment does not have. They were not saved, and the consequence was
+    # measured - satquery/tools/landcover.py standardised per image instead
+    # and the head asserted class 0 on every patch at 0.9 confidence, wrong
+    # every time. Saved beside the weights so the tool can refuse to run
+    # without them.
+    args.ckpt_dir.mkdir(parents=True, exist_ok=True)
+    (args.ckpt_dir / "band_stats.json").write_text(
+        json.dumps({
+            "bands": BAND_NAMES_12,
+            "reflectance_scale": REFLECTANCE_SCALE,
+            "mean": [float(v) for v in stats[0]],
+            "std": [float(v) for v in stats[1]],
+            "provenance": (
+                f"compute_stats(seed=0, sample=2000) over "
+                f"{[p.name for p in train_paths]}"
+            ),
+        }, indent=2),
+        encoding="utf-8",
+    )
+
     write_run_metadata(args.ckpt_dir, {
         "task": "track_a_full", "bands": BAND_NAMES_12,
         "n_train": len(train_ds), "epochs": args.epochs, "lr": args.lr,

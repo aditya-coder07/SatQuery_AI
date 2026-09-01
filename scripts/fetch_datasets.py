@@ -123,8 +123,23 @@ DATASETS: list[Dataset] = [
         name="CDVQA",
         priority="P0",
         used_for="change_vqa_v1; prescribed eval split",
-        urls=["https://github.com/YZHJessica/CDVQA"],
-        approx_size="small",
+        urls=[
+            "https://github.com/YZHJessica/CDVQA",
+            "https://huggingface.co/datasets/ljx620/CDVQA",
+        ],
+        hf_repo="ljx620/CDVQA",
+        verified=True,
+        approx_size="small annotations; ~32 GB imagery mirror",
+        notes=(
+            "Annotations only from the GitHub repo (Apache-2.0) - "
+            "curl the {Train,Val,Test,Test2}_{questions,answers,images}.json "
+            "files directly. Imagery lives in the SECOND dataset; the "
+            "ljx620/CDVQA webdataset mirror carries it keyed by the official "
+            "question_id, one copy of the pair per question (~32 GB for 968 "
+            "test pairs). training/prepare/cdvqa.py verifies the mirror "
+            "against the official annotations and works from a partial "
+            "download."
+        ),
     ),
     Dataset(
         key="levir_cc",

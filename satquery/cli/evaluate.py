@@ -60,4 +60,13 @@ def run(args) -> int:
     # Keep stdout readable: metrics summary, not every prediction.
     summary = {k: v for k, v in report.items() if k != "predictions"}
     print(json.dumps(summary, indent=2))
+
+    # A benchmark run is the fastest way to fill a disk: one artifact
+    # directory per item, none of which anything reads again. The API pruned
+    # its uploads and this path pruned nothing, which is how `artifacts/`
+    # reached 46 GB. Named directories are never touched - see
+    # satquery/controller/retention.py.
+    from satquery.controller.retention import auto_prune
+
+    auto_prune()
     return 0

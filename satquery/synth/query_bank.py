@@ -44,6 +44,13 @@ CHANGE_NOUNS = [
     "vegetation loss", "flooding", "land clearing", "built-up expansion",
 ]
 
+# Scene descriptors, for the "is this X or Y?" shape a user actually types.
+SCENE_TYPES = [
+    "urban", "rural", "residential", "industrial", "agricultural",
+    "coastal", "forested", "built-up", "developed", "natural",
+    "densely built", "sparsely populated",
+]
+
 _VQA = [
     "How many {feature} are visible in this image?",
     "How many {feature} can you count?",
@@ -66,9 +73,88 @@ _VQA = [
     "Whats the count of {feature}?",
 ]
 
+# General natural-language visual questions (PS-26167).
+#
+# Everything in _VQA above was written from benchmark phrasings, so the
+# classifier learned that "a question about one image" means "how many X" or
+# "what proportion is X". The open-ended shapes a user actually types - "is
+# this urban or rural?", "what do you see?", "are there buildings?" - matched
+# none of them and fell into CLARIFY_OR_ABSTAIN, whose own templates are
+# content-free filler ("What is this?", "Anything interesting?") and are the
+# nearest neighbour of any short unadorned question. The system refused to
+# answer questions rs_vqa_v1 answers perfectly well.
+#
+# These are templates over the same slots as the rest of the bank, not a list
+# of accepted questions. They expand into hundreds of paraphrases, and the
+# word/char n-gram features generalise across the *shape*, which is what lets
+# an unseen "does this look like an industrial estate?" reach the same class
+# as the "does this look like {feature}?" seen in training. Nothing here
+# enumerates the questions the product must accept.
+_GENERAL_VISUAL = [
+    "Is this {scene} or {scene2}?",
+    "Is this an {scene} or {scene2} scene?",
+    "Is this area {scene} or {scene2}?",
+    "Would you call this {scene} or {scene2}?",
+    "Is this scene {scene}?",
+    "Is this area {scene}?",
+    "Does this look {scene} to you?",
+    "Does this look like {feature}?",
+    "What kind of landscape is this?",
+    "What kind of area is this?",
+    "What sort of terrain is this?",
+    "What do you see in this image?",
+    "What do you see here?",
+    "What is in this image?",
+    "What can you tell me about this image?",
+    "What is happening in this scene?",
+    "Do you see any {feature}?",
+
+    # Conversational open-ended questions. These read like captioning and are
+    # not: "describe what you see" asks the assistant what it can make out,
+    # and "describe the landscape" asks about something *in* the scene. Both
+    # sat in _CAPTION, so an ordinary conversational question needed the
+    # captioner loaded and returned the caption stub when it was not, even
+    # though rs_vqa_v1 was loaded and could answer. The boundary that stays
+    # with _CAPTION is whether the user asked for a caption of *the image* -
+    # "caption this scene", "write a few sentences about this image" - which
+    # is the mandatory second single-image capability and is untouched.
+    "Describe what you see.",
+    "Describe what you can see here.",
+    "Describe what is visible here.",
+    "Tell me what you see.",
+    "Tell me what you can see in this scene.",
+    "Describe the {feature}.",
+    "Describe the {feature} you can see.",
+    "Describe the landscape.",
+    "Describe the {scene} area.",
+    "Tell me about the {feature} here.",
+    "Tell me about this area.",
+    "What features are visible?",
+    "What features can you make out?",
+    "Give me an overview of this image.",
+    "Give me a rundown of this picture.",
+    "Narrate what can be seen here.",
+    "Whats going on in this shot?",
+    "How dense is the {feature} here?",
+    "How built up is this area?",
+    "Is this a densely developed area?",
+    "What is unusual in this image?",
+    "Is there anything unusual in this scene?",
+]
+
+# A request to PRODUCE A CAPTION: the object is the image itself, and what is
+# wanted back is a written artifact about it - a caption, a summary, a few
+# sentences. See _GENERAL_VISUAL for the boundary against a conversational
+# "what do you see?", which asks the same model-shaped question but is not a
+# request for a caption and must not need the captioner to be loaded.
 _CAPTION = [
     "Describe this image.",
     "Caption this scene.",
+    "Generate a caption for this image.",
+    "Produce a caption for this scene.",
+    "Generate a formal caption for this image.",
+    "Write an image caption for this scene.",
+    "Give me a caption for this satellite image.",
     "Give me a description of what this image shows.",
     "Write a caption for this satellite image.",
     "Summarise what is visible in this scene.",
@@ -77,13 +163,9 @@ _CAPTION = [
     "Explain what this scene contains.",
     "Give a short summary of this image.",
     "Describe the overall content of this scene.",
-    "Narrate what can be seen here.",
     "Write a few sentences about this image.",
-    "Give me an overview of this scene.",
     "Describe the landscape in this image.",
     "What would you say this image depicts?",
-    "Give me a rundown of this picture.",
-    "Whats going on in this shot?",
     "Sum up the imagery.",
     "In a sentence or two, describe this scene.",
     "Talk me through what this image shows.",
@@ -168,6 +250,55 @@ _CHANGE_DESC = [
     "Write up how the area shifted.",
     "Talk me through the differences across the two passes.",
     "Describe how things developed since the earlier image.",
+
+    # Compound "what AND where" queries (added 2026-08-30, limitation L13).
+    #
+    # PS representative query 3 is "What changed between these two dates, and
+    # where did the change occur?" - it asks for both a description and a
+    # location. It was routing to TEMPORAL_CHANGE_MAP, because _CHANGE_MAP
+    # owns every "where" phrasing ("Show me where the changes occurred"), and
+    # MAP's plan is index_engine -> change_mask: it returns the mask and the
+    # answer "Produced a change mask; see the exported raster artifact."
+    # That answers *where* and not *what*.
+    #
+    # TEMPORAL_CHANGE_DESC's plan is index_engine -> change_mask ->
+    # change_caption, so it already produces **both** the georeferenced mask
+    # and the prose. The compound shape belongs here.
+    #
+    # A plain "show me where" still belongs to MAP and is left there: the
+    # distinction is whether the user asked for a description as well.
+    #
+    # None of these is the PS string verbatim. That is deliberate - the PS
+    # query is an acceptance test in tests/test_golden_traces.py, and a
+    # template equal to the test string would prove memorisation rather than
+    # that the router generalises to the shape.
+    "Tell me what changed and where it happened.",
+    "Which features changed, and in which parts of the scene?",
+    "Describe the changes and point out where they are.",
+    "What is different between the images, and whereabouts?",
+    "Identify what changed and its location.",
+    "Explain the changes and where they occurred in the scene.",
+    "What has altered here, and in which areas?",
+    "Report what changed and the areas affected.",
+
+    # Transition phrasings: "which areas BECAME X". The bank had the
+    # quantitative shape ("How many new {feature} appeared?" in _CHANGE_VQA)
+    # and CDVQA's "What have the areas of X mainly changed to?", but not the
+    # plain conversational transition, so "Which areas became built up?" on a
+    # bitemporal pair scored 0.326 for change against 0.273 for SINGLE_VQA -
+    # under the confidence bar, so the router fell back to the single-image
+    # default and rs_vqa_v1 answered "only one image was provided" about a
+    # two-image input. These belong with DESC rather than MAP because they
+    # ask *which areas*, and DESC's plan is index -> change_mask ->
+    # change_caption, which returns the georeferenced mask AND the prose.
+    "Which areas became {feature}?",
+    "Which areas turned into {feature}?",
+    "Which parts of the scene became {feature}?",
+    "What became {feature} between the two dates?",
+    "Which regions changed to {feature}?",
+    "Which areas were cleared?",
+    "What has been replaced by {feature}?",
+    "Which areas have become {feature} since the earlier image?",
 ]
 
 _CHANGE_VQA = [
@@ -216,15 +347,26 @@ _CHANGE_MAP = [
     "Export a difference raster between the two dates.",
 ]
 
+# Content-free requests: filler that names no visual subject, or that refers
+# to context the system does not have ("the other one", "last time").
+#
+# This class is *not* where a question with a visual subject belongs, however
+# vaguely it is phrased. It kept "Is this an urban or rural scene?" out of the
+# VQA model for exactly that reason - see the note on _GENERAL_VISUAL - and
+# the fix was to give the general shapes their own templates rather than to
+# thin this list out, so the filler below still abstains.
 _CLARIFY = [
     "Hello.",
     "Hi there.",
+    "Hey.",
     "What do you think?",
     "Tell me about it.",
     "Can you help?",
-    "What is this?",
-    "Anything interesting?",
     "Do the thing.",
+    "Have a look and let me know.",
+    "Just take a look.",
+    "OK.",
+    "Thoughts?",
     "Analyse.",
     "Go ahead.",
     "What should I do next?",
@@ -239,14 +381,189 @@ _CLARIFY = [
     "Sort it out.",
 ]
 
+# Real CDVQA question phrasings, for the routing gap measured on 2026-08-30.
+#
+# The synthetic templates above were written by us, and the router trained on
+# them sent only 67.4% of CDVQA's questions to TEMPORAL_CHANGE_VQA - the tool
+# that can actually answer them. `change_to_what` scored **0.000**: not one of
+# its phrasings ("What have the areas of X mainly changed to?") reached the
+# change-VQA task, they went to the change map or the change captioner. That
+# routing loss, not the segmenter, was the larger half of the end-to-end
+# CDVQA deficit.
+#
+# **Only half the templates are here, and that is deliberate.** CDVQA ships
+# 300 distinct question phrasings and its train and test splits use *exactly
+# the same 300* - zero novel phrasings at test time. Training on all of them
+# would produce perfect routing that measures memorisation, which is the same
+# trap the in-template split of this very bank falls into (see
+# docs/phase1-status.md: 100%, "near-meaningless"). So the templates are split
+# by a stable hash and only the training half is used; the other 151 are never
+# seen, and routing on them is the number that means something.
+#
+# The split rule is `sha1(template)[0] % 2 == 0`, reproduced by
+# `evaluation/cdvqa_routing.py` so the held-out half can be identified from
+# the data on disk without shipping it here.
+_CDVQA_TRAINED_TEMPLATES = [
+    'Did the areas of buildings change in the pre-change image?',
+    'Did the areas of buildings decrease?',
+    'Did the areas of low vegetation change in the post-change image?',
+    'Did the areas of low vegetation decrease?',
+    'Did the areas of low vegetation increase?',
+    'Did the areas of non-vegetated ground surface change in the pre-change image?',
+    'Did the areas of playgrounds change in the post-change image?',
+    'Did the areas of playgrounds change in the pre-change image?',
+    'Did the areas of trees decrease?',
+    'Did the areas of water decrease?',
+    'Did the regions of buildings change in the post-event image?',
+    'Did the regions of buildings change in the pre-event image?',
+    'Did the regions of low vegetation change in the post-event image?',
+    'Did the regions of low vegetation change?',
+    'Did the regions of low vegetation decrease?',
+    'Did the regions of non-vegetated ground surface change?',
+    'Did the regions of non-vegetated ground surface decrease?',
+    'Did the regions of non-vegetated ground surface increase?',
+    'Did the regions of playgrounds change in the post-event image?',
+    'Did the regions of playgrounds change in the pre-event image?',
+    'Did the regions of playgrounds decrease?',
+    'Did the regions of playgrounds increase?',
+    'Did the regions of trees change in the post-event image?',
+    'Did the regions of water change in the pre-event image?',
+    'Did the regions of water decrease?',
+    'Did the regions of water increase?',
+    'Have the areas of buildings changed in the second image?',
+    'Have the areas of buildings decreased?',
+    'Have the areas of low vegetation changed in the second image?',
+    'Have the areas of low vegetation changed?',
+    'Have the areas of low vegetation decreased?',
+    'Have the areas of low vegetation increased?',
+    'Have the areas of non-vegetated ground surface changed in the first image?',
+    'Have the areas of non-vegetated ground surface decreased?',
+    'Have the areas of playgrounds changed in the first image?',
+    'Have the areas of playgrounds changed?',
+    'Have the areas of trees changed?',
+    'Have the areas of water changed in the second image?',
+    'Have the areas of water decreased?',
+    'Have the areas of water increased?',
+    'Have the regions of buildings changed in the first image?',
+    'Have the regions of buildings changed in the second image?',
+    'Have the regions of low vegetation changed in the first image?',
+    'Have the regions of low vegetation changed in the second image?',
+    'Have the regions of low vegetation decreased?',
+    'Have the regions of non-vegetated ground surface changed in the first image?',
+    'Have the regions of non-vegetated ground surface changed in the second image?',
+    'Have the regions of non-vegetated ground surface decreased?',
+    'Have the regions of non-vegetated ground surface increased?',
+    'Have the regions of playgrounds changed in the first image?',
+    'Have the regions of playgrounds changed in the second image?',
+    'Have the regions of playgrounds changed?',
+    'Have the regions of playgrounds decreased?',
+    'Have the regions of playgrounds increased?',
+    'Have the regions of trees changed in the first image?',
+    'Have the regions of trees changed in the second image?',
+    'Have the regions of trees increased?',
+    'Have the regions of water changed in the first image?',
+    'Have the regions of water changed?',
+    'Have the regions of water decreased?',
+    'Have the regions of water increased?',
+    'How much area of low vegetation has changed in the pre-change image?',
+    'How much area of non-vegetated ground surface has changed in the first image?',
+    'How much area of non-vegetated ground surface has changed in the pre-change image?',
+    'How much area of playgrounds has changed in the first image?',
+    'How much area of playgrounds has changed in the pre-change image?',
+    'How much area of playgrounds has changed in the second image?',
+    'How much area of trees has changed in the first image?',
+    'How much area of trees has changed in the post-change image?',
+    'How much area of trees has changed in the pre-change image?',
+    'How much area of water has changed in the first image?',
+    'How much area of water has changed in the second image?',
+    'How much of the area has changed?',
+    'How much of the area has not changed?',
+    'What have the areas of buildings in the pre-event image mainly changed to?',
+    'What have the areas of low vegetation in the first image mainly changed to?',
+    'What have the areas of non-vegetated ground surface in the first image mainly changed to?',
+    'What have the areas of non-vegetated ground surface in the pre-event image mainly changed to?',
+    'What have the areas of trees in the pre-event image mainly changed to?',
+    'What have the areas of water in the first image mainly changed to?',
+    'What have the areas of water in the pre-event image mainly changed to?',
+    'What have the regions of buildings in the first image mainly changed to?',
+    'What have the regions of buildings in the pre-change image mainly changed to?',
+    'What have the regions of low vegetation in the first image mainly changed to?',
+    'What have the regions of low vegetation in the pre-change image mainly changed to?',
+    'What have the regions of non-vegetated ground surface in the first image mainly changed to?',
+    'What have the regions of non-vegetated ground surface in the pre-change image mainly changed to?',
+    'What have the regions of playgrounds in the pre-event image mainly changed to?',
+    'What have the regions of water in the first image mainly changed to?',
+    'What is the change percentage of buildings in the post-change image?',
+    'What is the change percentage of buildings in the second image?',
+    'What is the change percentage of low vegetation in the post-change image?',
+    'What is the change percentage of low vegetation in the pre-change image?',
+    'What is the change percentage of low vegetation in the second image?',
+    'What is the change percentage of non-vegetated ground surface in the first image?',
+    'What is the change percentage of non-vegetated ground surface in the post-change image?',
+    'What is the change percentage of non-vegetated ground surface in the pre-change image?',
+    'What is the change percentage of playgrounds in the second image?',
+    'What is the change percentage of trees in the first image?',
+    'What is the change percentage of trees in the post-change image?',
+    'What is the change percentage of trees in the pre-change image?',
+    'What is the change percentage of water in the post-change image?',
+    'What is the change percentage of water in the pre-change image?',
+    'What is the change proportion of buildings in the first image?',
+    'What is the change proportion of buildings in the second image?',
+    'What is the change proportion of low vegetation in the post-event image?',
+    'What is the change proportion of non-vegetated ground surface in the first image?',
+    'What is the change proportion of non-vegetated ground surface in the pre-event image?',
+    'What is the change proportion of non-vegetated ground surface in the second image?',
+    'What is the change proportion of playgrounds in the post-event image?',
+    'What is the change proportion of playgrounds in the pre-event image?',
+    'What is the change proportion of playgrounds in the second image?',
+    'What is the change proportion of trees in the post-event image?',
+    'What is the change proportion of trees in the pre-event image?',
+    'What is the change proportion of trees in the second image?',
+    'What is the change ratio of buildings in the post-event image?',
+    'What is the change ratio of buildings in the pre-change image?',
+    'What is the change ratio of buildings in the pre-event image?',
+    'What is the change ratio of buildings in the second image?',
+    'What is the change ratio of low vegetation in the first image?',
+    'What is the change ratio of low vegetation in the pre-change image?',
+    'What is the change ratio of low vegetation in the pre-event image?',
+    'What is the change ratio of low vegetation in the second image?',
+    'What is the change ratio of non-vegetated ground surface in the second image?',
+    'What is the change ratio of playgrounds in the post-event image?',
+    'What is the change ratio of playgrounds in the second image?',
+    'What is the change ratio of trees in the post-event image?',
+    'What is the change ratio of trees in the pre-change image?',
+    'What is the change ratio of trees in the pre-event image?',
+    'What is the change ratio of trees in the second image?',
+    'What is the change ratio of water in the post-change image?',
+    'What is the change ratio of water in the second image?',
+    'What is the largest change in the first image?',
+    'What is the largest change in the post-change image?',
+    'What is the percentage of changed areas?',
+    'What is the percentage of changed regions?',
+    'What is the percentage of non-change regions?',
+    'What is the smallest change in the first image?',
+    'What is the smallest change in the post-change image?',
+    'What is the smallest change?',
+    'What type of change is the largest in the first image?',
+    'What type of change is the largest in the post-event image?',
+    'What type of change is the largest in the pre-event image?',
+    'What type of change is the largest?',
+    'What type of change is the smallest in the post-change image?',
+    'What type of change is the smallest in the post-event image?',
+    'What type of change is the smallest in the pre-change image?',
+    'What type of change is the smallest in the pre-event image?',
+    'What type of change is the smallest?',
+]
+
+
 TEMPLATES: dict[TaskID, list[str]] = {
-    "SINGLE_VQA": _VQA,
+    "SINGLE_VQA": _VQA + _GENERAL_VISUAL,
     "SINGLE_CAPTION": _CAPTION,
     "SINGLE_GROUND": _GROUND,
     "SINGLE_LANDCOVER": _LANDCOVER,
     "XMODAL_JOINT_EXTRACT": _XMODAL,
     "TEMPORAL_CHANGE_DESC": _CHANGE_DESC,
-    "TEMPORAL_CHANGE_VQA": _CHANGE_VQA,
+    "TEMPORAL_CHANGE_VQA": _CHANGE_VQA + _CDVQA_TRAINED_TEMPLATES,
     "TEMPORAL_CHANGE_MAP": _CHANGE_MAP,
     "CLARIFY_OR_ABSTAIN": _CLARIFY,
 }
@@ -265,12 +582,16 @@ class QueryExample:
 def _fill(template: str, rng: random.Random) -> str:
     feature = rng.choice(FEATURES)
     feature2 = rng.choice([f for f in FEATURES if f != feature])
+    scene = rng.choice(SCENE_TYPES)
+    scene2 = rng.choice([s for s in SCENE_TYPES if s != scene])
     return (
         template.replace("{feature2}", feature2)
         .replace("{feature}", feature)
         .replace("{singular}", rng.choice(SINGULAR))
         .replace("{landcover}", rng.choice(LANDCOVER_CLASSES))
         .replace("{change}", rng.choice(CHANGE_NOUNS))
+        .replace("{scene2}", scene2)
+        .replace("{scene}", scene)
     )
 
 

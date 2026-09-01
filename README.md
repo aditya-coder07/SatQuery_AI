@@ -32,64 +32,64 @@ An interactive assistant that accepts single optical/SAR imagery, co-registered 
 
 ## 3. PS requirement traceability matrix
 
-Every clause of the PS mapped to a component, a document section, a test and a metric. **This table is the contract.** Anything in it without a green metric by W9 is a gap, and under normalised score combination a gap costs more than any amount of depth elsewhere gains.
+**The matrix lives in [`docs/00-README-and-Requirement-Traceability.md`](docs/00-README-and-Requirement-Traceability.md) §3, and that is the only authoritative copy.**
 
-### 3.1 Mandatory functional scope
+It used to be duplicated here verbatim. That is how a traceability matrix goes
+stale: the copy nobody edits is the copy a reader trusts. One matrix, one
+place, refreshed 2026-08-30 with measured results and a status per row.
 
-| # | PS requirement (paraphrased) | Component | Spec | Test | Metric |
-|---|---|---|---|---|---|
-| **M1** | **Adapt at least one visual / vision-language component to remote sensing data.** Using BigEarthNet.txt or any open-source training data. *A generic LLM/VLM without RS adaptation is explicitly not acceptable.* | **Track A** band-agnostic encoder (BigEarthNet) → `landcover_v1`, `optsar_fusion_v1`; **Track B** VLM QLoRA on RS instruction mix → `rs_vqa_v1`, `caption_v1` | `03` §2 | `training/track_a_encoder.py`, `training/track_b_vlm_qlora.py`; two-track ablation | BigEarthNet test mAP; VQA/caption gains over the un-adapted base VLM |
-| **M2** | **Single-image VQA — mandatory** | `rs_vqa_v1` | `01` §4, `03` §3 | RSVQA-LR/HR test, VRSBench VQA test | Accuracy overall + per question type |
-| **M3** | **At least one of** captioning **or** grounding / referring localisation | **Both built:** `caption_v1` and `grounding_v1` | `01` §4, `03` §3 | VRSBench caption test; DIOR-RSVG + VRSBench referring | BLEU-4/METEOR/ROUGE-L/CIDEr; Acc@0.5, Acc@0.7, mIoU |
-| **M4** | **Bi-temporal change description or change-VQA — mandatory** | **Both built:** `change_caption_v1` and `change_vqa_v1` (with a deterministic template path that cannot score zero) | `01` §4, `02` §7 Q4/Q5, `03` §3 | LEVIR-CC test; CDVQA test | BLEU-4/CIDEr; CDVQA accuracy per question type |
-| **M5** | Change map — **optional bonus**, where mask annotations exist | `change_mask_v1` | `01` §4 | LEVIR-CD, WHU-CD test | F1, IoU, precision, recall |
-| **M6** | **Cross-modal complementary information extraction** from a co-registered optical/MSI + SAR pair | `optsar_fusion_v1` in **triad mode** (optical-only / SAR-only / fused) + **complementarity score** | `01` §5.2, `05` §1.1 | WHU-OPT-SAR test; triad ablation | mIoU per class; **gain over best single modality**; modality agreement IoU |
-| **M7** | **Agentic layer**: interpret the query, determine the required task, select the model/tool from a **predefined registry**, execute with **permitted parameters** | Controller: config gate → two-tier intent classifier → capability matrix → validated plan → executor | `02` entire | 200-query adversarial suite; 30 golden trace tests; `satquery matrix --validate` in CI | Routing accuracy; **illegal-plan rate = 0**; unpermitted-parameter rate = 0 |
-| **M8** | **Auditable execution summary** with selected task, model/tool names, key parameters. *Internal reasoning traces neither required nor evaluated.* | Trace writer + SSE stream + live trace panel; `rationale_tag` enums instead of free-form reasoning | `01` §6, `02` §10 | Golden trace tests; Pydantic-validated trace schema | 100 % of runs carry every required field |
+Current headline status (see `docs/00` §3.1 for the evidence behind each):
 
-### 3.2 Defined input scope
+| | Requirement | Status |
+|---|---|---|
+| M1 | RS adaptation of a visual/VL component | **MET** |
+| M2 | Single-image VQA *(mandatory)* | **MET** |
+| M3 | Captioning **or** grounding | **MET (weak)** — both built; grounding near-floor |
+| M4 | Bi-temporal change description **or** change-VQA *(mandatory)* | **MET** |
+| M5 | Change map *(optional)* | **MET** |
+| M6 | Cross-modal optical + SAR extraction | **MET (negative)** — fusion does not beat optical alone |
+| M7 | Agentic orchestration | **MET** — illegal-plan rate 0/600; routing accuracy weak |
+| M8 | Auditable execution summary | **MET** |
 
-| # | PS requirement | Component | Spec | Test |
-|---|---|---|---|---|
-| **I1** | Single optical/MSI **or** single SAR image | `config = SINGLE`; adaptive modality inference from band count, dtype, histogram, local CoV and metadata — **never from the filename** | `01` §2.2 | 20 real files incl. Cartosat MX/PAN and RISAT |
-| **I2** | Co-registered optical/MSI + SAR **pair** | `config = CROSSMODAL_PAIR`; overlap ≥ 70 %, co-registration residual check via **gradient-domain** phase correlation (raw-intensity correlation fails across modalities) | `01` §2.4–2.5 | Pair compatibility suite |
-| **I3** | **Bi-temporal** pair of the same area | `config = BITEMPORAL_PAIR`; dates parsed from metadata, **abstain rather than guess** when absent | `01` §2.4 | Missing-date and same-date cases |
-| **I4** | GeoTIFF / TIFF for geospatial imagery | `IngestMode.OPERATIONAL` | `01` §2.1 | Format gate tests |
-| **I5** | **PNG / JPEG accepted *only* for the prescribed public benchmark datasets** | `IngestMode.BENCHMARK` requires a named benchmark; PNG in operational mode is **rejected with the rule quoted** | `01` §2.1 | Rejection test — and it is the demo's opening move |
-| **I6** | Inputs may be full scenes far larger than any model window | Tile pyramid + query-conditioned coarse-to-fine retrieval, bounded cost independent of scene size | `01` §2.7, `05` §2.4 | 8000×8000 scene answered in bounded time |
+| M9 | Combine outputs, estimate confidence, return visual evidence | **VERIFIED** |
 
-### 3.3 Representative queries (the PS's own five — these are acceptance tests)
+Inputs I1, I4 and I5 are **VERIFIED**; **I2 and I3 are PARTIAL**. The pair
+configurations are detected, and since 2026-08-30 the capability matrix's
+`min_overlap_pct` and `min_bands_optical` gates are **enforced** — a pair of
+images of different places now abstains instead of being fused. Two gates stay
+deliberately unenforced on evidence: `max_coreg_shift_px`, because the
+cross-modal shift estimator reports 38.1 px on a pair with identical
+footprints, and `require_dates`, because enforcing it would refuse the
+prescribed benchmarks, which ship undated (limitation L16). I6 (large scenes)
+is built but is **not a PS clause**. Of the three prescribed benchmarks,
+RSVQA-LR and CDVQA are evaluated; **VRSBench is not** (imagery lives in DOTA,
+not on disk). Twenty-eight known limitations are recorded in `docs/00` §3.6 —
+open and closed alike, with dates — rather than left to be discovered.
 
-| Query | Route | Mechanism | Spec |
-|---|---|---|---|
-| *"How many aircraft are visible in this image?"* | `SINGLE_VQA` (counting) | `grounding_v1` detect → NMS → **arithmetic count** → template. **Never a generative count.** | `02` §7 Q1 |
-| *"Describe the land-cover characteristics of this scene."* | `SINGLE_CAPTION` | `index_engine_v1` statistics → `landcover_v1` → `caption_v1` narrative from structured fractions → entailment gate | `02` §7 Q2 |
-| *"Use the optical and SAR images together to identify built-up and water-covered regions."* | `XMODAL_JOINT_EXTRACT` | index engine (NDWI + GLCM + adaptive σ⁰) → fusion triad → narrative → verifier. **NDBI unavailable on 4-band Cartosat → SAR-primary built-up path, logged.** | `02` §7 Q3, `01` Axiom 2 |
-| *"Describe the changes between these two images."* | `TEMPORAL_CHANGE_DESC` | per-date indices → `change_mask_v1` → mask-conditioned `change_caption_v1` → entailment gate → GeoTIFF evidence | `02` §7 Q4 |
-| *"Has the built-up area increased, decreased, or remained unchanged?"* | `TEMPORAL_CHANGE_VQA` | change mask → **georeferenced area difference in hectares** → significance threshold → three-way template answer | `02` §7 Q5 |
+The matrix was checked clause-by-clause against
+[`docs/ps-26167.md`](docs/ps-26167.md), the authoritative PS text, on
+2026-08-30.
 
-### 3.4 Deliverables
+### Model availability — 2026-08-31
 
-| PS deliverable | Where it comes from |
-|---|---|
-| Working interactive system | Next.js + FastAPI + SSE; `make demo` |
-| **Input upload and compatibility checking** | Layer 0 in full — `01` §2, an explicitly named PS deliverable, and the demo's opening beat |
-| Models | Published weights + model cards for all four trainings; `04` §4.5 |
-| Code | `satquery-ai` repo per `01` §9, with CI, golden tests and ADRs |
-| Documentation | This document set + technical report + this traceability matrix |
-| Evaluation results | `evaluation/harness.py` → one JSON report covering every row of `03` §5, plus four ablations |
+**The trained checkpoints were deleted on 2026-08-30 and recovered on
+2026-08-31** from a Windows volume shadow copy: 4.542 GB, 136 files, verified
+bit-exact against a SHA-256 recorded from the live file before the deletion.
+All 61 `.pt` files load, and every `metrics.json` matches the numbers
+published in `docs/model-cards.md`. **No number was re-derived or adjusted at
+any point.** The account is `docs/00` §3.6 **L26**; the root cause and its
+containment are **L27**.
 
-### 3.5 Evaluation conditions
+**Three components remain unavailable.** Twelve small JSON sidecars came back
+as NUL bytes — their size reached the volume, their contents did not — which
+leaves `caption_v1` and `grounding_v1` on their stubs and the Track A
+*multires* variant unnormalisable (the *base* variant is unaffected). See
+**L29**, and **L30** for the availability check that used to report such a
+tool as ready and then fail inside its loader.
 
-| PS condition | How the plan handles it |
-|---|---|
-| Prescribed **public benchmark test subsets** (VRSBench, RSVQA, CDVQA) | Official splits used throughout; `--eval-mode` emits predictions in reference format for all four annotation types |
-| **Private ISRO/SAC set**: pre-georeferenced, co-registered **Cartosat-2S optical + RISAT SAR** | The two-track resolution bridge exists for exactly this; Bhoonidhi products held out as an untrained cross-sensor check; adaptive σ⁰ thresholds cover the C-band/X-band ambiguity |
-| Reference **answers, labels, bounding boxes, masks** | All four output types implemented and emitted by the batch runner |
-| **Scores normalised before combining** | Drives the breadth-over-depth priority and the descope-ladder ordering — `01` Axiom 5, `04` §8 |
-| Large-scale batch evaluation implied | **Headless batch runner from day one**, `run_batch` on every tool, `--fast` verification skip — `01` Axiom 4, §7 |
-
----
+Everything else loads and answers: `landcover_v1` (base), `change_mask_v1`,
+`change_caption_v1`, `optsar_fusion_v1`, `change_vqa_v1` (semantic path), and
+the Track B QLoRA adapter.
 
 ## 4. Unverified claims register
 

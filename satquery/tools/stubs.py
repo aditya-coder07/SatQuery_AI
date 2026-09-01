@@ -6,6 +6,58 @@ from satquery.contracts.input_manifest import InputManifest
 from satquery.tools.base import ToolProtocol
 
 
+# Every stub answer carries this, and every stub emits the warning below.
+#
+# The registry falls back to a stub whenever a learned tool is unavailable -
+# no checkpoint, no environment variable, or a checkpoint that cannot be read.
+# That is the design, and it is what keeps CI green without torch. What was
+# wrong is that the stubs' *text* was indistinguishable from a real answer:
+# `RSVQAStub` returned "fake answer string" at 0.85 confidence, and
+# `ChangeCaptionStub` returned "A new building was constructed in the center."
+# - a plausible, specific, entirely fabricated finding, recorded as the golden
+# answer to the PS's own "what changed and where" query.
+#
+# Found on 2026-09-01 while testing a real image: with the Track B adapter
+# destroyed (docs/00 section 3.6 L31b), a VQA query answered "fake answer
+# string" with confidence 0.8973 HIGH and nothing in the answer said why.
+#
+# The marker is a prefix rather than a replacement so the payload shape and
+# every downstream consumer stay unchanged; the warning is what a trace reader
+# and the report page pick up.
+# A stub measures nothing, so it reports nothing to measure.
+#
+# The eight learned-tool stubs used to report confidences of 0.80-0.95 with
+# `confidence_method="threshold_rule"` - indistinguishable, to the combiner,
+# from a real head's score. `Executor` takes the MINIMUM over the learned
+# tools that ran, so a stubbed VQA answer reached the user as
+# "0.9473 HIGH" beside the text "[STUB - no model loaded]".
+#
+# The fix is not a special case in the combiner: it is to stop the stub
+# feeding it a fabricated number. `geometric_mean` already collapses to zero
+# when any component is zero - deliberately, so "a confident model on a
+# corrupt input must not score 0.66" - so a stub reporting 0.0 yields a final
+# score of 0.0 and a LOW band through the ordinary arithmetic, with no
+# override, no new band value, and no change to calibration.
+#
+# `confidence_method="stub"` is what makes it auditable: it is not in
+# CALIBRATABLE_CONFIDENCE_METHODS, so the calibration path is untouched, and
+# the trace names the reason the component is zero.
+STUB_CONFIDENCE = 0.0
+STUB_CONFIDENCE_METHOD = "stub"
+
+STUB_NOTICE = "[STUB - no model loaded]"
+STUB_WARNING = (
+    "this answer came from a placeholder, not a trained model: the learned "
+    "tool was unavailable and the registry fell back to its stub. The text is "
+    "fixed and carries no information about these inputs"
+)
+
+
+def stub_text(text: str) -> str:
+    """Prefix a stub's user-visible text so it cannot be read as a result."""
+    return f"{STUB_NOTICE} {text}"
+
+
 class StubPayload(ToolPayload):
     data: dict[str, Any]
 
@@ -13,18 +65,18 @@ class StubPayload(ToolPayload):
 class RSVQAStub(ToolProtocol):
     def run(self, manifest: InputManifest, params: dict[str, Any]) -> ToolResult:
         payload = StubPayload(data={
-            "answer": "fake answer string",
+            "answer": stub_text("no answer - the VQA model is not loaded"),
         })
         return ToolResult(
             tool="rs_vqa",
             version="0.1.0-stub",
             payload=payload,
             artifacts=[],
-            confidence=0.85,
-            confidence_method="threshold_rule",
+            confidence=STUB_CONFIDENCE,
+            confidence_method=STUB_CONFIDENCE_METHOD,
             model_card="stub_vqa_model",
             runtime_ms=120,
-            warnings=[]
+            warnings=[STUB_WARNING]
         )
 
     def run_batch(self, manifests: list[InputManifest], params: dict[str, Any]) -> list[ToolResult]:
@@ -34,18 +86,18 @@ class RSVQAStub(ToolProtocol):
 class CaptionStub(ToolProtocol):
     def run(self, manifest: InputManifest, params: dict[str, Any]) -> ToolResult:
         payload = StubPayload(data={
-            "caption": "A satellite image showing a fake landscape.",
+            "caption": stub_text("no caption - the captioning model is not loaded"),
         })
         return ToolResult(
             tool="caption",
             version="0.1.0-stub",
             payload=payload,
             artifacts=[],
-            confidence=0.9,
-            confidence_method="threshold_rule",
+            confidence=STUB_CONFIDENCE,
+            confidence_method=STUB_CONFIDENCE_METHOD,
             model_card="stub_caption_model",
             runtime_ms=150,
-            warnings=[]
+            warnings=[STUB_WARNING]
         )
 
     def run_batch(self, manifests: list[InputManifest], params: dict[str, Any]) -> list[ToolResult]:
@@ -68,11 +120,11 @@ class GroundingStub(ToolProtocol):
             version="0.1.0-stub",
             payload=payload,
             artifacts=[artifact],
-            confidence=0.95,
-            confidence_method="threshold_rule",
+            confidence=STUB_CONFIDENCE,
+            confidence_method=STUB_CONFIDENCE_METHOD,
             model_card="stub_grounding_model",
             runtime_ms=100,
-            warnings=[]
+            warnings=[STUB_WARNING]
         )
 
     def run_batch(self, manifests: list[InputManifest], params: dict[str, Any]) -> list[ToolResult]:
@@ -93,11 +145,11 @@ class LandcoverStub(ToolProtocol):
             version="0.1.0-stub",
             payload=payload,
             artifacts=[artifact],
-            confidence=0.8,
-            confidence_method="threshold_rule",
+            confidence=STUB_CONFIDENCE,
+            confidence_method=STUB_CONFIDENCE_METHOD,
             model_card="stub_landcover_model",
             runtime_ms=200,
-            warnings=[]
+            warnings=[STUB_WARNING]
         )
 
     def run_batch(self, manifests: list[InputManifest], params: dict[str, Any]) -> list[ToolResult]:
@@ -118,11 +170,11 @@ class OptSARFusionStub(ToolProtocol):
             version="0.1.0-stub",
             payload=payload,
             artifacts=[artifact],
-            confidence=0.88,
-            confidence_method="threshold_rule",
+            confidence=STUB_CONFIDENCE,
+            confidence_method=STUB_CONFIDENCE_METHOD,
             model_card="stub_fusion_model",
             runtime_ms=500,
-            warnings=[]
+            warnings=[STUB_WARNING]
         )
 
     def run_batch(self, manifests: list[InputManifest], params: dict[str, Any]) -> list[ToolResult]:
@@ -143,11 +195,11 @@ class ChangeMaskStub(ToolProtocol):
             version="0.1.0-stub",
             payload=payload,
             artifacts=[artifact],
-            confidence=0.89,
-            confidence_method="threshold_rule",
+            confidence=STUB_CONFIDENCE,
+            confidence_method=STUB_CONFIDENCE_METHOD,
             model_card="stub_change_mask_model",
             runtime_ms=300,
-            warnings=[]
+            warnings=[STUB_WARNING]
         )
 
     def run_batch(self, manifests: list[InputManifest], params: dict[str, Any]) -> list[ToolResult]:
@@ -157,18 +209,18 @@ class ChangeMaskStub(ToolProtocol):
 class ChangeCaptionStub(ToolProtocol):
     def run(self, manifest: InputManifest, params: dict[str, Any]) -> ToolResult:
         payload = StubPayload(data={
-            "caption": "A new building was constructed in the center.",
+            "caption": stub_text("no change description - the model is not loaded"),
         })
         return ToolResult(
             tool="change_caption",
             version="0.1.0-stub",
             payload=payload,
             artifacts=[],
-            confidence=0.92,
-            confidence_method="threshold_rule",
+            confidence=STUB_CONFIDENCE,
+            confidence_method=STUB_CONFIDENCE_METHOD,
             model_card="stub_change_caption_model",
             runtime_ms=180,
-            warnings=[]
+            warnings=[STUB_WARNING]
         )
 
     def run_batch(self, manifests: list[InputManifest], params: dict[str, Any]) -> list[ToolResult]:
@@ -178,18 +230,18 @@ class ChangeCaptionStub(ToolProtocol):
 class ChangeVQAStub(ToolProtocol):
     def run(self, manifest: InputManifest, params: dict[str, Any]) -> ToolResult:
         payload = StubPayload(data={
-            "answer": "Yes, there is a new road.",
+            "answer": stub_text("no answer - the change-VQA model is not loaded"),
         })
         return ToolResult(
             tool="change_vqa",
             version="0.1.0-stub",
             payload=payload,
             artifacts=[],
-            confidence=0.87,
-            confidence_method="threshold_rule",
+            confidence=STUB_CONFIDENCE,
+            confidence_method=STUB_CONFIDENCE_METHOD,
             model_card="stub_change_vqa_model",
             runtime_ms=170,
-            warnings=[]
+            warnings=[STUB_WARNING]
         )
 
     def run_batch(self, manifests: list[InputManifest], params: dict[str, Any]) -> list[ToolResult]:
@@ -211,7 +263,7 @@ class IndexEngineStub(ToolProtocol):
             confidence_method="deterministic",
             model_card="math",
             runtime_ms=10,
-            warnings=[]
+            warnings=[STUB_WARNING]
         )
 
     def run_batch(self, manifests: list[InputManifest], params: dict[str, Any]) -> list[ToolResult]:
@@ -249,14 +301,59 @@ def _vqa_tool():
     return RSVQATool() if available else RSVQAStub()
 
 
+def _landcover_tool():
+    """Real Track A head when SATQUERY_LANDCOVER is set, else the stub.
+
+    Wired with selective prediction rather than a 0.5 threshold - task 3.6
+    measured that this head is worse than trivial at 0.5.
+    """
+    from satquery.tools.landcover import LandcoverTool, is_available
+
+    return LandcoverTool() if is_available()[0] else LandcoverStub()
+
+
+def _caption_tool():
+    """Real captioner when SATQUERY_CAPTION is set, else the stub (task 2.8)."""
+    from satquery.tools.caption import CaptionTool, is_available
+
+    return CaptionTool() if is_available()[0] else CaptionStub()
+
+
+def _grounding_tool():
+    """Real grounder when SATQUERY_GROUNDING is set, else the stub (2.7)."""
+    from satquery.tools.grounding import GroundingTool, is_available
+
+    return GroundingTool() if is_available()[0] else GroundingStub()
+
+
+def _change_vqa_tool():
+    """Semantic change path when SATQUERY_CHANGE_VQA is set (task 2.6).
+
+    The template path is not a stub - it is a real deterministic answerer - so
+    the fallback here is a working tool rather than a placeholder. Setting the
+    variable adds the semantic path behind it, which is what makes CDVQA's
+    per-class questions answerable at all.
+    """
+    from satquery.tools.change_vqa import ChangeVQASemantic, semantic_available
+
+    return ChangeVQASemantic() if semantic_available()[0] else ChangeVQATemplate()
+
+
+def _change_caption_tool():
+    """Real change captioner when SATQUERY_CHANGE_CAPTION is set (task 2.5)."""
+    from satquery.tools.change_caption import ChangeCaptionTool, is_available
+
+    return ChangeCaptionTool() if is_available()[0] else ChangeCaptionStub()
+
+
 REGISTRY = {
     "rs_vqa_v1": _vqa_tool(),
-    "caption_v1": CaptionStub(),
-    "grounding_v1": GroundingStub(),
-    "landcover_v1": LandcoverStub(),
+    "caption_v1": _caption_tool(),
+    "grounding_v1": _grounding_tool(),
+    "landcover_v1": _landcover_tool(),
     "optsar_fusion_v1": _fusion_tool(),
     "change_mask_v1": _change_mask_tool(),
-    "change_caption_v1": ChangeCaptionStub(),
-    "change_vqa_v1": ChangeVQATemplate(),
+    "change_caption_v1": _change_caption_tool(),
+    "change_vqa_v1": _change_vqa_tool(),
     "index_engine_v1": IndexEngine(),
 }

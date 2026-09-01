@@ -42,7 +42,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from training.common.checkpointing import (  # noqa: E402
     TrainingState, find_latest_checkpoint, load_checkpoint, maybe_resume,
-    save_checkpoint, set_seed, write_run_metadata,
+    safe_torch_load, save_checkpoint, set_seed, write_run_metadata,
 )
 from training.track_a_encoder import (  # noqa: E402
     BAND_NAMES, CARTOSAT_INDICES, band_dropout_mask, build_model,
@@ -131,7 +131,7 @@ def load_pretrained_encoder(init: Path, torch, device, dim: int):
         print(f"WARNING: no checkpoint in {init}; training from scratch")
         return model.to(device), None
 
-    payload = torch.load(latest, map_location="cpu", weights_only=False)
+    payload = safe_torch_load(latest)
     state = payload["model_state_dict"]
     encoder_state = {k: v for k, v in state.items() if not k.startswith("head.")}
     missing, unexpected = model.load_state_dict(encoder_state, strict=False)

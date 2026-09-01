@@ -1,29 +1,33 @@
 {
+  "abstain_limiting_component": null,
   "abstain_reason": null,
+  "abstain_resolving_input": null,
+  "abstain_trigger": null,
   "abstained": false,
   "answer": "Localised 1 matching region.",
+  "artifact_paths": "<volatile>",
   "artifacts": [
     "grounding_bboxes"
   ],
   "code_version": "0.2.0-phase1",
   "confidence": {
-    "band": "HIGH",
+    "band": "LOW",
     "calibration": {
       "T": 1.0,
       "ece_after": -1.0,
-      "method": "uncalibrated"
+      "method": "uncalibrated (score is not a calibratable probability)"
     },
     "components": {
       "agreement": 1.0,
       "input_quality": 1.0,
-      "model": 0.95
+      "model": 1.0
     },
-    "final": 0.983
+    "final": 0.44
   },
   "execution": [
     {
-      "confidence": 0.95,
-      "confidence_method": "threshold_rule",
+      "confidence": 0.0,
+      "confidence_method": "stub",
       "outputs": {
         "bounding_boxes": [
           {
@@ -73,7 +77,9 @@
           "SWIR1",
           "SWIR2"
         ],
+        "container_format": "GTiff",
         "crs": "EPSG:32643",
+        "georeferenced": true,
         "gsd_m": 10.0,
         "modality": "MSI",
         "modality_reason": "optical_band_names_present",
@@ -106,10 +112,11 @@
   "routing": {
     "capability_matrix_version": "cm-2026.11.02",
     "classifier": {
-      "margin": 0.9882,
+      "margin": 0.978,
       "name": "tfidf_logreg_v1",
-      "top1": 0.9926
+      "top1": 0.9863
     },
+    "config_excluded_task": null,
     "legal_tasks": [
       "SINGLE_VQA",
       "SINGLE_CAPTION",
@@ -127,9 +134,13 @@
     "complementarity": {},
     "conflicts": [],
     "entailment_gate": {
+      "action": "none",
+      "backend": "deterministic",
       "flagged": 0,
+      "flagged_detail": [],
       "retained": 0,
-      "sentences": 0
+      "sentences": 1,
+      "unverifiable": 1
     },
     "physics_agreement": {}
   },

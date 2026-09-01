@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from satquery.contracts.input_manifest import InputManifest
+from satquery.contracts.input_manifest import IngestMode, InputManifest
 from satquery.ingest import (
     harmonise_bands,
     index_availability,
@@ -138,9 +138,22 @@ class TestConfigInference:
         with pytest.raises(ValueError, match="at most two"):
             ingest([msi_6band, msi_6band, msi_6band])
 
-    def test_empty_rejected(self):
-        with pytest.raises(ValueError, match="at least one"):
-            ingest([])
+    def test_empty_input_becomes_a_blocking_failure_not_an_exception(self):
+        """Changed in task 3.13, deliberately.
+
+        This used to raise `ValueError("at least one image path is required")`,
+        which reached the caller as a traceback. An empty or unreadable input
+        is a user-facing condition, so it now returns a manifest whose single
+        check has FAILed - the same path every other bad input takes, which
+        the router and the abstention policy already handle.
+
+        `>2 images` still raises: the API rejects that with a 400 before
+        ingest is reached, so hitting it means a caller ignored the contract.
+        """
+        manifest = ingest([])
+        assert manifest.blocking_failures == ["inputs_present"]
+        assert manifest.images == []
+        assert "no input images" in manifest.checks[0].message
 
 
 class TestChecks:
@@ -221,3 +234,179 @@ class TestManifestShape:
     def test_small_scene_not_flagged_for_tiling(self, msi_6band):
         assert ingest([msi_6band]).tiling.applied is False
         assert ingest([msi_6band]).tiling.level1_tiles is None
+
+
+class TestBenchmarkFormats:
+    """PNG/JPEG for the prescribed benchmarks (problem statement, input scope).
+
+    The PS admits PNG and JPEG "only for the prescribed public benchmark
+    datasets". Those are ungeoreferenced by construction - RSVQA and VRSBench
+    ship plain rasters - and the CRS check failed them in every mode, so no
+    prescribed benchmark image could enter the pipeline at all.
+    """
+
+    def _png(self, tmp_path):
+        import numpy as np
+        import rasterio
+
+        path = tmp_path / "benchmark.png"
+        array = (np.random.default_rng(3).random((3, 128, 128)) * 255).astype("uint8")
+        with rasterio.open(
+            path, "w", driver="PNG", height=128, width=128, count=3, dtype="uint8"
+        ) as dst:
+            dst.write(array)
+        return path
+
+    def test_benchmark_mode_accepts_an_ungeoreferenced_png(self, tmp_path):
+        manifest = ingest([self._png(tmp_path)], mode=IngestMode.BENCHMARK)
+        assert manifest.blocking_failures == []
+
+    def test_the_limitation_is_recorded_not_hidden(self, tmp_path):
+        """Accepting it must not imply the outputs are placeable."""
+        manifest = ingest([self._png(tmp_path)], mode=IngestMode.BENCHMARK)
+        crs = next(c for c in manifest.checks if c.name == "crs_present")
+        assert crs.status == "WARN"
+        assert "cannot be georeferenced" in crs.message
+
+    def test_operational_mode_accepts_a_png_and_discloses_the_limits(
+        self, tmp_path
+    ):
+        """PS-26167 item 10: an ordinary PNG upload must be answerable.
+
+        This used to assert the opposite - a PNG in operational mode was a
+        blocking failure, so every normal user upload that was not a GeoTIFF
+        refused the query outright. The requirement is that PNG/JPEG work for
+        normal image interaction, so the check now WARNs and names exactly
+        what is unavailable rather than refusing.
+        """
+        manifest = ingest([self._png(tmp_path)], mode=IngestMode.OPERATIONAL)
+        assert manifest.blocking_failures == []
+        crs = next(c for c in manifest.checks if c.name == "crs_present")
+        assert crs.status == "WARN"
+        assert "no geospatial metadata" in crs.message
+
+    def test_an_ungeoreferenced_geotiff_is_still_refused(self, no_crs_raster):
+        """The relaxation is about the container, not about CRS in general.
+
+        A GeoTIFF without a CRS is a defective product - the format carries
+        georeferencing and this one does not - and must keep failing.
+        """
+        manifest = ingest([no_crs_raster], mode=IngestMode.OPERATIONAL)
+        assert "crs_present" in manifest.blocking_failures
+
+    def test_a_benchmark_png_answers_end_to_end(self, tmp_path):
+        from satquery.controller.pipeline import Controller
+
+        trace = Controller().run(
+            [self._png(tmp_path)],
+            "How many buildings are visible?",
+            mode=IngestMode.BENCHMARK,
+            benchmark="rsvqa_lr",
+        )
+        assert trace.abstained is False
+        assert trace.routing.selected_task == "SINGLE_VQA"
+        assert trace.answer
+
+
+class TestFootprintOverlap:
+    """The gate that was declared for three phases and enforced by nothing.
+
+    `configs/capability_matrix.yaml` has carried `min_overlap_pct` since Phase
+    0. `RequiresSchema` declared only `config` with `extra="allow"`, so the
+    value was parsed and read by nothing, and `Router.legal_tasks` gated on
+    configuration alone. The measured consequence (2026-08-30): an optical and
+    a SAR scene written 60 km apart routed to `XMODAL_JOINT_EXTRACT`, answered,
+    and raised no failing check - the system fused two different places into
+    one confident answer.
+    """
+
+    def _offset(self, tmp_path, source, easting, northing, names):
+        import rasterio
+        from rasterio.transform import from_origin
+
+        with rasterio.open(source) as src:
+            data, profile = src.read(), src.profile
+        profile.update(transform=from_origin(easting, northing, 10.0, 10.0))
+        out = tmp_path / f"offset_{easting:.0f}.tif"
+        with rasterio.open(out, "w", **profile) as dst:
+            dst.write(data)
+            dst.descriptions = names
+        return out
+
+    def test_identical_footprints_are_full_overlap(self, msi_6band, sar_dualpol):
+        from satquery.ingest.checks import footprint_overlap_pct
+        from satquery.ingest import ingest
+
+        manifest = ingest([msi_6band, sar_dualpol])
+        assert footprint_overlap_pct(*manifest.images) == pytest.approx(100.0)
+
+    def test_disjoint_footprints_fail(self, tmp_path, msi_6band, sar_dualpol):
+        from satquery.ingest import ingest
+
+        far = self._offset(tmp_path, sar_dualpol, 560000.0, 1940000.0, ("VV", "VH"))
+        manifest = ingest([msi_6band, far])
+        overlap = next(c for c in manifest.checks if c.name == "footprint_overlap")
+        assert overlap.status == "FAIL"
+        assert overlap.value == 0.0
+
+    def test_a_disjoint_pair_cannot_reach_the_crossmodal_task(
+        self, tmp_path, msi_6band, sar_dualpol
+    ):
+        """The regression that matters: not the check, but the gate on it."""
+        from satquery.controller.matrix_loader import load_matrix
+        from satquery.controller.router import Router
+        from satquery.ingest import ingest
+
+        far = self._offset(tmp_path, sar_dualpol, 560000.0, 1940000.0, ("VV", "VH"))
+        manifest = ingest([msi_6band, far])
+        router = Router(load_matrix("configs/capability_matrix.yaml"))
+
+        assert "XMODAL_JOINT_EXTRACT" not in router.legal_tasks(manifest)
+        unmet = router.unmet_requirements("XMODAL_JOINT_EXTRACT", manifest)
+        assert unmet and "overlap" in unmet[0]
+
+    def test_a_valid_pair_still_reaches_the_crossmodal_task(
+        self, msi_6band, sar_dualpol
+    ):
+        """The gate must not cost the legitimate path.
+
+        This is why `max_coreg_shift_px` is deliberately not enforced: on this
+        very pair - identical footprints, same CRS, same GSD - the cross-modal
+        phase correlation reports ~38 px against the matrix's 2.0 px limit.
+        """
+        from satquery.controller.matrix_loader import load_matrix
+        from satquery.controller.router import Router
+        from satquery.ingest import ingest
+
+        manifest = ingest([msi_6band, sar_dualpol])
+        router = Router(load_matrix("configs/capability_matrix.yaml"))
+        assert "XMODAL_JOINT_EXTRACT" in router.legal_tasks(manifest)
+
+    def test_clarify_or_abstain_is_never_gated_away(
+        self, tmp_path, msi_6band, sar_dualpol
+    ):
+        """Gating the destination-of-last-resort would leave nothing to route
+        to, which turns a graceful refusal into a crash."""
+        from satquery.controller.matrix_loader import load_matrix
+        from satquery.controller.router import Router
+        from satquery.ingest import ingest
+
+        far = self._offset(tmp_path, sar_dualpol, 560000.0, 1940000.0, ("VV", "VH"))
+        manifest = ingest([msi_6band, far])
+        router = Router(load_matrix("configs/capability_matrix.yaml"))
+        assert "CLARIFY_OR_ABSTAIN" in router.legal_tasks(manifest)
+
+    def test_an_ungeoreferenced_pair_warns_rather_than_failing(self, tmp_path):
+        """"Overlap unknown" and "no overlap" are different answers, and only
+        the second is a defect in the pair. Benchmark inputs are
+        ungeoreferenced by construction."""
+        from evaluation.scenes import build_no_crs_raster
+        from satquery.ingest import ingest
+        from satquery.ingest.checks import (
+            check_footprint_overlap,
+            footprint_overlap_pct,
+        )
+
+        image = ingest([build_no_crs_raster(tmp_path / "a.tif")]).images[0]
+        assert footprint_overlap_pct(image, image) is None
+        assert check_footprint_overlap(image, image).status == "WARN"

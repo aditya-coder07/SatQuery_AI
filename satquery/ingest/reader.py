@@ -88,7 +88,13 @@ def _read_sample(src) -> np.ndarray:
 
 
 def _gsd_metres(src) -> float:
-    """Ground sample distance in metres, converting from degrees if needed."""
+    """Ground sample distance in metres, converting from degrees if needed.
+
+    For an ungeoreferenced raster - a plain PNG or JPEG - GDAL hands back the
+    identity transform, so this returns 1.0. That is a placeholder, not a
+    measurement, and `ImageMeta.georeferenced` is what tells the trace and the
+    tools apart; see the note on that field.
+    """
     x_res = abs(src.transform.a)
     if src.crs is not None and src.crs.is_geographic:
         # Approximate: 1 degree of latitude ~= 111320 m. Good enough for a
@@ -197,4 +203,6 @@ def read_image(
             # AzimuthLooks. Confirmed present in real EOS-04 metadata
             # (verification item 5), so it is no longer a placeholder.
             look_count_est=layout.metadata.get("equivalent_looks"),
+            container_format=src.driver,
+            georeferenced=src.crs is not None,
         )

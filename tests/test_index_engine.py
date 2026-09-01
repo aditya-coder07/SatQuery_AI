@@ -90,6 +90,167 @@ class TestSwirFreePath:
         assert any("SWIR-free proxy" in w for w in result.warnings)
 
 
+class TestRgbOnlyNoNirNoSwir:
+    """3-band RGB: no NIR, no SWIR1, so no standard optical index applies.
+
+    The defect this class exists for: the MNDWI branch appended
+    "MNDWI unavailable (no SWIR1); NDWI used as the water index" whenever
+    MNDWI was unavailable - including when NDWI was unavailable too. An
+    RGB-only input therefore reported that NDWI had been used as the water
+    index while computing no water index at all, and because the executor
+    turns every substitution into a verification conflict, the false claim
+    reached the trace twice.
+    """
+
+    def test_no_optical_index_is_available(self, engine, rgb_3band, tmp_path):
+        manifest, _ = run_on(engine, [rgb_3band], tmp_path)
+        avail = manifest.index_availability
+        assert avail["ndvi"] is False
+        assert avail["ndwi"] is False
+        assert avail["mndwi"] is False
+        assert avail["ndbi"] is False
+
+    def test_no_index_is_actually_computed(self, engine, rgb_3band, tmp_path):
+        _, result = run_on(engine, [rgb_3band], tmp_path)
+        assert result.payload.data["indices"] == {}
+
+    def test_does_not_claim_ndwi_was_used(self, engine, rgb_3band, tmp_path):
+        _, result = run_on(engine, [rgb_3band], tmp_path)
+        subs = result.payload.data["substitutions"]
+        assert subs == [], f"substitution claimed with nothing computed: {subs}"
+        assert not any("NDWI used" in s for s in subs)
+
+    def test_says_explicitly_that_no_water_index_was_computed(
+        self, engine, rgb_3band, tmp_path
+    ):
+        # Requirement: report the absence, rather than either claiming a
+        # substitution or saying nothing.
+        _, result = run_on(engine, [rgb_3band], tmp_path)
+        assert any(
+            "no water index computed" in w for w in result.warnings
+        ), result.warnings
+
+    def test_says_explicitly_that_no_builtup_index_was_computed(
+        self, engine, rgb_3band, tmp_path
+    ):
+        _, result = run_on(engine, [rgb_3band], tmp_path)
+        assert any(
+            "no built-up index computed" in w for w in result.warnings
+        ), result.warnings
+
+    def test_glcm_texture_still_computed_on_a_single_band(
+        self, engine, rgb_3band, tmp_path
+    ):
+        # Availability says texture is computable on any band; this asserts
+        # the claim is true rather than only declared.
+        manifest, result = run_on(engine, [rgb_3band], tmp_path)
+        assert manifest.index_availability["glcm_texture"] is True
+        assert result.payload.data["glcm"]
+
+
+class TestAvailabilityMatchesExecution:
+    """The invariant, across every band configuration.
+
+    Availability, the indices actually computed, and the substitutions claimed
+    must describe the same run. Each of the three could drift from the others
+    independently, and the RGB defect was exactly that drift.
+    """
+
+    WATER = ("ndwi", "mndwi")
+
+    @pytest.fixture(params=["rgb_3band", "msi_4band", "msi_6band", "pan_1band"])
+    def any_optical(self, request):
+        return request.getfixturevalue(request.param)
+
+    def test_every_computed_index_was_declared_available(
+        self, engine, any_optical, tmp_path
+    ):
+        manifest, result = run_on(engine, [any_optical], tmp_path)
+        avail = manifest.index_availability
+        for name in result.payload.data["indices"]:
+            if name == "builtup_proxy":
+                continue  # a substitute, not a declared index
+            assert avail.get(name) is True, f"{name} computed but not available"
+
+    def test_every_available_optical_index_was_computed(
+        self, engine, any_optical, tmp_path
+    ):
+        manifest, result = run_on(engine, [any_optical], tmp_path)
+        computed = result.payload.data["indices"]
+        for name in ("ndvi", "ndwi", "mndwi", "ndbi"):
+            if manifest.index_availability.get(name):
+                assert name in computed, f"{name} available but not computed"
+
+    def test_substitutions_only_name_indices_that_ran(
+        self, engine, any_optical, tmp_path
+    ):
+        _, result = run_on(engine, [any_optical], tmp_path)
+        data = result.payload.data
+        for sub in data["substitutions"]:
+            if "NDWI used as the water index" in sub:
+                assert "ndwi" in data["indices"], (
+                    "claimed NDWI as the substitute without computing it"
+                )
+            if "built-up estimated from" in sub:
+                assert "builtup_proxy" in data["indices"], (
+                    "claimed a built-up proxy without computing it"
+                )
+
+    def test_a_water_substitution_implies_a_water_index_exists(
+        self, engine, any_optical, tmp_path
+    ):
+        _, result = run_on(engine, [any_optical], tmp_path)
+        data = result.payload.data
+        if any("water index" in s for s in data["substitutions"]):
+            assert any(w in data["indices"] for w in self.WATER)
+
+    def test_no_water_index_means_no_water_substitution_and_a_warning(
+        self, engine, any_optical, tmp_path
+    ):
+        manifest, result = run_on(engine, [any_optical], tmp_path)
+        avail = manifest.index_availability
+        if not any(avail.get(w) for w in self.WATER):
+            assert not any(
+                "water index" in s for s in result.payload.data["substitutions"]
+            )
+            assert any("no water index computed" in w for w in result.warnings)
+
+
+class TestRgbTraceConsistency:
+    """The same invariant one level up, in the trace a judge reads."""
+
+    def test_trace_carries_no_false_substitution_conflict(self, rgb_3band):
+        from satquery.controller.pipeline import Controller
+
+        # This query routes through index_engine_v1; "Highlight the water
+        # body" does not - it goes straight to grounding_v1, which would make
+        # this test pass without exercising the engine at all.
+        trace = Controller().run(
+            [rgb_3band], "What land cover types are present in this image?"
+        )
+        assert "index_engine_v1" in [s.tool for s in trace.execution]
+        conflicts = trace.verification.conflicts
+        assert not any("NDWI used as the water index" in c for c in conflicts), (
+            f"false substitution reached the verifier: {conflicts}"
+        )
+
+    def test_trace_availability_matches_the_executed_indices(self, rgb_3band):
+        from satquery.controller.pipeline import Controller
+
+        trace = Controller().run(
+            [rgb_3band], "What land cover types are present in this image?"
+        )
+        assert "index_engine_v1" in [s.tool for s in trace.execution]
+        avail = trace.ingest.index_availability
+        assert avail["ndvi"] is False
+        assert avail["ndwi"] is False
+        assert avail["mndwi"] is False
+        assert avail["ndbi"] is False
+        for step in trace.execution:
+            if step.tool == "index_engine_v1":
+                assert step.outputs.get("indices", {}) == {}
+
+
 class TestSAR:
     def test_sigma0_and_ratio_computed(self, engine, sar_dualpol, tmp_path):
         _, result = run_on(engine, [sar_dualpol], tmp_path)

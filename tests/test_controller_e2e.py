@@ -65,6 +65,10 @@ def test_controller_e2e(tmp_path):
     
     # Check answer
     assert trace.answer != ""
-    assert "fake answer string" in trace.answer # Matches the payload from stub
+    # The stub still reaches the answer - what changed is that it now says
+    # so. A placeholder that reads like a result is the defect this asserts
+    # against (satquery/tools/stubs.py STUB_NOTICE).
+    assert "[STUB - no model loaded]" in trace.answer
+    assert "the VQA model is not loaded" in trace.answer
 
     print(trace.model_dump_json(indent=2))

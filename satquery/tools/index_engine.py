@@ -158,9 +158,24 @@ class IndexEngine(ToolProtocol):
                     green = read_canonical_band(optical, "GREEN")
                 swir1 = read_canonical_band(optical, "SWIR1")
                 record("mndwi", mndwi(green, swir1), optical)
-            else:
+            elif "ndwi" in indices:
+                # A substitution is a claim that something ran INSTEAD. This
+                # branch used to fire whenever MNDWI was unavailable, including
+                # when NDWI was unavailable too - so an RGB-only input, with no
+                # NIR and no SWIR1, reported "NDWI used as the water index"
+                # while computing no water index at all. The claim then reached
+                # the verifier as a conflict, because the executor turns every
+                # substitution into one.
                 substitutions.append(
                     "MNDWI unavailable (no SWIR1); NDWI used as the water index"
+                )
+            else:
+                # Neither water index is computable. Say so, rather than
+                # claiming a substitution that did not happen or saying
+                # nothing at all.
+                warnings.append(
+                    "no water index computed: MNDWI needs SWIR1 and NDWI needs "
+                    "NIR; neither band is present in these inputs"
                 )
 
             if avail.get("ndbi"):
@@ -191,6 +206,15 @@ class IndexEngine(ToolProtocol):
                 warnings.append(
                     "built-up derived from a SWIR-free proxy, not NDBI - "
                     "lower reliability"
+                )
+            else:
+                # Same rule as the water index: the proxy needs RED and NIR,
+                # so with neither NDBI nor the proxy computable the honest
+                # trace says nothing was estimated - not nothing at all.
+                warnings.append(
+                    "no built-up index computed: NDBI needs SWIR1 and NIR, and "
+                    "the SWIR-free proxy needs RED and NIR; these inputs "
+                    "support neither"
                 )
 
         # --- SAR indices -----------------------------------------------------
