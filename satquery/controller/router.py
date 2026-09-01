@@ -23,11 +23,32 @@ Blocking ingest failures short-circuit straight to CLARIFY_OR_ABSTAIN.
 
 from __future__ import annotations
 
+from dataclasses import dataclass
+
 from satquery.contracts.input_manifest import InputManifest
 from satquery.contracts.plan import Plan, PlanStep, RationaleTag, TaskID
-from satquery.controller.intent import IntentClassifier, default_classifier
+from satquery.controller.intent import (
+    IntentClassifier,
+    IntentPrediction,
+    default_classifier,
+)
 from satquery.controller.matrix_loader import CapabilityMatrix
 from satquery.controller.validator import assert_legal
+
+
+@dataclass(frozen=True)
+class RouteDecision:
+    """Everything one routing decision produced, carried rather than stashed.
+
+    `prediction` is None when the input checks forced the abstention, because
+    the classifier was not consulted at all. `config_excluded` names the task
+    the query actually asked for when the input configuration cannot support
+    it - the plan is still legal, and the answer says so.
+    """
+
+    plan: Plan
+    prediction: IntentPrediction | None
+    config_excluded: str | None
 
 CONFIG_TO_LEGAL_TASKS: dict[str, list[str]] = {
     "SINGLE": [
@@ -253,8 +274,33 @@ class Router:
 
     # -- entry point ------------------------------------------------------
     def route(self, query: str, manifest: InputManifest) -> Plan:
+        """The plan alone. Equivalent to `decide(...).plan`.
+
+        Kept because most callers - the adversarial harness, the ablations,
+        the routing tests - want only the plan. It also refreshes the
+        `last_*` attributes below for callers that read them, which is safe
+        in a single-threaded caller and unsafe across concurrent ones; that
+        is exactly why the controller uses `decide` instead.
+        """
+        return self.decide(query, manifest).plan
+
+    def decide(self, query: str, manifest: InputManifest) -> RouteDecision:
+        """Plan plus everything the executor needs to explain it.
+
+        The prediction and the config-excluded task are **returned**, not
+        stored on `self`. They used to be attributes that `route()` set and
+        the controller read immediately afterwards, which is correct only
+        while one request at a time is in flight. The API builds a single
+        `Controller` - so a single `Router` - and serves `/runs/stream` from
+        one thread per request, so two concurrent runs could interleave the
+        write and the read: run A would attach run B's "this input
+        configuration cannot support TEMPORAL_CHANGE_MAP" notice to its own
+        answer, or take B's classifier scores into its trace. Nothing in the
+        trace would show it happened.
+        """
         legal = self.legal_tasks(manifest)
-        self.last_config_excluded: str | None = None
+        config_excluded: str | None = None
+        prediction: IntentPrediction | None = None
 
         if manifest.blocking_failures:
             # Inputs failed validation: no amount of query understanding makes
@@ -270,16 +316,29 @@ class Router:
             # a land-cover map when they asked about change.
             unconstrained = self.classifier.predict(query)
             if unconstrained.is_confident and unconstrained.task not in legal:
-                self.last_config_excluded = unconstrained.task
+                config_excluded = unconstrained.task
 
             prediction = self.classifier.predict(query, candidates=legal)
-            if prediction.is_confident:
+            # A low-confidence pick is normally discarded in favour of the
+            # configuration default, because a weak guess at *which* capability
+            # to use still beats refusing. CLARIFY_OR_ABSTAIN is the one class
+            # where that reasoning inverts: the fallback ANSWERS, so overriding
+            # a weak abstain pick converts "I could not understand this" into a
+            # confident-looking answer to a query with no content in it.
+            #
+            # An empty query, "   " and "hmm" carry no features at all, so they
+            # land on the class prior - CLARIFY_OR_ABSTAIN top-1 at 0.353 with a
+            # 0.042 margin, below the generic confidence bar. Whether they
+            # abstained was therefore decided by where a linear model's prior
+            # happened to sit, and it moved every time the template bank
+            # changed size. Honouring the abstain pick regardless of its
+            # confidence takes that off the knife edge in the safe direction.
+            if prediction.is_confident or prediction.task == "CLARIFY_OR_ABSTAIN":
                 task = prediction.task
             else:
                 task = CONFIG_DEFAULT_TASK.get(manifest.config, "SINGLE_VQA")
                 if task not in legal:
                     task = "CLARIFY_OR_ABSTAIN"
-            self.last_prediction = prediction
 
         if task not in legal:
             task = "CLARIFY_OR_ABSTAIN"
@@ -305,4 +364,20 @@ class Router:
 
         # The guarantee: nothing leaves this method without passing the matrix.
         assert_legal(plan, self.matrix)
-        return plan
+
+        # Refreshed for the callers that still read them. Both are written on
+        # every call, including this abstention path, so a stale value from an
+        # earlier query can never be read back as if it belonged to this one.
+        self.last_prediction = prediction
+        self.last_config_excluded = config_excluded
+
+        return RouteDecision(
+            plan=plan,
+            # Routing was decided by the input checks rather than by the
+            # classifier, so there is no prediction to report. The executor
+            # renders this as `classifier="not_invoked"` instead of inventing
+            # a score - which is why it is None here rather than a zeroed
+            # prediction object.
+            prediction=None if manifest.blocking_failures else prediction,
+            config_excluded=config_excluded,
+        )

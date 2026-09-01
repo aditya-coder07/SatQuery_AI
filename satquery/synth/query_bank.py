@@ -44,6 +44,13 @@ CHANGE_NOUNS = [
     "vegetation loss", "flooding", "land clearing", "built-up expansion",
 ]
 
+# Scene descriptors, for the "is this X or Y?" shape a user actually types.
+SCENE_TYPES = [
+    "urban", "rural", "residential", "industrial", "agricultural",
+    "coastal", "forested", "built-up", "developed", "natural",
+    "densely built", "sparsely populated",
+]
+
 _VQA = [
     "How many {feature} are visible in this image?",
     "How many {feature} can you count?",
@@ -66,9 +73,88 @@ _VQA = [
     "Whats the count of {feature}?",
 ]
 
+# General natural-language visual questions (PS-26167).
+#
+# Everything in _VQA above was written from benchmark phrasings, so the
+# classifier learned that "a question about one image" means "how many X" or
+# "what proportion is X". The open-ended shapes a user actually types - "is
+# this urban or rural?", "what do you see?", "are there buildings?" - matched
+# none of them and fell into CLARIFY_OR_ABSTAIN, whose own templates are
+# content-free filler ("What is this?", "Anything interesting?") and are the
+# nearest neighbour of any short unadorned question. The system refused to
+# answer questions rs_vqa_v1 answers perfectly well.
+#
+# These are templates over the same slots as the rest of the bank, not a list
+# of accepted questions. They expand into hundreds of paraphrases, and the
+# word/char n-gram features generalise across the *shape*, which is what lets
+# an unseen "does this look like an industrial estate?" reach the same class
+# as the "does this look like {feature}?" seen in training. Nothing here
+# enumerates the questions the product must accept.
+_GENERAL_VISUAL = [
+    "Is this {scene} or {scene2}?",
+    "Is this an {scene} or {scene2} scene?",
+    "Is this area {scene} or {scene2}?",
+    "Would you call this {scene} or {scene2}?",
+    "Is this scene {scene}?",
+    "Is this area {scene}?",
+    "Does this look {scene} to you?",
+    "Does this look like {feature}?",
+    "What kind of landscape is this?",
+    "What kind of area is this?",
+    "What sort of terrain is this?",
+    "What do you see in this image?",
+    "What do you see here?",
+    "What is in this image?",
+    "What can you tell me about this image?",
+    "What is happening in this scene?",
+    "Do you see any {feature}?",
+
+    # Conversational open-ended questions. These read like captioning and are
+    # not: "describe what you see" asks the assistant what it can make out,
+    # and "describe the landscape" asks about something *in* the scene. Both
+    # sat in _CAPTION, so an ordinary conversational question needed the
+    # captioner loaded and returned the caption stub when it was not, even
+    # though rs_vqa_v1 was loaded and could answer. The boundary that stays
+    # with _CAPTION is whether the user asked for a caption of *the image* -
+    # "caption this scene", "write a few sentences about this image" - which
+    # is the mandatory second single-image capability and is untouched.
+    "Describe what you see.",
+    "Describe what you can see here.",
+    "Describe what is visible here.",
+    "Tell me what you see.",
+    "Tell me what you can see in this scene.",
+    "Describe the {feature}.",
+    "Describe the {feature} you can see.",
+    "Describe the landscape.",
+    "Describe the {scene} area.",
+    "Tell me about the {feature} here.",
+    "Tell me about this area.",
+    "What features are visible?",
+    "What features can you make out?",
+    "Give me an overview of this image.",
+    "Give me a rundown of this picture.",
+    "Narrate what can be seen here.",
+    "Whats going on in this shot?",
+    "How dense is the {feature} here?",
+    "How built up is this area?",
+    "Is this a densely developed area?",
+    "What is unusual in this image?",
+    "Is there anything unusual in this scene?",
+]
+
+# A request to PRODUCE A CAPTION: the object is the image itself, and what is
+# wanted back is a written artifact about it - a caption, a summary, a few
+# sentences. See _GENERAL_VISUAL for the boundary against a conversational
+# "what do you see?", which asks the same model-shaped question but is not a
+# request for a caption and must not need the captioner to be loaded.
 _CAPTION = [
     "Describe this image.",
     "Caption this scene.",
+    "Generate a caption for this image.",
+    "Produce a caption for this scene.",
+    "Generate a formal caption for this image.",
+    "Write an image caption for this scene.",
+    "Give me a caption for this satellite image.",
     "Give me a description of what this image shows.",
     "Write a caption for this satellite image.",
     "Summarise what is visible in this scene.",
@@ -77,13 +163,9 @@ _CAPTION = [
     "Explain what this scene contains.",
     "Give a short summary of this image.",
     "Describe the overall content of this scene.",
-    "Narrate what can be seen here.",
     "Write a few sentences about this image.",
-    "Give me an overview of this scene.",
     "Describe the landscape in this image.",
     "What would you say this image depicts?",
-    "Give me a rundown of this picture.",
-    "Whats going on in this shot?",
     "Sum up the imagery.",
     "In a sentence or two, describe this scene.",
     "Talk me through what this image shows.",
@@ -198,6 +280,25 @@ _CHANGE_DESC = [
     "Explain the changes and where they occurred in the scene.",
     "What has altered here, and in which areas?",
     "Report what changed and the areas affected.",
+
+    # Transition phrasings: "which areas BECAME X". The bank had the
+    # quantitative shape ("How many new {feature} appeared?" in _CHANGE_VQA)
+    # and CDVQA's "What have the areas of X mainly changed to?", but not the
+    # plain conversational transition, so "Which areas became built up?" on a
+    # bitemporal pair scored 0.326 for change against 0.273 for SINGLE_VQA -
+    # under the confidence bar, so the router fell back to the single-image
+    # default and rs_vqa_v1 answered "only one image was provided" about a
+    # two-image input. These belong with DESC rather than MAP because they
+    # ask *which areas*, and DESC's plan is index -> change_mask ->
+    # change_caption, which returns the georeferenced mask AND the prose.
+    "Which areas became {feature}?",
+    "Which areas turned into {feature}?",
+    "Which parts of the scene became {feature}?",
+    "What became {feature} between the two dates?",
+    "Which regions changed to {feature}?",
+    "Which areas were cleared?",
+    "What has been replaced by {feature}?",
+    "Which areas have become {feature} since the earlier image?",
 ]
 
 _CHANGE_VQA = [
@@ -246,15 +347,26 @@ _CHANGE_MAP = [
     "Export a difference raster between the two dates.",
 ]
 
+# Content-free requests: filler that names no visual subject, or that refers
+# to context the system does not have ("the other one", "last time").
+#
+# This class is *not* where a question with a visual subject belongs, however
+# vaguely it is phrased. It kept "Is this an urban or rural scene?" out of the
+# VQA model for exactly that reason - see the note on _GENERAL_VISUAL - and
+# the fix was to give the general shapes their own templates rather than to
+# thin this list out, so the filler below still abstains.
 _CLARIFY = [
     "Hello.",
     "Hi there.",
+    "Hey.",
     "What do you think?",
     "Tell me about it.",
     "Can you help?",
-    "What is this?",
-    "Anything interesting?",
     "Do the thing.",
+    "Have a look and let me know.",
+    "Just take a look.",
+    "OK.",
+    "Thoughts?",
     "Analyse.",
     "Go ahead.",
     "What should I do next?",
@@ -445,7 +557,7 @@ _CDVQA_TRAINED_TEMPLATES = [
 
 
 TEMPLATES: dict[TaskID, list[str]] = {
-    "SINGLE_VQA": _VQA,
+    "SINGLE_VQA": _VQA + _GENERAL_VISUAL,
     "SINGLE_CAPTION": _CAPTION,
     "SINGLE_GROUND": _GROUND,
     "SINGLE_LANDCOVER": _LANDCOVER,
@@ -470,12 +582,16 @@ class QueryExample:
 def _fill(template: str, rng: random.Random) -> str:
     feature = rng.choice(FEATURES)
     feature2 = rng.choice([f for f in FEATURES if f != feature])
+    scene = rng.choice(SCENE_TYPES)
+    scene2 = rng.choice([s for s in SCENE_TYPES if s != scene])
     return (
         template.replace("{feature2}", feature2)
         .replace("{feature}", feature)
         .replace("{singular}", rng.choice(SINGULAR))
         .replace("{landcover}", rng.choice(LANDCOVER_CLASSES))
         .replace("{change}", rng.choice(CHANGE_NOUNS))
+        .replace("{scene2}", scene2)
+        .replace("{scene}", scene)
     )
 
 

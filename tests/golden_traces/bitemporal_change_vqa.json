@@ -15,7 +15,7 @@
   ],
   "code_version": "0.2.0-phase1",
   "confidence": {
-    "band": "HIGH",
+    "band": "LOW",
     "calibration": {
       "T": 1.0,
       "ece_after": -1.0,
@@ -24,9 +24,9 @@
     "components": {
       "agreement": 1.0,
       "input_quality": 1.0,
-      "model": 0.89
+      "model": 1.0
     },
-    "final": 0.9619
+    "final": 0.44
   },
   "execution": [
     {
@@ -159,8 +159,8 @@
       "version": "1.0.0"
     },
     {
-      "confidence": 0.89,
-      "confidence_method": "threshold_rule",
+      "confidence": 0.0,
+      "confidence_method": "stub",
       "outputs": {
         "changed_pixels": 420
       },
@@ -272,7 +272,9 @@
           "SWIR1",
           "SWIR2"
         ],
+        "container_format": "GTiff",
         "crs": "EPSG:32643",
+        "georeferenced": true,
         "gsd_m": 10.0,
         "modality": "MSI",
         "modality_reason": "optical_band_names_present",
@@ -291,7 +293,9 @@
           "SWIR1",
           "SWIR2"
         ],
+        "container_format": "GTiff",
         "crs": "EPSG:32643",
+        "georeferenced": true,
         "gsd_m": 10.0,
         "modality": "MSI",
         "modality_reason": "optical_band_names_present",
@@ -324,9 +328,9 @@
   "routing": {
     "capability_matrix_version": "cm-2026.11.02",
     "classifier": {
-      "margin": 0.9666,
+      "margin": 0.9761,
       "name": "tfidf_logreg_v1",
-      "top1": 0.9764
+      "top1": 0.9827
     },
     "config_excluded_task": null,
     "legal_tasks": [

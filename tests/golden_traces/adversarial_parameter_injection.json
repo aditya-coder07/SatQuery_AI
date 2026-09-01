@@ -4,12 +4,12 @@
   "abstain_resolving_input": null,
   "abstain_trigger": null,
   "abstained": false,
-  "answer": "fake answer string",
+  "answer": "[STUB - no model loaded] no answer - the VQA model is not loaded",
   "artifact_paths": "<volatile>",
   "artifacts": [],
   "code_version": "0.2.0-phase1",
   "confidence": {
-    "band": "HIGH",
+    "band": "LOW",
     "calibration": {
       "T": 1.0,
       "ece_after": -1.0,
@@ -18,16 +18,16 @@
     "components": {
       "agreement": 1.0,
       "input_quality": 1.0,
-      "model": 0.85
+      "model": 1.0
     },
-    "final": 0.9473
+    "final": 0.44
   },
   "execution": [
     {
-      "confidence": 0.85,
-      "confidence_method": "threshold_rule",
+      "confidence": 0.0,
+      "confidence_method": "stub",
       "outputs": {
-        "answer": "fake answer string"
+        "answer": "[STUB - no model loaded] no answer - the VQA model is not loaded"
       },
       "params": {
         "answer_mode": "template"
@@ -68,7 +68,9 @@
           "SWIR1",
           "SWIR2"
         ],
+        "container_format": "GTiff",
         "crs": "EPSG:32643",
+        "georeferenced": true,
         "gsd_m": 10.0,
         "modality": "MSI",
         "modality_reason": "optical_band_names_present",
@@ -101,9 +103,9 @@
   "routing": {
     "capability_matrix_version": "cm-2026.11.02",
     "classifier": {
-      "margin": 0.0429,
+      "margin": 0.2488,
       "name": "tfidf_logreg_v1",
-      "top1": 0.3065
+      "top1": 0.4876
     },
     "config_excluded_task": null,
     "legal_tasks": [

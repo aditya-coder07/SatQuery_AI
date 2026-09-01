@@ -4,14 +4,14 @@
   "abstain_resolving_input": null,
   "abstain_trigger": null,
   "abstained": false,
-  "answer": "A satellite image showing a fake landscape.",
+  "answer": "[STUB - no model loaded] no caption - the captioning model is not loaded",
   "artifact_paths": "<volatile>",
   "artifacts": [
     "landcover_map"
   ],
   "code_version": "0.2.0-phase1",
   "confidence": {
-    "band": "HIGH",
+    "band": "LOW",
     "calibration": {
       "T": 1.0,
       "ece_after": -1.0,
@@ -20,9 +20,9 @@
     "components": {
       "agreement": 1.0,
       "input_quality": 1.0,
-      "model": 0.8
+      "model": 1.0
     },
-    "final": 0.9283
+    "final": 0.44
   },
   "execution": [
     {
@@ -46,9 +46,7 @@
           "vh_vv_ratio": false
         },
         "indices": {},
-        "substitutions": [
-          "MNDWI unavailable (no SWIR1); NDWI used as the water index"
-        ],
+        "substitutions": [],
         "thresholds": []
       },
       "params": {},
@@ -59,8 +57,8 @@
       "version": "1.0.0"
     },
     {
-      "confidence": 0.8,
-      "confidence_method": "threshold_rule",
+      "confidence": 0.0,
+      "confidence_method": "stub",
       "outputs": {
         "classes": [
           "forest",
@@ -75,10 +73,10 @@
       "version": "0.1.0-stub"
     },
     {
-      "confidence": 0.9,
-      "confidence_method": "threshold_rule",
+      "confidence": 0.0,
+      "confidence_method": "stub",
       "outputs": {
-        "caption": "A satellite image showing a fake landscape."
+        "caption": "[STUB - no model loaded] no caption - the captioning model is not loaded"
       },
       "params": {},
       "rationale_tag": "MASK_CONDITIONED_CAPTION",
@@ -112,7 +110,9 @@
         "bands": [
           "PAN"
         ],
+        "container_format": "GTiff",
         "crs": "EPSG:32643",
+        "georeferenced": true,
         "gsd_m": 0.65,
         "modality": "PAN",
         "modality_reason": "single_band_defaulted_to_panchromatic",
@@ -145,9 +145,9 @@
   "routing": {
     "capability_matrix_version": "cm-2026.11.02",
     "classifier": {
-      "margin": 0.9918,
+      "margin": 0.9736,
       "name": "tfidf_logreg_v1",
-      "top1": 0.9943
+      "top1": 0.9862
     },
     "config_excluded_task": null,
     "legal_tasks": [
@@ -165,9 +165,7 @@
   "verification": {
     "built_up_path": "not_computed",
     "complementarity": {},
-    "conflicts": [
-      "substitution: MNDWI unavailable (no SWIR1); NDWI used as the water index"
-    ],
+    "conflicts": [],
     "entailment_gate": {
       "action": "none",
       "backend": "deterministic",

@@ -49,8 +49,10 @@
           "GREEN",
           "RED"
         ],
+        "container_format": "GTiff",
         "crs": "UNKNOWN",
-        "gsd_m": 1.0,
+        "georeferenced": false,
+        "gsd_m": null,
         "modality": "OPTICAL",
         "modality_reason": "band_count_lt_4_no_names_assumed_optical",
         "nodata_pct": 0.0,

@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useCallback, useRef, useState } from 'react';
 
 import Comparator from './Comparator';
@@ -66,6 +67,10 @@ export default function Page() {
   const [running, setRunning] = useState(false);
   const [error, setError] = useState<string>('');
   const [runId, setRunId] = useState<string>('');
+  // The run id arrives on `run_started`, but the trace is only persisted when
+  // the run finishes: `/runs/{id}/overlays` 404s until then, by design. This
+  // flag is what separates "the run exists" from "the run can be queried".
+  const [runComplete, setRunComplete] = useState(false);
   const [abstained, setAbstained] = useState(false);
   const [roles, setRoles] = useState<string[]>([]);
   const traceRef = useRef<HTMLDivElement>(null);
@@ -87,6 +92,7 @@ export default function Page() {
       setConfidence(null);
       setChecks([]);
       setRunId('');
+      setRunComplete(false);
       setRoles([]);
 
       const form = new FormData();
@@ -112,6 +118,10 @@ export default function Page() {
           } else if (event.name === 'confidence') {
             setConfidence(event.data);
           } else if (event.name === 'complete') {
+            // The API calls store.complete() BEFORE emitting this event, so
+            // by the time it arrives the trace is persisted and the overlay
+            // endpoints will answer.
+            setRunComplete(true);
             setAnswer(event.data.answer ?? '');
             setAbstained(Boolean(event.data.abstained));
             if (event.data.abstained && event.data.abstain_reason) {
@@ -154,7 +164,7 @@ export default function Page() {
         />
         <input
           type="file"
-          accept=".tif,.tiff,.img,.jp2"
+          accept=".tif,.tiff,.img,.jp2,.png,.jpg,.jpeg"
           multiple
           onChange={(e) => setFiles(e.target.files)}
         />
@@ -174,6 +184,16 @@ export default function Page() {
           {task && <span className="pill">{task}</span>}
           <p className="answer">{answer || (running ? 'Working…' : '—')}</p>
 
+          {/* The run is stored the moment it completes, and docs/rehearsal.md
+              recommends presenting the two 56 s Cartosat beats from their
+              stored permalink rather than re-running them live. Nothing
+              linked to one, so the presenter had to type the URL. */}
+          {runId && !running && (
+            <Link className="permalink" href={`/runs/${runId}`}>
+              Permalink to this run ({runId}) →
+            </Link>
+          )}
+
           {checks.length > 0 && (
             <>
               <h2 style={{ marginTop: 20 }}>Input checks</h2>
@@ -189,7 +209,14 @@ export default function Page() {
         </section>
 
         <section className="panel">
-          <h2>Confidence</h2>
+          {/* "Confidence score", not "Confidence": the combiner reports an
+              uncalibrated score, and satquery/controller/calibration.py states
+              it plainly - "uncalibrated (score is not a calibratable
+              probability)" - whenever no learned head contributed. Rendering
+              1.00 as "100.0%" asserted a calibrated probability the system
+              does not claim to produce. The run permalink already showed the
+              score; this brings the live page into line with it. */}
+          <h2>Confidence score</h2>
           {confidence ? (
             <>
               {/* An abstained run returned no answer, so a confidence *for
@@ -208,7 +235,7 @@ export default function Page() {
                 </div>
               ) : (
                 <div className={`confidence-value band-${confidence.band}`}>
-                  {(confidence.final * 100).toFixed(1)}%
+                  {confidence.final.toFixed(2)}
                   <span style={{ fontSize: 14, marginLeft: 8 }}>{confidence.band}</span>
                 </div>
               )}
@@ -244,7 +271,7 @@ export default function Page() {
       {/* Task 1.6. Mounted for ANY completed run, not just pairs: a single
           image still produces georeferenced index rasters worth putting on a
           map, and the comparator above only applies to two-image inputs. */}
-      {runId && <MapView runId={runId} />}
+      {runId && <MapView runId={runId} ready={runComplete} />}
 
       <section className="panel" style={{ marginTop: 16 }}>
         <h2>Live trace ({events.length} events)</h2>

@@ -4,7 +4,7 @@
   "abstain_resolving_input": null,
   "abstain_trigger": null,
   "abstained": false,
-  "answer": "fake answer string",
+  "answer": "[STUB - no model loaded] no answer - the VQA model is not loaded",
   "artifact_paths": "<volatile>",
   "artifacts": [
     "ndvi",
@@ -18,7 +18,7 @@
   ],
   "code_version": "0.2.0-phase1",
   "confidence": {
-    "band": "HIGH",
+    "band": "LOW",
     "calibration": {
       "T": 1.0,
       "ece_after": -1.0,
@@ -27,9 +27,9 @@
     "components": {
       "agreement": 0.9,
       "input_quality": 1.0,
-      "model": 0.85
+      "model": 1.0
     },
-    "final": 0.9146
+    "final": 0.44
   },
   "execution": [
     {
@@ -223,8 +223,8 @@
       "version": "1.0.0"
     },
     {
-      "confidence": 0.88,
-      "confidence_method": "threshold_rule",
+      "confidence": 0.0,
+      "confidence_method": "stub",
       "outputs": {
         "fusion_status": "success"
       },
@@ -244,10 +244,10 @@
       "version": "0.1.0-stub"
     },
     {
-      "confidence": 0.85,
-      "confidence_method": "threshold_rule",
+      "confidence": 0.0,
+      "confidence_method": "stub",
       "outputs": {
-        "answer": "fake answer string"
+        "answer": "[STUB - no model loaded] no answer - the VQA model is not loaded"
       },
       "params": {
         "classes": [
@@ -329,7 +329,9 @@
           "SWIR1",
           "SWIR2"
         ],
+        "container_format": "GTiff",
         "crs": "EPSG:32643",
+        "georeferenced": true,
         "gsd_m": 10.0,
         "modality": "MSI",
         "modality_reason": "optical_band_names_present",
@@ -344,7 +346,9 @@
           "VV",
           "VH"
         ],
+        "container_format": "GTiff",
         "crs": "EPSG:32643",
+        "georeferenced": true,
         "gsd_m": 10.0,
         "modality": "SAR",
         "modality_reason": "sar_metadata_present_and_no_optical_band_names",
@@ -380,9 +384,9 @@
   "routing": {
     "capability_matrix_version": "cm-2026.11.02",
     "classifier": {
-      "margin": 0.9939,
+      "margin": 0.9925,
       "name": "tfidf_logreg_v1",
-      "top1": 0.9961
+      "top1": 0.9953
     },
     "config_excluded_task": null,
     "legal_tasks": [

@@ -37,6 +37,7 @@ from satquery.controller.intent import CLASSIFIER_NAME, IntentPrediction
 from satquery.synth.narrative import synthesise_answer
 from satquery.verify.entailment import run_gate
 from satquery.verify.verifier import verify as verify_claims
+from satquery.tools.provenance import hashes_for as weights_hashes_for
 from satquery.tools.stubs import REGISTRY
 
 CODE_VERSION = "0.2.0-phase1"
@@ -127,7 +128,13 @@ class Executor:
                     "modality": img.modality,
                     "modality_reason": img.modality_evidence.get("reason"),
                     "crs": img.crs,
-                    "gsd_m": img.gsd_m,
+                    "container_format": img.container_format,
+                    "georeferenced": img.georeferenced,
+                    # None, not the identity-transform 1.0, when the container
+                    # carried no georeferencing: reporting a GSD nobody
+                    # measured is the kind of quiet fabrication the trace
+                    # exists to prevent.
+                    "gsd_m": img.gsd_m if img.georeferenced else None,
                     "bands": img.bands,
                     "nodata_pct": img.nodata_pct,
                     "sensor_guess": img.sensor_guess,
@@ -159,6 +166,8 @@ class Executor:
         # method - not merely "a learned tool ran" - decides whether the
         # fitted transform may be applied. See CALIBRATABLE_CONFIDENCE_METHODS.
         confidence_method: str | None = None
+        # Set when any executed tool was a placeholder rather than a model.
+        stubbed = False
         index_payload: dict = {}
         # optsar_fusion_v1 computes a per-query triad (optical / SAR / fused)
         # and puts the score in its payload. The trace hardcoded `{}`, so the
@@ -188,7 +197,13 @@ class Executor:
             legal_tasks=plan.legal_tasks,
             selected_task=plan.tasks[0],
             classifier=classifier,
-            llm_tiebreak_invoked=False,  # Tier-2 tiebreak is Phase 3
+            # Tier-2 tiebreak is unbuilt, and this flag is honest about it
+            # rather than absent. It is not one of the plan's tasks and the
+            # PS does not ask for one: docs/ps-26167.md says the controller
+            # MAY plan internally and that only the observable trace is
+            # evaluated. Recorded as limitation L9. (The comment here used
+            # to say "Phase 3", which passed without it being built.)
+            llm_tiebreak_invoked=False,
             config_excluded_task=config_excluded,
             capability_matrix_version=plan.matrix_version,
         )
@@ -233,7 +248,15 @@ class Executor:
             else:
                 # Only learned tools contribute to the model confidence
                 # component; the index engine is deterministic by construction.
-                if result.confidence <= model_confidence:
+                #
+                # A stub contributes nothing either. It reports 0.0 under the
+                # `stub` method, and feeding that into the geometric mean
+                # would collapse the score below the abstention threshold and
+                # turn every CI run into a refusal. Instead the run is flagged
+                # and the FINAL score is capped - see STUB_CONFIDENCE_CAP.
+                if result.confidence_method == "stub":
+                    stubbed = True
+                elif result.confidence <= model_confidence:
                     model_confidence = result.confidence
                     confidence_method = result.confidence_method
 
@@ -281,7 +304,21 @@ class Executor:
         # worked as designed.
         tool_declined = model_confidence <= 0.0
 
-        if not final_answer.strip() and not tool_failure and not tool_declined:
+        # CLARIFY_OR_ABSTAIN declares no tools in the matrix, so it reaches
+        # here with no steps and no answer *by design*. That is a routing
+        # outcome, and `decide()` has a `routing` trigger that says so. Without
+        # this guard it fell into the branch below, which found that no learned
+        # tool had run and blamed the profile - telling a user who typed "hmm"
+        # to "run the full profile on a machine with a GPU". The condition the
+        # branch is for is a task that HAS tools whose tools were all shed.
+        routed_to_abstain = plan.tasks[0] == "CLARIFY_OR_ABSTAIN"
+
+        if (
+            not final_answer.strip()
+            and not tool_failure
+            and not tool_declined
+            and not routed_to_abstain
+        ):
             # Nothing produced a sentence and nothing raised. This is the
             # degraded-profile case (task 3.10): the learned tool that would
             # have answered was shed by the VRAM budget. An empty answer is a
@@ -369,6 +406,7 @@ class Executor:
                 if confidence_method in CALIBRATABLE_CONFIDENCE_METHODS
                 else None
             ),
+            stubbed=stubbed,
         )
 
         emit("confidence", confidence.model_dump())
@@ -378,7 +416,7 @@ class Executor:
         # contradicts must also be able to decline.
         decision = decide(
             policy=self.abstention_policy,
-            routed_to_abstain=plan.tasks[0] == "CLARIFY_OR_ABSTAIN",
+            routed_to_abstain=routed_to_abstain,
             blocking_failures=list(manifest.blocking_failures),
             final_confidence=confidence.final,
             components=confidence.components.model_dump(),
@@ -432,5 +470,9 @@ class Executor:
             abstain_trigger=decision.trigger,
             abstain_resolving_input=decision.resolving_input,
             abstain_limiting_component=decision.limiting_component,
-            weights_hashes={},  # populated when real checkpoints load (1.7/1.10)
+            # SHA-256 of the weights the tools in THIS plan actually loaded.
+            # Empty when every step ran from a stub or from deterministic
+            # arithmetic, which is the CI and no-checkpoint case: a stub loads
+            # no bytes, so it gets no digest. See satquery/tools/provenance.py.
+            weights_hashes=weights_hashes_for(t.tool for t in execution_traces),
         )

@@ -1,0 +1,26 @@
+services:
+  api:
+    build:
+      context: .
+      dockerfile: docker/api.Dockerfile
+      target: gpu-image
+    volumes:
+      - ./checkpoints:/app/checkpoints
+    environment:
+      - SATQUERY_PROFILE=full
+      - SATQUERY_VQA_BASE=/app/models/qwen25_vl_3b
+      - SATQUERY_VQA_ADAPTER=/app/checkpoints/track_b_v2/adapter_final
+      # Every learned tool is opt-in: satquery/tools/stubs.py REGISTRY calls
+      # each tool's is_available() at import and falls back to a stub when its
+      # variable is unset. Only the VQA adapter was named here, so a GPU
+      # deployment with all the weights on disk still answered every non-VQA
+      # task from a stub. Paths are the ones docs/model-cards.md records for
+      # each checkpoint; ./checkpoints is mounted by the volume above.
+      - SATQUERY_CAPTION=/app/checkpoints/caption
+      - SATQUERY_LANDCOVER=/app/checkpoints/track_a_full_base
+      - SATQUERY_GROUNDING=/app/checkpoints/grounding
+      - SATQUERY_CHANGE_MASK=/app/checkpoints/change_mask
+      - SATQUERY_CHANGE_CAPTION=/app/checkpoints/change_caption
+      # A file, not a directory - this one is a single .pt.
+      - SATQUERY_CHANGE_VQA=/app/checkpoints/change_vqa/best.pt
+      - SATQUERY_FUSION=/app/checkpoints/optsar_fusion

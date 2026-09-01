@@ -41,6 +41,11 @@ def _fail(name: str, message: str, value=None, threshold=None) -> CheckResult:
     )
 
 
+# Container formats that cannot carry a CRS at all. A missing CRS in one of
+# these is a property of the format, not a defect in the product.
+NON_GEOSPATIAL_FORMATS = {"PNG", "JPEG", "JPEG2000", "GIF", "BMP", "WEBP"}
+
+
 def check_crs_present(img: ImageMeta, benchmark: bool = False) -> CheckResult:
     """Georeferencing check, relaxed for benchmark inputs.
 
@@ -57,6 +62,24 @@ def check_crs_present(img: ImageMeta, benchmark: bool = False) -> CheckResult:
     """
     if img.crs and img.crs != "UNKNOWN":
         return _pass("crs_present", f"{img.role}: CRS {img.crs}", img.crs)
+    if (img.container_format or "").upper() in NON_GEOSPATIAL_FORMATS:
+        # A PNG or JPEG the user uploaded to ask an ordinary visual question.
+        # Failing it here refused the whole query, which is the wrong trade:
+        # the vision model can answer "is this urban or rural?" from pixels
+        # alone. What is NOT available is anything geospatial - the outputs
+        # cannot be georeferenced, GSD and sensor are unknown, and the index
+        # engine has no calibrated bands to work from - so this WARNs and
+        # says so rather than passing silently. The distinction from the
+        # branch below is deliberate: a GeoTIFF with no CRS is a defective
+        # product and still fails.
+        return _warn(
+            "crs_present",
+            f"{img.role}: {img.container_format} carries no geospatial "
+            "metadata - visual questions can be answered from the pixels, but "
+            "CRS, GSD and sensor are unknown, outputs cannot be georeferenced, "
+            "and no geospatial index is available",
+            img.crs,
+        )
     if benchmark:
         return _warn(
             "crs_present",

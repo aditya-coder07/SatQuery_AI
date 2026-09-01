@@ -268,9 +268,30 @@ class TestBenchmarkFormats:
         assert crs.status == "WARN"
         assert "cannot be georeferenced" in crs.message
 
-    def test_operational_mode_still_refuses(self, tmp_path):
-        """A real query about real imagery still needs a CRS."""
+    def test_operational_mode_accepts_a_png_and_discloses_the_limits(
+        self, tmp_path
+    ):
+        """PS-26167 item 10: an ordinary PNG upload must be answerable.
+
+        This used to assert the opposite - a PNG in operational mode was a
+        blocking failure, so every normal user upload that was not a GeoTIFF
+        refused the query outright. The requirement is that PNG/JPEG work for
+        normal image interaction, so the check now WARNs and names exactly
+        what is unavailable rather than refusing.
+        """
         manifest = ingest([self._png(tmp_path)], mode=IngestMode.OPERATIONAL)
+        assert manifest.blocking_failures == []
+        crs = next(c for c in manifest.checks if c.name == "crs_present")
+        assert crs.status == "WARN"
+        assert "no geospatial metadata" in crs.message
+
+    def test_an_ungeoreferenced_geotiff_is_still_refused(self, no_crs_raster):
+        """The relaxation is about the container, not about CRS in general.
+
+        A GeoTIFF without a CRS is a defective product - the format carries
+        georeferencing and this one does not - and must keep failing.
+        """
+        manifest = ingest([no_crs_raster], mode=IngestMode.OPERATIONAL)
         assert "crs_present" in manifest.blocking_failures
 
     def test_a_benchmark_png_answers_end_to_end(self, tmp_path):

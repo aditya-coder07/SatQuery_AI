@@ -191,7 +191,19 @@ class TestWrongFileType:
         except Exception as exc:  # noqa: BLE001
             pytest.fail(f"1-band PNG raised instead of degrading: {exc!r}")
         assert_no_leak(trace)
-        assert trace.abstained
+
+        # This used to assert `trace.abstained`, which was true only because
+        # a missing CRS was a blocking failure for every operational input.
+        # PS-26167 item 10 requires ordinary PNG/JPEG uploads to be
+        # answerable, so the degradation is now graded rather than total: the
+        # question is answered from the pixels, the trace says the image is
+        # ungeoreferenced, and the confidence cannot reach HIGH. Abstaining on
+        # a legible image would be the refusal-instead-of-answer failure the
+        # abstention policy's own docstring warns about.
+        assert trace.ingest.images[0]["georeferenced"] is False
+        assert trace.confidence.band != "HIGH"
+        crs = next(c for c in trace.ingest.checks if c["name"] == "crs_present")
+        assert crs["status"] == "WARN"
 
     def test_a_text_file_is_not_imagery(self, controller, tmp_path):
         path = tmp_path / "notes.txt"

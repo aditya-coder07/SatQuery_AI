@@ -47,7 +47,9 @@
         "bands": [
           "BAND_1"
         ],
+        "container_format": "GTiff",
         "crs": "EPSG:32643",
+        "georeferenced": true,
         "gsd_m": 10.0,
         "modality": "PAN",
         "modality_reason": "single_band_defaulted_to_panchromatic",
