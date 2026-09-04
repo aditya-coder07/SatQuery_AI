@@ -64,6 +64,14 @@ export type ProbedScene = {
   multi_file?: boolean;
   /** A small PNG of the scene as a data URL, rendered by the API. */
   preview?: string | null;
+  /**
+   * Where to draw that PNG, in EPSG:3857.
+   *
+   * Sent by the server rather than derived here from `lonlat_bounds`: the
+   * preview is reprojected, so its extent is the warped one. Deriving it from
+   * the lon/lat envelope would put the imagery back where it was wrong.
+   */
+  preview_extent?: [number, number, number, number] | null;
 };
 
 /** Metres per degree of longitude at a given latitude, near enough for a label. */
@@ -146,13 +154,15 @@ export default function AreaPicker({
     // scenes in a bi-temporal pair overlap, and seeing that overlap is the
     // point — it is the ground the crop has to sit inside.
     const sceneLayers = located
-      .filter((s) => s.preview)
+      .filter((s) => s.preview && s.preview_extent)
       .map(
         (s) =>
           new ImageLayer({
             source: new Static({
               url: s.preview!,
-              imageExtent: transformExtent(s.lonlat_bounds!, 'EPSG:4326', 'EPSG:3857'),
+              // The server's warped extent, used as given. Recomputing it from
+              // `lonlat_bounds` would undo the reprojection.
+              imageExtent: s.preview_extent!,
               projection: 'EPSG:3857',
             }),
             opacity: 0.92,

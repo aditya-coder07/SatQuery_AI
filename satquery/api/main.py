@@ -851,31 +851,67 @@ async def probe_uploads(images: list[UploadFile] = File(...)):
 
         import rasterio
 
+        from rasterio.vrt import WarpedVRT
+        from rasterio.warp import transform_bounds
+
         from satquery.ingest.reader import read_image, wgs84_bounds
         from satquery.tools.imaging import to_rgb_preview
 
-        def preview_data_url(target: Path) -> str | None:
-            """A small PNG of the scene, as a data URL, or None.
+        def preview_for(target: Path, src) -> tuple[str | None, list[float] | None]:
+            """A small PNG of the scene in EPSG:3857, and the extent to draw it at.
 
-            The picker draws a box over the imagery, so it has to show the
-            imagery: a rectangle on a street map tells you where the scene is
-            but nothing about what is in it, and you cannot choose an area of
-            something you cannot see.
+            Reprojected, not just bounded. A UTM scene's footprint is a rotated
+            quadrilateral in web-mercator, so dropping its PNG into the
+            axis-aligned lon/lat envelope misregisters it against the basemap -
+            measured at 164 m on an 8.7 km Landsat scene at 83.4E, where the
+            grid convergence is 1.08 degrees. You cannot choose an area off a
+            picture that is in the wrong place, so this warps first, the same
+            way `/runs/{id}/overlay/{key}` already does.
 
             Rendered by `to_rgb_preview`, the same path the VQA tool feeds the
             model, so the pixels being selected are the pixels that will be
-            read - band choice and stretch included - rather than a separately
-            tuned display rendering that could look better than the input.
+            read - band choice and stretch included.
             """
             try:
-                image, _ = to_rgb_preview(read_image(target), max_edge=PROBE_PREVIEW_PX)
+                from affine import Affine
+
+                with WarpedVRT(src, crs="EPSG:3857") as vrt:
+                    scale = min(1.0, PROBE_PREVIEW_PX / max(vrt.width, vrt.height))
+                    width = max(1, int(vrt.width * scale))
+                    height = max(1, int(vrt.height * scale))
+                    data = vrt.read(out_shape=(vrt.count, height, width))
+                    profile = vrt.profile.copy()
+                    profile.update(
+                        driver="GTiff",
+                        width=width,
+                        height=height,
+                        transform=vrt.transform
+                        * Affine.scale(vrt.width / width, vrt.height / height),
+                    )
+
+                warped = work_dir / f"{target.stem}_3857.tif"
+                with rasterio.open(warped, "w", **profile) as dst:
+                    dst.write(data)
+                    # Band names decide which bands `to_rgb_preview` picks, and
+                    # the VRT does not carry them across on its own.
+                    if any(src.descriptions):
+                        dst.descriptions = src.descriptions
+                    dst.update_tags(**src.tags())
+
+                image, _ = to_rgb_preview(read_image(warped), max_edge=PROBE_PREVIEW_PX)
                 buffer = io.BytesIO()
                 image.save(buffer, format="PNG")
+                extent = list(
+                    transform_bounds(src.crs, "EPSG:3857", *src.bounds, densify_pts=21)
+                )
             except Exception:  # noqa: BLE001 - a scene that will not render is
                 # still worth reporting the bounds for; the picker falls back
                 # to the outline alone.
-                return None
-            return "data:image/png;base64," + base64.b64encode(buffer.getvalue()).decode()
+                return None, None
+            return (
+                "data:image/png;base64," + base64.b64encode(buffer.getvalue()).decode(),
+                extent,
+            )
 
         scenes = []
         for path in paths:
@@ -896,6 +932,9 @@ async def probe_uploads(images: list[UploadFile] = File(...)):
             try:
                 with rasterio.open(target) as src:
                     located = src.crs is not None
+                    preview, preview_extent = (
+                        preview_for(target, src) if located else (None, None)
+                    )
                     scenes.append({
                         "name": path.name,
                         "crs": str(src.crs) if src.crs else "UNKNOWN",
@@ -906,7 +945,9 @@ async def probe_uploads(images: list[UploadFile] = File(...)):
                         "multi_file": path.is_dir(),
                         # Only for a scene that can be placed on a map: there
                         # is nowhere to draw a preview of one that cannot.
-                        "preview": preview_data_url(path) if located else None,
+                        "preview": preview,
+                        # In EPSG:3857 already, because the PNG is reprojected.
+                        "preview_extent": preview_extent,
                     })
             except Exception:  # noqa: BLE001 - an unreadable file is not a 500
                 scenes.append({"name": path.name, "georeferenced": False})
