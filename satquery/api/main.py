@@ -213,6 +213,10 @@ def _validate_upload_shape(images: list[UploadFile]) -> None:
         )
 
 
+# The longest edge of the preview PNG the picker draws over. Big enough to
+# choose an area from, small enough to sit in a JSON response.
+PROBE_PREVIEW_PX = 512
+
 # A crop smaller than this on either side is not an input. Below roughly a
 # tile the model has nothing to look at, and the ingest checks that follow
 # would be describing noise.
@@ -842,9 +846,36 @@ async def probe_uploads(images: list[UploadFile] = File(...)):
     work_dir = Path(tempfile.mkdtemp(prefix="satquery_probe_"))
     try:
         paths = _save_uploads(images, work_dir)
+        import base64
+        import io
+
         import rasterio
 
-        from satquery.ingest.reader import wgs84_bounds
+        from satquery.ingest.reader import read_image, wgs84_bounds
+        from satquery.tools.imaging import to_rgb_preview
+
+        def preview_data_url(target: Path) -> str | None:
+            """A small PNG of the scene, as a data URL, or None.
+
+            The picker draws a box over the imagery, so it has to show the
+            imagery: a rectangle on a street map tells you where the scene is
+            but nothing about what is in it, and you cannot choose an area of
+            something you cannot see.
+
+            Rendered by `to_rgb_preview`, the same path the VQA tool feeds the
+            model, so the pixels being selected are the pixels that will be
+            read - band choice and stretch included - rather than a separately
+            tuned display rendering that could look better than the input.
+            """
+            try:
+                image, _ = to_rgb_preview(read_image(target), max_edge=PROBE_PREVIEW_PX)
+                buffer = io.BytesIO()
+                image.save(buffer, format="PNG")
+            except Exception:  # noqa: BLE001 - a scene that will not render is
+                # still worth reporting the bounds for; the picker falls back
+                # to the outline alone.
+                return None
+            return "data:image/png;base64," + base64.b64encode(buffer.getvalue()).decode()
 
         scenes = []
         for path in paths:
@@ -864,14 +895,18 @@ async def probe_uploads(images: list[UploadFile] = File(...)):
 
             try:
                 with rasterio.open(target) as src:
+                    located = src.crs is not None
                     scenes.append({
                         "name": path.name,
                         "crs": str(src.crs) if src.crs else "UNKNOWN",
-                        "georeferenced": src.crs is not None,
+                        "georeferenced": located,
                         "lonlat_bounds": wgs84_bounds(src),
                         "width": src.width,
                         "height": src.height,
                         "multi_file": path.is_dir(),
+                        # Only for a scene that can be placed on a map: there
+                        # is nowhere to draw a preview of one that cannot.
+                        "preview": preview_data_url(path) if located else None,
                     })
             except Exception:  # noqa: BLE001 - an unreadable file is not a 500
                 scenes.append({"name": path.name, "georeferenced": False})

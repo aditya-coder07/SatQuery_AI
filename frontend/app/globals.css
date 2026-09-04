@@ -834,53 +834,40 @@
     height: 13px;
   }
 
-  /* ---------------- area picker ---------------- */
-  .picker-backdrop {
-    position: fixed;
-    inset: 0;
-    z-index: 60;
-    display: grid;
-    place-items: center;
-    padding: var(--s4);
-    background: rgba(4, 3, 6, 0.82);
-    backdrop-filter: blur(6px);
-    -webkit-backdrop-filter: blur(6px);
+  /* ---------------- attached scene ---------------- */
+  /* Inline under the composer rather than in a modal: it belongs to setting
+     up the run, not to a dialog you have to know to open. */
+  .scenebox {
+    margin-top: var(--s3);
+    border-top: 1px solid var(--hair);
+    padding-top: var(--s3);
   }
-  .picker {
-    width: min(1100px, 100%);
-    max-height: 100%;
-    overflow: auto;
-    display: flex;
-    flex-direction: column;
-    gap: var(--s3);
-    padding: var(--s3) var(--s4) var(--s4);
-    background: linear-gradient(168deg, var(--pane), #0d0b11);
-    border: 1px solid var(--hair);
-    border-radius: 3px;
-  }
-  .picker-head,
-  .picker-foot {
+  .scenebox-head,
+  .scenebox-foot {
     display: flex;
     align-items: center;
     gap: var(--s2);
     flex-wrap: wrap;
   }
-  .picker-head {
-    padding-bottom: var(--s2);
-    border-bottom: 1px solid var(--hair);
+  .scenebox-head {
+    margin-bottom: var(--s2);
   }
-  .picker-head .spacer,
-  .picker-foot .spacer {
+  .scenebox-foot {
+    margin-top: var(--s2);
+  }
+  .scenebox-head .spacer,
+  .scenebox-foot .spacer {
     flex: 1;
   }
-  .picker-head .meta {
+  .scenebox-head .meta {
     font-family: var(--f-mono);
     font-size: 10.5px;
     color: var(--dim);
   }
-  .picker-map {
-    height: min(58vh, 520px);
+  .scenebox-map {
+    height: clamp(260px, 34vh, 420px);
     border: 1px solid var(--hair);
+    border-radius: 2px;
     background: #0a090c;
     cursor: crosshair;
   }
@@ -2020,10 +2007,10 @@
    loads after this file at equal specificity, so the extra class is what makes
    this rule stick rather than lose the source-order tie. */
 .mapview-canvas .ol-viewport canvas,
-.picker-map .ol-viewport canvas {
+.scenebox-map .ol-viewport canvas {
   filter: saturate(0.62) brightness(0.82) contrast(1.04);
 }
-.picker-map .ol-control button {
+.scenebox-map .ol-control button {
   background: rgba(8, 7, 10, 0.82);
   border: 1px solid var(--hair);
   color: var(--ink);

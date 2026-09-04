@@ -3,11 +3,20 @@
 /**
  * Draw an area of interest over the attached scene's footprint.
  *
+ * Sits inline under the composer, not in a modal: the scene appears as soon as
+ * it is attached, so choosing an area is part of setting up the run rather
+ * than a dialog you have to know to open.
+ *
+ * The scene itself is drawn on the map, not just its outline. A rectangle over
+ * a street map tells you where the imagery is and nothing about what is in it,
+ * and you cannot choose an area of something you cannot see. The preview comes
+ * from `to_rgb_preview`, the same path the model is fed, so the pixels being
+ * selected are the pixels that will be read.
+ *
  * Separate from MapView on purpose. MapView renders a *finished* run — its
  * overlays, its basemap probe, its layer switching — and is mounted inside the
- * results deck. This is a modal over an unrun upload with one job: put a box
- * on the map. Sharing one component between the two would mean a pile of mode
- * flags in a file that is already the most intricate on the frontend.
+ * results deck. Sharing one component between the two would mean a pile of
+ * mode flags in a file that is already the most intricate on the frontend.
  *
  * The footprint comes from `POST /probe`, which opens the file's header and
  * throws the pixels away. The browser could parse a GeoTIFF header itself, but
@@ -23,6 +32,8 @@ import TileLayer from 'ol/layer/Tile';
 import VectorLayer from 'ol/layer/Vector';
 import VectorSource from 'ol/source/Vector';
 import XYZ from 'ol/source/XYZ';
+import ImageLayer from 'ol/layer/Image';
+import Static from 'ol/source/ImageStatic';
 import Feature from 'ol/Feature';
 import Polygon, { fromExtent } from 'ol/geom/Polygon';
 import Draw, { createBox } from 'ol/interaction/Draw';
@@ -50,6 +61,8 @@ export type ProbedScene = {
   width?: number;
   height?: number;
   multi_file?: boolean;
+  /** A small PNG of the scene as a data URL, rendered by the API. */
+  preview?: string | null;
 };
 
 /** Metres per degree of longitude at a given latitude, near enough for a label. */
@@ -63,19 +76,17 @@ function boxSizeKm(box: Bounds): [number, number] {
 
 export default function AreaPicker({
   scenes,
-  initial,
-  onCancel,
-  onConfirm,
+  value,
+  onChange,
 }: {
   scenes: ProbedScene[];
-  initial: Bounds | null;
-  onCancel: () => void;
-  onConfirm: (box: Bounds) => void;
+  value: Bounds | null;
+  onChange: (box: Bounds | null) => void;
 }) {
   const container = useRef<HTMLDivElement>(null);
   const mapRef = useRef<Map | null>(null);
   const drawnRef = useRef<VectorSource | null>(null);
-  const [box, setBox] = useState<Bounds | null>(initial);
+  const [box, setBox] = useState<Bounds | null>(value);
   const [tooSmall, setTooSmall] = useState(false);
 
   const located = scenes.filter((s) => s.georeferenced && s.lonlat_bounds);
@@ -130,12 +141,30 @@ export default function AreaPicker({
       }),
     });
 
+    // Each located scene painted at its own extent, over the basemap. Two
+    // scenes in a bi-temporal pair overlap, and seeing that overlap is the
+    // point — it is the ground the crop has to sit inside.
+    const sceneLayers = located
+      .filter((s) => s.preview)
+      .map(
+        (s) =>
+          new ImageLayer({
+            source: new Static({
+              url: s.preview!,
+              imageExtent: transformExtent(s.lonlat_bounds!, 'EPSG:4326', 'EPSG:3857'),
+              projection: 'EPSG:3857',
+            }),
+            opacity: 0.92,
+          }),
+      );
+
     const map = new Map({
       target: container.current,
       layers: [
         BASEMAP_URL
           ? new TileLayer({ source: new XYZ({ url: BASEMAP_URL, crossOrigin: 'anonymous' }) })
           : new Graticule({ showLabels: true, wrapX: false }),
+        ...sceneLayers,
         outline,
         drawnLayer,
       ],
@@ -173,6 +202,12 @@ export default function AreaPicker({
       event.feature.setGeometry(fromExtent(clipped) as Polygon);
       const lonlat = transformExtent(clipped, 'EPSG:3857', 'EPSG:4326') as Bounds;
       setBox(lonlat);
+      const small =
+        minSpanDeg > 0 &&
+        (lonlat[2] - lonlat[0] < minSpanDeg || lonlat[3] - lonlat[1] < minSpanDeg);
+      // Reported up as soon as it is drawn — there is no confirm step in an
+      // inline panel, and a box the API would refuse is not sent.
+      onChange(small ? null : lonlat);
       setTooSmall(
         minSpanDeg > 0 &&
           (lonlat[2] - lonlat[0] < minSpanDeg || lonlat[3] - lonlat[1] < minSpanDeg),
@@ -180,8 +215,8 @@ export default function AreaPicker({
     });
     map.addInteraction(draw);
 
-    if (initial) {
-      const restored = transformExtent(initial, 'EPSG:4326', 'EPSG:3857');
+    if (value) {
+      const restored = transformExtent(value, 'EPSG:4326', 'EPSG:3857');
       if (containsExtent(extent, restored)) {
         drawn.addFeature(new Feature(fromExtent(restored) as Polygon));
       }
@@ -191,88 +226,69 @@ export default function AreaPicker({
       map.setTarget(undefined);
       mapRef.current = null;
     };
-  }, [footprint, initial, minSpanDeg]);
+  }, [footprint, minSpanDeg]);
+  /* eslint-disable-line react-hooks/exhaustive-deps */
 
   const clear = useCallback(() => {
     drawnRef.current?.clear();
     setBox(null);
     setTooSmall(false);
-  }, []);
-
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onCancel();
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [onCancel]);
+    onChange(null);
+  }, [onChange]);
 
   const size = box ? boxSizeKm(box) : null;
   const unlocated = scenes.filter((s) => !s.georeferenced);
 
   return (
-    <div className="picker-backdrop" role="dialog" aria-modal="true" aria-label="Select an area">
-      <div className="picker">
-        <div className="picker-head">
-          <span className="label">Select an area</span>
-          <span className="spacer" />
-          <span className="meta">
-            {located.length} located scene{located.length === 1 ? '' : 's'}
-          </span>
-          <button type="button" className="composer-attach" onClick={onCancel}>
-            <svg className="icon" viewBox="0 0 24 24" aria-hidden="true">
-              <path d="M6 6l12 12M18 6L6 18" />
-            </svg>
-            Close
-          </button>
-        </div>
-
-        {footprint ? (
-          <>
-            <div ref={container} className="picker-map" />
-            <div className="picker-foot">
-              <span className="composer-hint">
-                {box && size
-                  ? `${size[0].toFixed(1)} × ${size[1].toFixed(1)} km · ${box
-                      .map((v) => v.toFixed(4))
-                      .join(', ')}`
-                  : 'drag a rectangle inside the highlighted footprint'}
-              </span>
-              <span className="spacer" />
-              {box && (
-                <button type="button" className="composer-attach" onClick={clear}>
-                  Clear
-                </button>
-              )}
-              <button
-                type="button"
-                className="btn btn-solid"
-                disabled={!box || tooSmall}
-                onClick={() => box && onConfirm(box)}
-              >
-                Use this area
-              </button>
-            </div>
-            {tooSmall && (
-              <p className="composer-error" role="alert">
-                That area is under {MIN_AOI_PX} pixels on a side at this scene&apos;s
-                resolution — the run would have nothing to look at. Draw a larger one.
-              </p>
-            )}
-            {unlocated.length > 0 && (
-              <p className="cap">
-                {unlocated.map((s) => s.name).join(', ')} carries no CRS and will be sent
-                whole.
-              </p>
-            )}
-          </>
-        ) : (
-          <p className="composer-error">
-            None of the attached scenes carry a coordinate reference system, so there is
-            nothing to place on a map. Attach a georeferenced GeoTIFF to select an area.
-          </p>
-        )}
+    <section className="scenebox" aria-label="Attached scene">
+      <div className="scenebox-head">
+        <span className="label">Attached scene</span>
+        <span className="spacer" />
+        <span className="meta">
+          {located.length} located · drag on the image to crop
+        </span>
       </div>
-    </div>
+
+      {footprint ? (
+        <>
+          <div ref={container} className="scenebox-map" />
+          <div className="scenebox-foot">
+            <span className="composer-hint">
+              {box && size
+                ? `area · ${size[0].toFixed(1)} × ${size[1].toFixed(1)} km · ${box
+                    .map((v) => v.toFixed(4))
+                    .join(', ')}`
+                : 'the whole scene will be used unless you drag a box on it'}
+            </span>
+            <span className="spacer" />
+            {box && (
+              <button type="button" className="composer-attach" onClick={clear}>
+                <svg className="icon" viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M6 6l12 12M18 6L6 18" />
+                </svg>
+                Use whole scene
+              </button>
+            )}
+          </div>
+          {tooSmall && (
+            <p className="composer-error" role="alert">
+              That area is under {MIN_AOI_PX} pixels on a side at this scene&apos;s
+              resolution — the run would have nothing to look at. Drag a larger one.
+            </p>
+          )}
+          {unlocated.length > 0 && (
+            <p className="cap">
+              {unlocated.map((s) => s.name).join(', ')} carries no CRS and will be sent
+              whole.
+            </p>
+          )}
+        </>
+      ) : (
+        <p className="cap">
+          No attached scene carries a coordinate reference system, so there is nothing to
+          place on a map. The files will be sent whole.
+        </p>
+      )}
+    </section>
   );
 }

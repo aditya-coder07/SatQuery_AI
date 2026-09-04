@@ -51,6 +51,9 @@ const MAX_FILES = 32;
 const MAX_FILE_BYTES = 256 * 1024 * 1024;
 const MAX_TOTAL_BYTES = 1024 * 1024 * 1024;
 
+// Above this, the scene is not uploaded for a preview until asked.
+const AUTO_PROBE_BYTES = 64 * 1024 * 1024;
+
 function formatBytes(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
@@ -91,34 +94,30 @@ export default function QueryComposer({
   // Drag events fire for every child element, so a boolean flag flickers as
   // the pointer crosses the chips. A depth counter does not.
   const dragDepth = useRef(0);
-  const [picking, setPicking] = useState(false);
   const [probe, setProbe] = useState<ProbedScene[] | null>(null);
   const [probing, setProbing] = useState(false);
   const [probeError, setProbeError] = useState('');
 
-  /* An area belongs to the scenes it was drawn over. Change the attachments
-     and it is no longer meaningful, so it goes with them. */
-  useEffect(() => {
-    onAoiChange(null);
-    setProbe(null);
-    setProbeError('');
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [files]);
-
   /**
-   * Ask the server where these scenes are, then open the picker.
+   * Ask the server where the attached scenes are, and for a picture of them.
    *
-   * The footprint is only knowable once something has opened the file, and the
-   * server is the authority on that — it is the one that will refuse the run
-   * if the scene turns out not to be georeferenced.
+   * Runs on attach rather than behind a button: the scene should appear
+   * because you attached it, not because you found a control. The footprint is
+   * only knowable once something has opened the file, and the server is the
+   * authority on that — it is the one that will refuse the run if the scene
+   * turns out not to be georeferenced.
+   *
+   * Held back above AUTO_PROBE_BYTES. Uploading a quarter-gigabyte scene the
+   * moment it is attached, for a preview, is not a favour; past that size the
+   * button asks first.
    */
-  const openPicker = useCallback(async () => {
-    if (files.length === 0) return;
+  const runProbe = useCallback(async (targets: File[]) => {
+    if (targets.length === 0) return;
     setProbing(true);
     setProbeError('');
     try {
       const form = new FormData();
-      files.forEach((f) => form.append('images', f));
+      targets.forEach((f) => form.append('images', f));
       const res = await fetch(`${API}/probe`, { method: 'POST', body: form });
       if (!res.ok) {
         const detail = await res.json().catch(() => null);
@@ -126,12 +125,24 @@ export default function QueryComposer({
       }
       const data = await res.json();
       setProbe(data.scenes ?? []);
-      setPicking(true);
     } catch (err: any) {
       setProbeError(err?.message ?? String(err));
     } finally {
       setProbing(false);
     }
+  }, []);
+
+  /* An area belongs to the scenes it was drawn over. Change the attachments
+     and it is no longer meaningful, so it goes with them — and the new set is
+     located straight away. */
+  useEffect(() => {
+    onAoiChange(null);
+    setProbe(null);
+    setProbeError('');
+    if (files.length === 0) return;
+    const total = files.reduce((sum, f) => sum + f.size, 0);
+    if (total <= AUTO_PROBE_BYTES) runProbe(files);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [files]);
 
   // Grow with the question, up to a ceiling, then scroll.
@@ -326,23 +337,21 @@ export default function QueryComposer({
               {files.length ? 'Add more' : 'Attach imagery'}
             </button>
 
-            <button
-              type="button"
-              className="composer-attach"
-              onClick={openPicker}
-              disabled={running || probing || files.length === 0}
-              title={
-                files.length === 0
-                  ? 'Attach a georeferenced scene first'
-                  : 'Draw an area on the map'
-              }
-            >
-              <svg className="icon" viewBox="0 0 24 24" aria-hidden="true">
-                <path d="M3 6l6-3 6 3 6-3v15l-6 3-6-3-6 3z" />
-                <path d="M9 3v15M15 6v15" />
-              </svg>
-              {probing ? 'Locating…' : aoi ? 'Change area' : 'Select area'}
-            </button>
+            {files.length > 0 && !probe && (
+              <button
+                type="button"
+                className="composer-attach"
+                onClick={() => runProbe(files)}
+                disabled={running || probing}
+                title="Upload the scenes to locate them and show a preview"
+              >
+                <svg className="icon" viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M3 6l6-3 6 3 6-3v15l-6 3-6-3-6 3z" />
+                  <path d="M9 3v15M15 6v15" />
+                </svg>
+                {probing ? 'Locating…' : 'Show on map'}
+              </button>
+            )}
 
             <span className="composer-hint">
               {files.length
@@ -407,16 +416,8 @@ export default function QueryComposer({
         </p>
       )}
 
-      {picking && probe && (
-        <AreaPicker
-          scenes={probe}
-          initial={aoi}
-          onCancel={() => setPicking(false)}
-          onConfirm={(box) => {
-            onAoiChange(box);
-            setPicking(false);
-          }}
-        />
+      {probe && probe.length > 0 && (
+        <AreaPicker scenes={probe} value={aoi} onChange={onAoiChange} />
       )}
     </form>
   );
