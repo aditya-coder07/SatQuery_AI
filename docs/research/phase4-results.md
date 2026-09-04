@@ -2,7 +2,7 @@
 
 **Written 2026-09-04.** Measurement only. Two downloads made under individual approval; **zero existing repository files modified**; two new read-only evaluators added.
 
-> **Status: RSVQA-LR COMPLETE. VRSBench — `v3` COMPLETE, `v2` running** (§4). CDVQA cross-referenced from Phase 2 (§2).
+> **Status: COMPLETE.** RSVQA-LR, CDVQA and VRSBench (both arms) all measured.
 >
 > **All three PS-prescribed benchmarks now have a measured SatQuery result for the first time.**
 
@@ -225,9 +225,54 @@ An unanticipated second cost: the stratified draw touches 5,681 distinct images
 for 7,999 questions, where sequential order reused each image about four times.
 The lost image-read locality roughly doubled decode cost, 1.12 → 1.975 s/q.
 
-### 4.5 `track_b_v2` — running
+### 4.5 `track_b_v2` — paired comparison
 
-Same 7,999 rows, same seed, so the arms are **paired**. Result pending.
+Same 7,999 rows, same seed, so the arms are paired.
+
+| arm | strict | 95% CI | lenient | vs constant (χ²) |
+|---|---|---|---|---|
+| **`track_b_v3`** | **0.2968** | [0.2869, 0.3069] | 0.3548 | 77.4 — below |
+| `track_b_v2` (deployed) | 0.2045 | [0.1958, 0.2135] | 0.3128 | 543.0 — far below |
+
+**`v3` beats `v2` by 9.23 points out-of-domain, and beats it on all 12 types
+without exception:**
+
+| type | n | `v3` | `v2` | Δ | constant |
+|---|---|---|---|---|---|
+| object existence | 1,666 | 0.6321 | 0.4340 | **+0.1981** | 0.8169 |
+| object quantity | 1,363 | 0.1753 | 0.1658 | +0.0095 | 0.3258 |
+| object position | 1,246 | 0.2978 | 0.2464 | +0.0514 | 0.1942 |
+| object category | 1,162 | 0.0361 | 0.0112 | +0.0250 | 0.0861 |
+| object color | 759 | 0.1858 | 0.0527 | **+0.1331** | 0.2082 |
+| scene type | 684 | 0.2135 | 0.1725 | +0.0409 | 0.1111 |
+| object shape | 304 | 0.1743 | 0.0691 | **+0.1053** | 0.1776 |
+| image | 241 | 0.3983 | 0.1369 | **+0.2614** | 0.6183 |
+| object size | 216 | 0.3194 | 0.1898 | **+0.1296** | 0.2454 |
+| reasoning | 193 | 0.4974 | 0.2953 | **+0.2021** | 0.4352 |
+| object direction | 102 | 0.2353 | 0.2157 | +0.0196 | 0.2059 |
+| rural or urban | 63 | 0.6984 | 0.5556 | **+0.1429** | 0.4444 |
+
+**This answers the question the `v3` arm alone could not.** `v3`'s RSVQA-LR gain
+over `v2` (89.23 vs 77.31) could have been in-domain overfitting to the
+adaptation set. It was not: the same checkpoint is better on a benchmark neither
+arm has ever trained on, uniformly across every question type. **The vision-tower
+adaptation in `v3` improved genuine transfer, not just in-domain fit.**
+
+The caveat stays attached: **both arms are still below the optimistic constant
+(0.3463) and below GeoChat's 40.8 zero-shot.** `v3` is a real improvement over
+`v2` on a benchmark where SatQuery is not yet competitive.
+
+`v2`'s χ² of 543.0 against the constant is the starkest single number Phase 4
+produced — the deployed model loses to a majority-class answer on 1,749
+questions while winning only 615.
+
+#### The counting result survives the paired test
+
+`object quantity` is the *smallest* gain of the twelve (+0.0095, well inside the
+interval). Both arms sit far below the constant (0.3258). Vision-tower adaptation
+lifted every other capability and left counting where it was — which is direct
+evidence for **W17**'s framing: counting is not a metric that responds to more or
+better adaptation. It needs a different mechanism.
 
 ---
 
@@ -266,7 +311,8 @@ This is the same failure that left the `.incomplete` fragments removed in Phase 
 | `v3` VQA headline | 0.9533 (optimistic) | **0.8923**, CI [88.49, 89.93] |
 | Best comparable gap | unmeasurable | **−0.38 vs LHRS-Bot-Nova — statistically indistinguishable** |
 | Counting | "equals a constant" (n=57) | **below a constant, resolved (n=2,947)** — W17 |
-| VRSBench | unevaluated, believed to need DOTA/DIOR | **`v3` measured: 29.68 zero-shot — below GeoChat's 40.8 and below a constant** |
+| VRSBench | unevaluated, believed to need DOTA/DIOR | **both arms measured: `v3` 29.68, `v2` 20.45 zero-shot — below GeoChat's 40.8 and below a constant** |
+| Did `v3`'s gain generalise? | unknown — could have been in-domain overfitting | **yes — `v3` beats `v2` on all 12 out-of-domain types** |
 | Out-of-domain generalisation | never measured | **measured and negative** — the counterweight to 89.23 |
 | W17 (counting) | one benchmark | **reproduced on a second** — RSVQA-LR *and* VRSBench, both below a constant |
 | Prescribed benchmarks evaluated | RSVQA (slice) + CDVQA | **RSVQA (official) + CDVQA + VRSBench** — all three |

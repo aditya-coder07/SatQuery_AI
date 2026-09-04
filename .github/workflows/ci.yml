@@ -63,7 +63,10 @@ jobs:
         with:
           python-version: "3.12"
       - run: pip install -e ".[dev]" pip-audit
-      - run: pip-audit --strict
+      # --skip-editable: satquery itself is installed with `-e` and is not on
+      # PyPI, so pip-audit cannot resolve it. Under --strict that unresolvable
+      # local package fails the whole audit even when no vulnerability is found.
+      - run: pip-audit --strict --skip-editable
 
   frontend:
     runs-on: ubuntu-latest
