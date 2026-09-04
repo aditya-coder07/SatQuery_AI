@@ -4,7 +4,7 @@
   "abstain_resolving_input": null,
   "abstain_trigger": null,
   "abstained": false,
-  "answer": "[STUB - no model loaded] no change description - the model is not loaded",
+  "answer": "[STUB - no model loaded] no change description - the model is not loaded. Index thresholds indicate 18% vegetation, 82% water and 82% built-up land. These classes are measured independently and may overlap.",
   "artifact_paths": "<volatile>",
   "artifacts": [
     "ndvi",
@@ -338,15 +338,18 @@
       "backend": "deterministic",
       "flagged": 0,
       "flagged_detail": [],
-      "retained": 0,
-      "sentences": 1,
-      "unverifiable": 1
+      "retained": 1,
+      "sentences": 3,
+      "unverifiable": 2
     },
     "physics_agreement": {
+      "built_up:fraction": 1.0,
       "mndwi": 1.0,
       "ndbi": 1.0,
       "ndvi": 1.0,
-      "ndwi": 1.0
+      "ndwi": 1.0,
+      "vegetation:fraction": 1.0,
+      "water:fraction": 1.0
     }
   },
   "weights_hashes": {}

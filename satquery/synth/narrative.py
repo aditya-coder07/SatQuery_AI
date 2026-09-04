@@ -109,7 +109,15 @@ def synthesise_answer(
             return f"Localised {len(boxes)} matching {noun}."
         return "No matching region was localised."
 
-    if task in ("SINGLE_CAPTION", "TEMPORAL_CHANGE_DESC"):
+    if task == "SINGLE_CAPTION":
+        # landcover_v1 is in this task's plan (see configs/capability_matrix.yaml),
+        # so any class it was confident enough to assert belongs in the prose.
+        # It usually asserts none - recall is 0.25% at the measured threshold -
+        # and `describe_labels` returns "" for that, which is the honest result.
+        pieces = [describe_labels(labels), describe_indices(index_payload)]
+        return " ".join(p for p in pieces if p)
+
+    if task == "TEMPORAL_CHANGE_DESC":
         return describe_indices(index_payload)
 
     if task == "TEMPORAL_CHANGE_MAP":
@@ -136,3 +144,90 @@ def synthesise_answer(
     # is a signal to the caller, not an answer - the executor turns it into a
     # named abstention rather than showing it.
     return ""
+
+
+# Tasks whose synthesised prose is purely *additive* measurement, and so may be
+# appended to a tool's own answer rather than only replacing a missing one.
+#
+# The list is deliberately short. `synthesise_answer` also covers
+# TEMPORAL_CHANGE_MAP and XMODAL_JOINT_EXTRACT, but the strings it returns for
+# those explain why a tool did NOT run ("Optical-SAR fusion did not run in this
+# profile"). Appending that to a real tool answer would contradict it. Those
+# tasks keep the replace-only behaviour.
+#
+# VQA tasks are absent because `synthesise_answer` returns "" for them, which
+# already means "the model's own answer stands alone" - a question like "did
+# vegetation increase?" wants a direction, not a paragraph of scene statistics.
+ENRICHABLE_TASKS = frozenset(
+    {"SINGLE_CAPTION", "SINGLE_LANDCOVER", "TEMPORAL_CHANGE_DESC"}
+)
+
+
+def _terminated(text: str) -> str:
+    """Give a fragment a full stop so it can be joined to another sentence.
+
+    The scene captioner emits `" ".join(words)` with no terminal punctuation,
+    so concatenating it directly produced "a river runs through the scene Index
+    thresholds indicate ...".
+    """
+    text = text.strip()
+    if not text or text[-1] in ".!?":
+        return text
+    return text + "."
+
+
+def describe_georeferencing(
+    georeferenced: bool, container_format: str | None = None
+) -> str:
+    """Disclose a missing CRS, because it bounds what the answer can contain.
+
+    A PNG or JPEG cannot carry georeferencing at all, so for those inputs there
+    is no latitude, longitude, ground extent or area in metres to report - the
+    `gsd_m` on the manifest is a placeholder from GDAL's identity transform,
+    not a measurement (see satquery/ingest/reader.py). Saying so is better than
+    a reader assuming the system simply declined to mention where the scene is.
+    """
+    if georeferenced:
+        return ""
+    container = f" ({container_format})" if container_format else ""
+    return (
+        f"This file{container} carries no georeferencing, so no coordinates, "
+        "ground extent or areas in metres can be reported for it."
+    )
+
+
+def compose_answer(
+    task: str,
+    tool_answer: str,
+    step_outputs: list[dict],
+    index_payload: dict,
+    artifacts: list[str] | None = None,
+    georeferenced: bool = True,
+    container_format: str | None = None,
+) -> str:
+    """Combine a tool's prose with the measured description of the scene.
+
+    The executor used to let the last answer-bearing tool win outright, and
+    only synthesised prose when *no* tool had produced any. For SINGLE_CAPTION
+    that meant `index_engine_v1` and `landcover_v1` both ran, both produced
+    numbers, and both were then discarded from the answer because
+    `caption_v1` - last in the plan - had emitted one short sentence. The
+    measurements survived in the trace and never reached the reader.
+
+    Composition keeps the captioner's sentence as the opening clause and adds
+    what was actually measured after it, so the answer says what the model saw
+    *and* what the physics found.
+    """
+    synthesised = synthesise_answer(
+        task, step_outputs, index_payload, artifacts=artifacts
+    )
+    tool_answer = tool_answer.strip()
+
+    if task not in ENRICHABLE_TASKS or not synthesised:
+        # Replace-only, exactly as before: the tool's answer if it produced
+        # one, otherwise whatever the synthesiser could say.
+        return tool_answer or synthesised
+
+    parts = [_terminated(tool_answer), _terminated(synthesised)]
+    parts.append(describe_georeferencing(georeferenced, container_format))
+    return " ".join(p for p in parts if p)

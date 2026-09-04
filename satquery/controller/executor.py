@@ -34,7 +34,7 @@ from satquery.controller.abstention import AbstentionPolicy, decide
 from satquery.controller.calibration import CALIBRATABLE_CONFIDENCE_METHODS
 from satquery.controller.confidence import compute_confidence
 from satquery.controller.intent import CLASSIFIER_NAME, IntentPrediction
-from satquery.synth.narrative import synthesise_answer
+from satquery.synth.narrative import compose_answer
 from satquery.verify.entailment import run_gate
 from satquery.verify.verifier import verify as verify_claims
 from satquery.tools.provenance import hashes_for as weights_hashes_for
@@ -159,6 +159,10 @@ class Executor:
         # paths, and they were previously written to disk without ever
         # reaching the trace, so nothing downstream could find them.
         artifact_paths: dict[str, str] = {}
+        # Prose emitted by a tool, if any. Kept separate from `final_answer`
+        # so the composition step below can put the measured description
+        # alongside it instead of one silently overwriting the other.
+        tool_answer = ""
         final_answer = ""
         model_confidence = 1.0
         # The `confidence_method` of the tool that set the running minimum.
@@ -262,7 +266,7 @@ class Executor:
 
             for key in _ANSWER_KEYS:
                 if key in data:
-                    final_answer = str(data[key])
+                    tool_answer = str(data[key])
                     break
 
             execution_traces.append(
@@ -283,17 +287,23 @@ class Executor:
             artifact_paths.update({a.key: str(a.path) for a in result.artifacts})
             emit("step", execution_traces[-1].model_dump())
 
-        if not final_answer:
-            # Tools that return structure rather than prose (land cover,
-            # grounding) still owe the user a sentence. It is synthesised
-            # deterministically from the numbers already computed, so it
-            # cannot assert anything the index engine did not measure.
-            final_answer = synthesise_answer(
-                plan.tasks[0],
-                [t.outputs for t in execution_traces],
-                index_payload,
-                artifacts=artifacts,
-            )
+        # Tools that return structure rather than prose (land cover, grounding)
+        # still owe the user a sentence, and tools that DO return prose return
+        # one short one - the captioner's whole output is a single clause. Both
+        # are handled here: the synthesised description is built deterministically
+        # from the numbers already computed, so it cannot assert anything the
+        # index engine did not measure, and for descriptive tasks it is appended
+        # to the tool's answer rather than only standing in for a missing one.
+        first = manifest.images[0] if manifest.images else None
+        final_answer = compose_answer(
+            plan.tasks[0],
+            tool_answer,
+            [t.outputs for t in execution_traces],
+            index_payload,
+            artifacts=artifacts,
+            georeferenced=first.georeferenced if first else True,
+            container_format=first.container_format if first else None,
+        )
 
         # `model_confidence == 0.0` means a learned tool ran and explicitly
         # reported that it could not measure anything - change_vqa_v1's
