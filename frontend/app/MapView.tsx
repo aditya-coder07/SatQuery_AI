@@ -37,7 +37,13 @@ import ImageLayer from 'ol/layer/Image';
 import XYZ from 'ol/source/XYZ';
 import Static from 'ol/source/ImageStatic';
 import { Graticule } from 'ol/layer';
-import { Stroke } from 'ol/style';
+import VectorLayer from 'ol/layer/Vector';
+import VectorSource from 'ol/source/Vector';
+import Feature from 'ol/Feature';
+import Polygon, { fromExtent } from 'ol/geom/Polygon';
+import { transformExtent } from 'ol/proj';
+import { defaults as defaultInteractions } from 'ol/interaction';
+import { Stroke, Style } from 'ol/style';
 import 'ol/ol.css';
 
 const API = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000';
@@ -115,9 +121,32 @@ type Overlay = { key: string; available: boolean };
 export default function MapView({
   runId,
   ready = true,
+  footprint = null,
+  geolocatable = false,
 }: {
   runId: string;
   ready?: boolean;
+  /**
+   * The scene's own lon/lat bounds, `[west, south, east, north]`.
+   *
+   * The map used to place *overlays* and nothing else, so a run that produced
+   * no GeoTIFF artifacts left the view at its initial centre — zoom 2 on
+   * [0, 0], the middle of the Atlantic — even when the uploaded scene was
+   * perfectly well georeferenced. The location was in the trace the whole
+   * time: `ingest.images[].lonlat_bounds`, next to `crs` and `georeferenced`.
+   * Passing it in lets the map open where the imagery actually is, and draw
+   * the footprint, whether or not the run wrote any rasters.
+   *
+   * Null when the scene carries no CRS, which is a different thing from
+   * "no overlays" and is said differently in the bar.
+   */
+  footprint?: [number, number, number, number] | null;
+  /**
+   * Whether any ingested scene claims a CRS, independent of whether its
+   * bounds were reported. Separates "this file cannot be placed on a map"
+   * from "this API build does not say where it is".
+   */
+  geolocatable?: boolean;
 }) {
   const container = useRef<HTMLDivElement>(null);
   const mapRef = useRef<Map | null>(null);
@@ -190,6 +219,14 @@ export default function MapView({
       target: container.current,
       layers: [base],
       view: new View({ center: [0, 0], zoom: 2 }),
+      /* Wheel zoom off.
+         OpenLayers binds the wheel by default, so scrolling the page with the
+         pointer anywhere over the map zoomed the map instead — the page stops
+         dead under the cursor and the view you had set is gone. The map sits
+         inline in a long document here, so the wheel belongs to the document.
+         Pinch still zooms (PinchZoom stays in the defaults), as do the ±
+         buttons and double-click. */
+      interactions: defaultInteractions({ mouseWheelZoom: false }),
     });
 
     return () => {
@@ -197,6 +234,38 @@ export default function MapView({
       mapRef.current = null;
     };
   }, [basemap]);
+
+  /**
+   * Place the view on the scene itself.
+   *
+   * Runs only while no overlay is active, so it never fights the overlay fit
+   * below — an overlay is the more specific thing to look at when there is
+   * one.
+   */
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !footprint) return;
+
+    const extent = transformExtent(footprint, 'EPSG:4326', 'EPSG:3857');
+    const outline = new VectorLayer({
+      source: new VectorSource({
+        features: [new Feature(fromExtent(extent) as Polygon)],
+      }),
+      style: new Style({
+        stroke: new Stroke({ color: 'rgba(232,195,158,0.9)', width: 1 }),
+      }),
+    });
+    outline.set('footprint', true);
+    map.addLayer(outline);
+
+    if (!active) {
+      map.getView().fit(extent, { padding: [24, 24, 24, 24], maxZoom: 15 });
+    }
+
+    return () => {
+      map.removeLayer(outline);
+    };
+  }, [footprint, active, basemap]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -266,8 +335,15 @@ export default function MapView({
         {!ready && (
           <span className="mapview-note">preparing map overlays…</span>
         )}
+        <span className="mapview-note">pinch or ± to zoom</span>
         {ready && overlays.length === 0 && !error && (
-          <span className="mapview-note">no georeferenced artifacts</span>
+          <span className="mapview-note">
+            {footprint
+              ? 'scene footprint — this run wrote no raster overlays'
+              : geolocatable
+                ? 'this API build does not report scene bounds'
+                : 'this scene carries no CRS, so it cannot be placed on a map'}
+          </span>
         )}
       </div>
       <div ref={container} className="mapview-canvas" />

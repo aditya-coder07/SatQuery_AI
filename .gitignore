@@ -40,3 +40,11 @@ artifacts/
 # held-out cross-sensor generalisation set that must never be trained on.
 data/
 models/
+
+# `models/` above is meant for downloaded weights, but it matches at any depth,
+# and that silently swallowed the /models Next.js route - the page whose
+# absence was the live 404 the header linked to. The directory has to be
+# re-included before the file inside it can be: git will not re-include a file
+# whose parent directory is still excluded.
+!frontend/app/models/
+!frontend/app/models/**

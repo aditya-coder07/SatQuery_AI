@@ -79,7 +79,8 @@ export default function BenchmarksPage() {
 
   return (
     <main className="page">
-      <h1>Benchmarks</h1>
+      <span className="label">/benchmarks</span>
+      <h1>Measured, and not yet measured</h1>
       <p className="note">
         Every number is read from the report that produced it. Regenerate with{' '}
         <code>{data.regenerate_with}</code>.

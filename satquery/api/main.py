@@ -684,3 +684,66 @@ def get_run(run_id: str):
     if record is None:
         raise HTTPException(404, f"no such run: {run_id}")
     return record
+
+
+@app.get("/device")
+def get_device():
+    """One sample of what the process actually knows about its device.
+
+    The frontend's telemetry chart polls this at 1 Hz. It reports only
+    measurements this process can take, and says `null` for the rest:
+
+    * **VRAM** comes from `torch.cuda.mem_get_info`, which is a real reading
+      of free and total bytes on the active device.
+    * **Utilisation** needs NVML (`pynvml`), which is not a dependency here.
+      Rather than deriving a plausible-looking number from memory - which
+      would be a chart of an invented quantity - the field is null and the
+      chart labels that series "not instrumented".
+
+    A dashboard that draws a smooth line for something it never measured is
+    worse than a dashboard with one line, so the honest null is the point of
+    this endpoint.
+    """
+    import time
+
+    sample = {
+        "t": time.time(),
+        "device": "cpu",
+        "name": None,
+        "vram_free_bytes": None,
+        "vram_total_bytes": None,
+        "vram_used_fraction": None,
+        "utilisation": None,
+        "utilisation_source": None,
+    }
+
+    try:
+        import torch
+    except Exception:  # noqa: BLE001 - torch missing is a valid answer here
+        return sample
+
+    if not torch.cuda.is_available():
+        return sample
+
+    index = torch.cuda.current_device()
+    sample["device"] = f"cuda:{index}"
+    try:
+        sample["name"] = torch.cuda.get_device_name(index)
+        free, total = torch.cuda.mem_get_info(index)
+        sample["vram_free_bytes"] = int(free)
+        sample["vram_total_bytes"] = int(total)
+        sample["vram_used_fraction"] = round(1.0 - (free / total), 4) if total else None
+    except Exception:  # noqa: BLE001 - a driver hiccup is not a 500
+        pass
+
+    try:
+        import pynvml
+
+        pynvml.nvmlInit()
+        handle = pynvml.nvmlDeviceGetHandleByIndex(index)
+        sample["utilisation"] = int(pynvml.nvmlDeviceGetUtilizationRates(handle).gpu)
+        sample["utilisation_source"] = "nvml"
+    except Exception:  # noqa: BLE001 - NVML is optional, and its absence is data
+        pass
+
+    return sample
