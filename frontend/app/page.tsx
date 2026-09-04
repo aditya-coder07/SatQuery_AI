@@ -287,62 +287,62 @@ export default function Page() {
           />
         </Enter>
 
-        <Enter index={2}>
-          <div className="vitals">
-            <div className="vital">
-              <div className="k">Run</div>
-              <div className="v">{runId || '—'}</div>
-              <div className="n">
-                {roles.length ? roles.join(' · ') : 'no scenes ingested yet'}
-              </div>
-            </div>
-            <div className="vital">
-              <div className="k">Wall clock</div>
-              <div className="v accent">
-                {elapsed == null ? '—' : `${elapsed.toFixed(2)} s`}
-              </div>
-              <div className="n">measured in the browser</div>
-            </div>
-            <div className="vital">
-              <div className="k">Task</div>
-              <div className="v">{task || '—'}</div>
-              <div className="n">{task ? 'routed, not asked for' : 'awaiting routing'}</div>
-            </div>
-            <div className="vital">
-              <div className="k">Confidence</div>
-              <div className="v accent">
-                {confidence && !abstained ? confidence.final.toFixed(2) : '—'}
-              </div>
-              <div className="n">
-                {abstained
-                  ? 'n/a — the run abstained'
-                  : confidence
-                    ? `${confidence.band} · ${isCalibrated(confidence) ? 'calibrated' : 'uncalibrated'}`
-                    : 'no confidence event yet'}
-              </div>
-            </div>
-            <div className="vital">
-              <div className="k">Checks</div>
-              <div className="v">
-                {checks.length
-                  ? `${checkCounts.pass} / ${checkCounts.warn} / ${checkCounts.fail}`
-                  : '—'}
-              </div>
-              <div className="n">
-                {checks.length ? 'pass · warn · fail' : 'no ingest event yet'}
-              </div>
-            </div>
-          </div>
-        </Enter>
-
         <main className="deck">
-          <Enter index={3} ref={pipelineRef} className="pipeline-anchor">
+          <Enter index={2} ref={pipelineRef} className="pipeline-anchor">
             <Pipeline
               events={events}
               running={running}
               runId={runId}
               startedAt={startedAt}
             />
+          </Enter>
+
+          <Enter index={3}>
+            <div className="vitals">
+              <div className="vital">
+                <div className="k">Run</div>
+                <div className="v">{runId || '—'}</div>
+                <div className="n">
+                  {roles.length ? roles.join(' · ') : 'no scenes ingested yet'}
+                </div>
+              </div>
+              <div className="vital">
+                <div className="k">Wall clock</div>
+                <div className="v accent">
+                  {elapsed == null ? '—' : `${elapsed.toFixed(2)} s`}
+                </div>
+                <div className="n">measured in the browser</div>
+              </div>
+              <div className="vital">
+                <div className="k">Task</div>
+                <div className="v">{task || '—'}</div>
+                <div className="n">{task ? 'routed, not asked for' : 'awaiting routing'}</div>
+              </div>
+              <div className="vital">
+                <div className="k">Confidence</div>
+                <div className="v accent">
+                  {confidence && !abstained ? confidence.final.toFixed(2) : '—'}
+                </div>
+                <div className="n">
+                  {abstained
+                    ? 'n/a — the run abstained'
+                    : confidence
+                      ? `${confidence.band} · ${isCalibrated(confidence) ? 'calibrated' : 'uncalibrated'}`
+                      : 'no confidence event yet'}
+                </div>
+              </div>
+              <div className="vital">
+                <div className="k">Checks</div>
+                <div className="v">
+                  {checks.length
+                    ? `${checkCounts.pass} / ${checkCounts.warn} / ${checkCounts.fail}`
+                    : '—'}
+                </div>
+                <div className="n">
+                  {checks.length ? 'pass · warn · fail' : 'no ingest event yet'}
+                </div>
+              </div>
+            </div>
           </Enter>
 
           <Enter index={4}>
