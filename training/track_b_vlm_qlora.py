@@ -261,6 +261,13 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--lora-dropout", type=float, default=0.05)
     p.add_argument("--lora-targets", nargs="*", default=DEFAULT_LORA_TARGETS)
     p.add_argument(
+        "--optim",
+        choices=["adamw8bit", "adamw"],
+        default="adamw8bit",
+        help="8-bit Adam moments (default) or fp32. Must MATCH on --resume: "
+             "the checkpoint stores an optimiser state_dict of one shape.",
+    )
+    p.add_argument(
         "--dry-run",
         action="store_true",
         help="validate data and config without importing the GPU stack",
@@ -326,9 +333,26 @@ def main() -> int:
 
     model, processor = build_model(args, torch, peft, transformers)
 
-    optimizer = torch.optim.AdamW(
-        [p for p in model.parameters() if p.requires_grad], lr=args.lr
-    )
+    trainable = [p for p in model.parameters() if p.requires_grad]
+    if args.optim == "adamw8bit":
+        # Adam keeps two moments per trainable parameter. In fp32 that is
+        # 8 bytes each on top of the 8 the parameter and its gradient already
+        # cost; 8-bit quantises the moments to 2 bytes, saving 6 bytes per
+        # parameter. Measured on the RTX 4050 (6,141 MiB) with the full target
+        # set at r=32 and every micro-batch at 512x512 - the worst case this
+        # dataset contains:
+        #
+        #     fp32 AdamW    6,036 MiB reserved   (105 MiB headroom)
+        #     8-bit AdamW   5,668 MiB reserved   (473 MiB headroom)
+        #
+        # The 105 MiB margin is not one to stake an 11-hour run on: on Windows
+        # an over-allocation does not raise, it spills into shared system RAM
+        # and the run silently slows by an order of magnitude.
+        import bitsandbytes as bnb
+
+        optimizer = bnb.optim.AdamW8bit(trainable, lr=args.lr)
+    else:
+        optimizer = torch.optim.AdamW(trainable, lr=args.lr)
     scheduler = transformers.get_linear_schedule_with_warmup(
         optimizer, args.warmup_steps, args.max_steps
     )
@@ -352,6 +376,7 @@ def main() -> int:
                 "targets": args.lora_targets,
             },
             "lr": args.lr,
+            "optim": args.optim,
             "effective_batch": args.batch_size * args.grad_accum,
             "max_steps": args.max_steps,
             "seed": args.seed,

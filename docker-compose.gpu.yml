@@ -24,3 +24,21 @@ services:
       # A file, not a directory - this one is a single .pt.
       - SATQUERY_CHANGE_VQA=/app/checkpoints/change_vqa/best.pt
       - SATQUERY_FUSION=/app/checkpoints/optsar_fusion
+
+    # The base file reserves `count: ${GPU_COUNT:-0}`, so composing it with
+    # this override still handed the container ZERO GPUs unless GPU_COUNT
+    # happened to be exported. The full profile then loaded a 4-bit
+    # bitsandbytes VLM with no CUDA device behind it, which is the one
+    # configuration guaranteed not to work. A file whose entire purpose is
+    # "run this on the GPU" should not depend on an unset variable.
+    deploy:
+      resources:
+        reservations:
+          # `!override`, not a plain list: compose MERGES sequences across
+          # files, so without it the base's `count: ${GPU_COUNT:-0}` entry
+          # survives alongside this one and the container is handed a
+          # zero-GPU reservation as well as a real one.
+          devices: !override
+            - driver: nvidia
+              count: ${GPU_COUNT:-1}
+              capabilities: [gpu]

@@ -35,6 +35,11 @@ class ImageMeta(BaseModel):
     # reject. Defaulted so existing constructions stay valid.
     container_format: str | None = None
     georeferenced: bool = True
+    # Geographic extent in EPSG:4326 as (west, south, east, north), when
+    # the raster carries enough georeferencing to compute one. This is
+    # measured from the file's own CRS and transform - it is not a guess,
+    # and it is None rather than zeroed when it cannot be measured.
+    lonlat_bounds: tuple[float, float, float, float] | None = None
 
 class CheckResult(BaseModel):
     name: str
