@@ -29,9 +29,18 @@
  *   backend does.
  */
 
+import dynamic from 'next/dynamic';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { QUERY_FIELD_ID } from '../lib/focusQuery';
+import type { Bounds } from '../lib/footprint';
+import type { ProbedScene } from './AreaPicker';
+
+const API = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000';
+
+// OpenLayers has no business in the first paint of a page whose main control
+// is a text field.
+const AreaPicker = dynamic(() => import('./AreaPicker'), { ssr: false });
 
 export const ACCEPTED = '.tif,.tiff,.img,.jp2,.png,.jpg,.jpeg';
 
@@ -62,6 +71,8 @@ export default function QueryComposer({
   running,
   onSubmit,
   error,
+  aoi,
+  onAoiChange,
 }: {
   query: string;
   onQueryChange: (value: string) => void;
@@ -70,6 +81,8 @@ export default function QueryComposer({
   running: boolean;
   onSubmit: () => void;
   error: string;
+  aoi: Bounds | null;
+  onAoiChange: (box: Bounds | null) => void;
 }) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -78,6 +91,48 @@ export default function QueryComposer({
   // Drag events fire for every child element, so a boolean flag flickers as
   // the pointer crosses the chips. A depth counter does not.
   const dragDepth = useRef(0);
+  const [picking, setPicking] = useState(false);
+  const [probe, setProbe] = useState<ProbedScene[] | null>(null);
+  const [probing, setProbing] = useState(false);
+  const [probeError, setProbeError] = useState('');
+
+  /* An area belongs to the scenes it was drawn over. Change the attachments
+     and it is no longer meaningful, so it goes with them. */
+  useEffect(() => {
+    onAoiChange(null);
+    setProbe(null);
+    setProbeError('');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [files]);
+
+  /**
+   * Ask the server where these scenes are, then open the picker.
+   *
+   * The footprint is only knowable once something has opened the file, and the
+   * server is the authority on that — it is the one that will refuse the run
+   * if the scene turns out not to be georeferenced.
+   */
+  const openPicker = useCallback(async () => {
+    if (files.length === 0) return;
+    setProbing(true);
+    setProbeError('');
+    try {
+      const form = new FormData();
+      files.forEach((f) => form.append('images', f));
+      const res = await fetch(`${API}/probe`, { method: 'POST', body: form });
+      if (!res.ok) {
+        const detail = await res.json().catch(() => null);
+        throw new Error(detail?.detail ?? `server returned ${res.status}`);
+      }
+      const data = await res.json();
+      setProbe(data.scenes ?? []);
+      setPicking(true);
+    } catch (err: any) {
+      setProbeError(err?.message ?? String(err));
+    } finally {
+      setProbing(false);
+    }
+  }, [files]);
 
   // Grow with the question, up to a ceiling, then scroll.
   useEffect(() => {
@@ -190,9 +245,30 @@ export default function QueryComposer({
         {/* The attachment rail collapses to nothing when there is nothing on
             it, so an empty composer is one clean field rather than a field
             with a permanently reserved gap above it. */}
-        <div className={`composer-rail${files.length ? ' open' : ''}`}>
+        <div className={`composer-rail${files.length || aoi ? ' open' : ''}`}>
           <div className="composer-rail-inner">
             <ul className="attachments">
+              {aoi && (
+                <li className="attachment aoi">
+                  <svg className="icon" viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M4 4h16v16H4z" />
+                    <path d="M9 9h6v6H9z" />
+                  </svg>
+                  <span className="attachment-name">
+                    area · {aoi.map((v) => v.toFixed(3)).join(', ')}
+                  </span>
+                  <button
+                    type="button"
+                    className="attachment-remove"
+                    onClick={() => onAoiChange(null)}
+                    aria-label="Remove the selected area"
+                  >
+                    <svg className="icon" viewBox="0 0 24 24" aria-hidden="true">
+                      <path d="M6 6l12 12M18 6L6 18" />
+                    </svg>
+                  </button>
+                </li>
+              )}
               {files.map((file, i) => (
                 <li className="attachment" key={`${file.name}-${file.lastModified}-${i}`}>
                   <svg className="icon" viewBox="0 0 24 24" aria-hidden="true">
@@ -248,6 +324,24 @@ export default function QueryComposer({
                 <path d="M21.4 11.1l-9.2 9.2a6 6 0 01-8.5-8.5l9.2-9.2a4 4 0 015.7 5.7l-9.2 9.2a2 2 0 01-2.8-2.9l8.5-8.4" />
               </svg>
               {files.length ? 'Add more' : 'Attach imagery'}
+            </button>
+
+            <button
+              type="button"
+              className="composer-attach"
+              onClick={openPicker}
+              disabled={running || probing || files.length === 0}
+              title={
+                files.length === 0
+                  ? 'Attach a georeferenced scene first'
+                  : 'Draw an area on the map'
+              }
+            >
+              <svg className="icon" viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M3 6l6-3 6 3 6-3v15l-6 3-6-3-6 3z" />
+                <path d="M9 3v15M15 6v15" />
+              </svg>
+              {probing ? 'Locating…' : aoi ? 'Change area' : 'Select area'}
             </button>
 
             <span className="composer-hint">
@@ -307,10 +401,22 @@ export default function QueryComposer({
         </span>
       </div>
 
-      {notice && (
+      {(notice || probeError) && (
         <p className="composer-error" role="alert">
-          {notice}
+          {probeError || notice}
         </p>
+      )}
+
+      {picking && probe && (
+        <AreaPicker
+          scenes={probe}
+          initial={aoi}
+          onCancel={() => setPicking(false)}
+          onConfirm={(box) => {
+            onAoiChange(box);
+            setPicking(false);
+          }}
+        />
       )}
     </form>
   );

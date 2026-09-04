@@ -213,6 +213,141 @@ def _validate_upload_shape(images: list[UploadFile]) -> None:
         )
 
 
+# A crop smaller than this on either side is not an input. Below roughly a
+# tile the model has nothing to look at, and the ingest checks that follow
+# would be describing noise.
+MIN_AOI_PX = 64
+
+
+def _parse_aoi(raw: str | None) -> tuple[float, float, float, float] | None:
+    """Parse the optional `aoi` form field: [west, south, east, north] in EPSG:4326.
+
+    Rejected here rather than deep in rasterio, so a malformed box comes back
+    as a 400 naming the problem instead of a 500 naming a GDAL internal.
+    """
+    if raw is None or not raw.strip():
+        return None
+    try:
+        box = json.loads(raw)
+    except json.JSONDecodeError as exc:
+        raise HTTPException(400, f"aoi is not valid JSON: {exc.msg}") from exc
+
+    if not isinstance(box, (list, tuple)) or len(box) != 4:
+        raise HTTPException(400, "aoi must be [west, south, east, north]")
+    try:
+        west, south, east, north = (float(v) for v in box)
+    except (TypeError, ValueError) as exc:
+        raise HTTPException(400, "aoi values must be numbers") from exc
+
+    if not (-180 <= west < east <= 180) or not (-90 <= south < north <= 90):
+        raise HTTPException(
+            400,
+            "aoi must be [west, south, east, north] in degrees, with west < east "
+            "and south < north",
+        )
+    return (west, south, east, north)
+
+
+def _crop_to_aoi(path: Path, aoi: tuple[float, float, float, float]) -> Path:
+    """Write the part of `path` inside `aoi`, and return the new file.
+
+    A windowed read, so the crop keeps the source resolution, dtype, band
+    count and nodata: only the extent changes. That matters because every
+    check downstream - GSD, radiometry, overlap - then describes the pixels
+    the model was actually given.
+
+    The original is left on disk. The trace records both extents, so a run on
+    a crop can never be mistaken for a run on the whole scene.
+    """
+    import rasterio
+    from rasterio.warp import transform_bounds
+    from rasterio.windows import Window, from_bounds, intersection
+
+    from satquery.ingest.reader import wgs84_bounds
+
+    if path.is_dir():
+        # A multi-file vendor product is several rasters plus the metadata
+        # that describes them; cropping the bands without rewriting the
+        # sidecars would leave a product whose own header disagrees with its
+        # pixels. Refused rather than half-done.
+        raise HTTPException(
+            400,
+            "area selection is not supported for multi-file products yet - "
+            "upload a single raster, or run the whole scene",
+        )
+
+    with rasterio.open(path) as src:
+        if src.crs is None:
+            raise HTTPException(
+                400,
+                f"{path.name} carries no CRS, so an area on the map cannot be "
+                "located in it",
+            )
+
+        left, bottom, right, top = transform_bounds(
+            "EPSG:4326", src.crs, *aoi, densify_pts=21
+        )
+        try:
+            window = intersection(
+                from_bounds(left, bottom, right, top, src.transform),
+                Window(0, 0, src.width, src.height),
+            )
+        except Exception as exc:  # noqa: BLE001 - rasterio raises when disjoint
+            raise HTTPException(
+                400,
+                f"the selected area does not overlap {path.name}",
+            ) from exc
+
+        window = window.round_lengths().round_offsets()
+        if window.width < MIN_AOI_PX or window.height < MIN_AOI_PX:
+            raise HTTPException(
+                400,
+                f"the selected area covers only {int(window.width)}x"
+                f"{int(window.height)} px of {path.name}; at least "
+                f"{MIN_AOI_PX}x{MIN_AOI_PX} is needed",
+            )
+
+        source_bounds = wgs84_bounds(src)
+        profile = src.profile.copy()
+        profile.update(
+            driver="GTiff",
+            height=int(window.height),
+            width=int(window.width),
+            transform=src.window_transform(window),
+        )
+        data = src.read(window=window)
+
+    target = path.with_name(f"{path.stem}_aoi.tif")
+    with rasterio.open(target, "w", **profile) as dst:
+        dst.write(data)
+        # The provenance goes in the file, not in a variable that has to be
+        # carried through three layers to reach the trace. Ingest reads these
+        # back into the manifest, so a crop can never be presented as though
+        # the whole scene had been examined.
+        dst.update_tags(
+            SATQUERY_AOI=json.dumps([round(v, 6) for v in aoi]),
+            SATQUERY_SOURCE_BOUNDS=json.dumps(
+                [round(v, 6) for v in source_bounds] if source_bounds else None
+            ),
+            SATQUERY_SOURCE_FILE=path.name,
+        )
+    return target
+
+
+def _apply_aoi(
+    paths: list[Path], aoi: tuple[float, float, float, float] | None
+) -> list[Path]:
+    """Crop every scene to the AOI, or return the paths untouched.
+
+    All scenes are cropped to the *same* box, which is the point for a
+    bi-temporal pair: it guarantees the two cover the same ground, which is
+    the condition the overlap check exists to test.
+    """
+    if aoi is None:
+        return paths
+    return [_crop_to_aoi(path, aoi) for path in paths]
+
+
 def _save_uploads(files: list[UploadFile], dest: Path) -> list[Path]:
     """Persist uploads under `dest`, grouped into logical images.
 
@@ -336,9 +471,11 @@ def health_check():
 async def create_run(
     query: str = Form(...),
     images: list[UploadFile] = File(...),
+    aoi: str | None = Form(None),
 ):
     """Run the pipeline synchronously and return the complete trace."""
     _validate_upload_shape(images)
+    area = _parse_aoi(aoi)
 
     run_id = f"run_{uuid.uuid4().hex[:12]}"
     work_dir = Path(tempfile.mkdtemp(prefix=f"satquery_{run_id}_"))
@@ -346,7 +483,7 @@ async def create_run(
     store.create(run_id, query)
 
     try:
-        paths = _save_uploads(images, work_dir)
+        paths = _apply_aoi(_save_uploads(images, work_dir), area)
         trace = get_controller().run(paths, query, run_id=run_id)
     except HTTPException as exc:
         # A deliberate status - 413 for an oversized upload - must survive.
@@ -367,13 +504,15 @@ async def create_run(
 async def stream_run(
     query: str = Form(...),
     images: list[UploadFile] = File(...),
+    aoi: str | None = Form(None),
 ):
     """Run the pipeline and stream trace stages as server-sent events."""
     _validate_upload_shape(images)
+    area = _parse_aoi(aoi)
 
     run_id = f"run_{uuid.uuid4().hex[:12]}"
     work_dir = Path(tempfile.mkdtemp(prefix=f"satquery_{run_id}_"))
-    paths = _save_uploads(images, work_dir)
+    paths = _apply_aoi(_save_uploads(images, work_dir), area)
 
     store = get_store()
     store.create(run_id, query)
@@ -684,6 +823,62 @@ def get_run(run_id: str):
     if record is None:
         raise HTTPException(404, f"no such run: {run_id}")
     return record
+
+
+@app.post("/probe")
+async def probe_uploads(images: list[UploadFile] = File(...)):
+    """Where the uploaded scenes are, without running anything.
+
+    The area picker has to draw a box over the scene's footprint, and the
+    footprint is only known once something has opened the file. Running the
+    whole pipeline to find that out would cost minutes and a stored trace, so
+    this reads the header and throws the pixels away.
+
+    Nothing is persisted: no run id, no trace, no artifacts. The temporary
+    directory goes with the response.
+    """
+    _validate_upload_shape(images)
+
+    work_dir = Path(tempfile.mkdtemp(prefix="satquery_probe_"))
+    try:
+        paths = _save_uploads(images, work_dir)
+        import rasterio
+
+        from satquery.ingest.reader import wgs84_bounds
+
+        scenes = []
+        for path in paths:
+            # A multi-file product is a directory; probe its first raster,
+            # which is enough to place the product on a map.
+            target = path
+            if path.is_dir():
+                rasters = sorted(
+                    p
+                    for p in path.iterdir()
+                    if p.suffix.lower() in {".tif", ".tiff", ".jp2", ".img"}
+                )
+                if not rasters:
+                    scenes.append({"name": path.name, "georeferenced": False})
+                    continue
+                target = rasters[0]
+
+            try:
+                with rasterio.open(target) as src:
+                    scenes.append({
+                        "name": path.name,
+                        "crs": str(src.crs) if src.crs else "UNKNOWN",
+                        "georeferenced": src.crs is not None,
+                        "lonlat_bounds": wgs84_bounds(src),
+                        "width": src.width,
+                        "height": src.height,
+                        "multi_file": path.is_dir(),
+                    })
+            except Exception:  # noqa: BLE001 - an unreadable file is not a 500
+                scenes.append({"name": path.name, "georeferenced": False})
+
+        return {"scenes": scenes}
+    finally:
+        shutil.rmtree(work_dir, ignore_errors=True)
 
 
 @app.get("/device")

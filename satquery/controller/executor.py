@@ -226,6 +226,18 @@ class Executor:
                     "nodata_pct": img.nodata_pct,
                     "sensor_guess": img.sensor_guess,
                     "polarisations": img.polarisations,
+                    # Present only on a run that was given a crop, so an
+                    # ordinary run's trace - and every golden - is unchanged.
+                    **(
+                        {
+                            "aoi_applied": list(img.aoi_applied),
+                            "source_lonlat_bounds": list(img.source_lonlat_bounds)
+                            if img.source_lonlat_bounds
+                            else None,
+                        }
+                        if img.aoi_applied
+                        else {}
+                    ),
                 }
                 for img in manifest.images
             ],

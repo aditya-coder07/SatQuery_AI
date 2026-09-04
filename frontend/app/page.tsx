@@ -77,6 +77,9 @@ export default function Page() {
   const [roles, setRoles] = useState<string[]>([]);
   const [footprint, setFootprint] = useState<Bounds | null>(null);
   const [geolocatable, setGeolocatable] = useState(false);
+  // The area drawn on the map, [west, south, east, north] in EPSG:4326. The
+  // composer owns picking it; the run sends it.
+  const [aoi, setAoi] = useState<Bounds | null>(null);
   const traceRef = useRef<HTMLDivElement>(null);
   const pipelineRef = useRef<HTMLDivElement>(null);
 
@@ -110,6 +113,9 @@ export default function Page() {
       const form = new FormData();
       form.append('query', query);
       files.forEach((f) => form.append('images', f));
+      // Only when an area was actually drawn: an absent field means the whole
+      // scene, which is what the API defaults to.
+      if (aoi) form.append('aoi', JSON.stringify(aoi));
 
       try {
         const res = await fetch(`${API}/runs/stream`, { method: 'POST', body: form });
@@ -166,7 +172,7 @@ export default function Page() {
         setElapsed((Date.now() - began) / 1000);
       }
     },
-    [files, query],
+    [files, query, aoi],
   );
 
   /**
@@ -276,6 +282,8 @@ export default function Page() {
             running={running}
             onSubmit={submit}
             error={error}
+            aoi={aoi}
+            onAoiChange={setAoi}
           />
         </Enter>
 

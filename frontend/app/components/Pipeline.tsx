@@ -113,7 +113,16 @@ function buildBoard(
     kind: 'INGEST',
     title: 'Ingest',
     value: ingest ? `${images.length} scene${images.length === 1 ? '' : 's'} · ${checks.length} checks` : '—',
-    sub: ingest ? images.map((i) => i.role).join(' · ') || 'no roles' : '',
+    sub: ingest
+      ? [
+          images.map((i) => i.role).join(' · ') || 'no roles',
+          // Said on the node, not only in the trace: the whole board describes
+          // a run on a crop when one was selected.
+          images.some((i) => i.aoi_applied) ? 'cropped to area' : '',
+        ]
+          .filter(Boolean)
+          .join(' · ')
+      : '',
     badge: !ingest
       ? undefined
       : counts.fail

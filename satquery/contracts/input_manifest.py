@@ -35,6 +35,14 @@ class ImageMeta(BaseModel):
     # reject. Defaulted so existing constructions stay valid.
     container_format: str | None = None
     georeferenced: bool = True
+    # Set when the run was given a crop of a larger scene rather than the
+    # scene itself. `aoi_applied` is the requested box and
+    # `source_lonlat_bounds` the extent of the file it came out of, both in
+    # EPSG:4326. Reporting on a crop as though the whole scene had been
+    # examined is the kind of quiet overclaim the manifest exists to prevent,
+    # so both travel with the image. None on an ordinary upload.
+    aoi_applied: tuple[float, float, float, float] | None = None
+    source_lonlat_bounds: tuple[float, float, float, float] | None = None
     # Geographic extent in EPSG:4326 as (west, south, east, north), when
     # the raster carries enough georeferencing to compute one. This is
     # measured from the file's own CRS and transform - it is not a guess,

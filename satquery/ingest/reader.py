@@ -7,6 +7,7 @@ set (Sentinel-1/2) in band layout, GSD and dtype.
 
 from __future__ import annotations
 
+import json
 import math
 from datetime import datetime
 from pathlib import Path
@@ -126,6 +127,22 @@ def read_canonical_band(meta: ImageMeta, band: str) -> np.ndarray:
 # "undefined" for every band, so this refines the ordinary-image case without
 # disturbing the products where positional convention is the only signal.
 _PHOTOMETRIC = {"red": "RED", "green": "GREEN", "blue": "BLUE"}
+
+
+def _tag_bounds(tags: dict, key: str) -> tuple[float, float, float, float] | None:
+    """Read a four-number bounds tag written by the AOI crop, if present.
+
+    A malformed tag is treated as absent: a crop whose provenance cannot be
+    parsed should not fail the run, it should simply not claim anything.
+    """
+    raw = tags.get(key)
+    if not raw:
+        return None
+    try:
+        west, south, east, north = (float(v) for v in json.loads(raw))
+    except Exception:  # noqa: BLE001 - an unreadable tag is not a failure
+        return None
+    return (west, south, east, north)
 
 
 def wgs84_bounds(src) -> tuple[float, float, float, float] | None:
@@ -291,4 +308,10 @@ def read_image(
             container_format=src.driver,
             georeferenced=src.crs is not None,
             lonlat_bounds=wgs84_bounds(src),
+            # Written into the GeoTIFF by the API when an area was selected on
+            # the map. Read back here rather than threaded through the
+            # controller, so the provenance travels with the pixels and cannot
+            # be separated from them by a later copy.
+            aoi_applied=_tag_bounds(tags, "SATQUERY_AOI"),
+            source_lonlat_bounds=_tag_bounds(tags, "SATQUERY_SOURCE_BOUNDS"),
         )
