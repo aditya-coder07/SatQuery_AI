@@ -42,6 +42,7 @@ import { Graticule } from 'ol/layer';
 import { getIntersection, containsExtent, isEmpty } from 'ol/extent';
 import { transformExtent } from 'ol/proj';
 import { Fill, Stroke, Style } from 'ol/style';
+import CircleStyle from 'ol/style/Circle';
 import 'ol/ol.css';
 
 import type { Bounds } from '../lib/footprint';
@@ -184,6 +185,18 @@ export default function AreaPicker({
       // clicks, which is a fine convention but not the one the instruction on
       // screen gives — and the instruction is what people follow.
       freehand: true,
+      // The interaction needs its own style, not just the layer the finished
+      // box lands in. Without this OpenLayers draws its stock editing style —
+      // a blue dot parked at the cursor over the imagery, which reads as a
+      // marker on the scene rather than as a cursor.
+      style: new Style({
+        stroke: new Stroke({ color: '#E8C39E', width: 1.5, lineDash: [4, 3] }),
+        fill: new Fill({ color: 'rgba(232,195,158,0.10)' }),
+        image: new CircleStyle({
+          radius: 2.5,
+          fill: new Fill({ color: 'rgba(232,195,158,0.9)' }),
+        }),
+      }),
     });
 
     // One box at a time: drawing again replaces it rather than stacking
