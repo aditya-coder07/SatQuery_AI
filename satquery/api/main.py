@@ -1007,6 +1007,12 @@ def get_device():
     except Exception:  # noqa: BLE001 - a driver hiccup is not a 500
         pass
 
+    # Utilisation, from whichever of the two sources is actually present.
+    # NVML is the better one - it is an API, not a subprocess - but it is a
+    # dependency this project does not carry, whereas `nvidia-smi` ships with
+    # the driver and is therefore in every CUDA image already. Reporting
+    # "not instrumented" while a working nvidia-smi sits on the PATH was
+    # honest about the wrong thing.
     try:
         import pynvml
 
@@ -1014,7 +1020,33 @@ def get_device():
         handle = pynvml.nvmlDeviceGetHandleByIndex(index)
         sample["utilisation"] = int(pynvml.nvmlDeviceGetUtilizationRates(handle).gpu)
         sample["utilisation_source"] = "nvml"
-    except Exception:  # noqa: BLE001 - NVML is optional, and its absence is data
+        return sample
+    except Exception:  # noqa: BLE001 - NVML is optional; fall through to the CLI
+        pass
+
+    try:
+        import shutil
+        import subprocess
+
+        smi = shutil.which("nvidia-smi")
+        if smi:
+            out = subprocess.run(
+                [
+                    smi,
+                    f"--id={index}",
+                    "--query-gpu=utilization.gpu",
+                    "--format=csv,noheader,nounits",
+                ],
+                capture_output=True,
+                text=True,
+                # A hung driver query must not hold the request open: this is
+                # polled once a second by the telemetry chart.
+                timeout=2,
+                check=True,
+            )
+            sample["utilisation"] = int(out.stdout.strip().splitlines()[0])
+            sample["utilisation_source"] = "nvidia-smi"
+    except Exception:  # noqa: BLE001 - no driver tool is data, not a failure
         pass
 
     return sample

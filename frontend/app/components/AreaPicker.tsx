@@ -97,6 +97,7 @@ export default function AreaPicker({
   const drawnRef = useRef<VectorSource | null>(null);
   const [box, setBox] = useState<Bounds | null>(value);
   const [tooSmall, setTooSmall] = useState(false);
+  const [basemapFailed, setBasemapFailed] = useState(false);
 
   const located = scenes.filter((s) => s.georeferenced && s.lonlat_bounds);
 
@@ -169,12 +170,39 @@ export default function AreaPicker({
           }),
       );
 
+    /* The basemap is optional context; the scene is the point.
+       MapView probes for a reachable tile before deciding. Probing here would
+       put a network round trip in front of a panel that opens as soon as a
+       file is attached, so this reacts instead: if tiles start failing — no
+       network, a captive portal, a blocked host — the layer is dropped and a
+       graticule takes its place, so the scene is never floating in a void
+       waiting for a basemap that is not coming. */
+    const graticule = new Graticule({
+      strokeStyle: new Stroke({ color: 'rgba(154,146,158,0.28)', width: 1 }),
+      showLabels: true,
+      wrapX: false,
+    });
+    graticule.setVisible(!BASEMAP_URL);
+
+    const tiles = BASEMAP_URL
+      ? new TileLayer({ source: new XYZ({ url: BASEMAP_URL, crossOrigin: 'anonymous' }) })
+      : null;
+    if (tiles) {
+      let fellBack = false;
+      tiles.getSource()!.on('tileloaderror', () => {
+        if (fellBack) return;
+        fellBack = true;
+        tiles.setVisible(false);
+        graticule.setVisible(true);
+        setBasemapFailed(true);
+      });
+    }
+
     const map = new Map({
       target: container.current,
       layers: [
-        BASEMAP_URL
-          ? new TileLayer({ source: new XYZ({ url: BASEMAP_URL, crossOrigin: 'anonymous' }) })
-          : new Graticule({ showLabels: true, wrapX: false }),
+        ...(tiles ? [tiles] : []),
+        graticule,
         ...sceneLayers,
         outline,
         drawnLayer,
@@ -297,6 +325,12 @@ export default function AreaPicker({
             <p className="composer-error" role="alert">
               That area is under {MIN_AOI_PX} pixels on a side at this scene&apos;s
               resolution — the run would have nothing to look at. Drag a larger one.
+            </p>
+          )}
+          {basemapFailed && (
+            <p className="cap">
+              No basemap — the tile server is unreachable. The scene and its
+              coordinates are unaffected; only the map behind them is missing.
             </p>
           )}
           {unlocated.length > 0 && (
