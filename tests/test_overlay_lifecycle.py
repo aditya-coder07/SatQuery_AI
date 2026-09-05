@@ -142,7 +142,21 @@ class TestFrontendDoesNotAskEarly:
 
     def test_page_only_marks_ready_on_the_complete_event(self):
         text = PAGE.read_text(encoding="utf-8")
-        assert "<MapView runId={runId} ready={runComplete} />" in text
+        # Matched on the element rather than on one exact line: this asserted a
+        # single-line `<MapView runId={runId} ready={runComplete} />` and broke
+        # the moment the map gained a `footprint` prop and wrapped across
+        # lines. The invariant is that the map is gated on `runComplete`, not
+        # how many props happen to sit beside it.
+        mounts = [
+            text[at : text.index("/>", at)]
+            for at in range(len(text))
+            if text.startswith("<MapView", at)
+        ]
+        assert mounts, "the query page must still mount MapView"
+        assert any("ready={runComplete}" in mount for mount in mounts), (
+            "MapView must be gated on runComplete, so overlays are not "
+            "requested before the trace is persisted"
+        )
         # setRunComplete(true) must sit inside the `complete` branch, never in
         # the run_started branch.
         complete_branch = text.index("event.name === 'complete'")

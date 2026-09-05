@@ -66,8 +66,10 @@ export default function Comparator({ api, runId, roles }: Props) {
   if (failed) {
     return (
       <section className="panel">
-        <h2>Comparator</h2>
-        <p style={{ color: 'var(--muted)' }}>
+        <div className="panel-head">
+          <span className="label">Comparator</span>
+        </div>
+        <p className="answer empty">
           Previews are unavailable for this run — the source images may no longer
           be on disk.
         </p>
@@ -77,9 +79,17 @@ export default function Comparator({ api, runId, roles }: Props) {
 
   return (
     <section className="panel">
-      <h2>
-        {mode === 'swipe' ? 'Bi-temporal swipe' : 'Optical–SAR blend'}
-      </h2>
+      <div className="panel-head">
+        <span className="label">
+          <svg className="icon" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M4 4h16v16H4z" />
+            <path d="M12 4v16" />
+          </svg>
+          {mode === 'swipe' ? 'Bi-temporal swipe' : 'Optical–SAR blend'}
+        </span>
+        <span className="spacer" />
+        <span className="meta">preview/{'{role}'} · max_edge 768</span>
+      </div>
 
       <div className="cmp-labels">
         <span>{mode === 'swipe' ? `${left} (earlier)` : left}</span>
@@ -121,7 +131,7 @@ export default function Comparator({ api, runId, roles }: Props) {
         onChange={(e) => setPosition(Number(e.target.value))}
         style={{ width: '100%', marginTop: 10 }}
       />
-      <p style={{ color: 'var(--muted)', fontSize: 12, margin: '6px 0 0' }}>
+      <p className="cap">
         {mode === 'swipe'
           ? 'Drag the divider, or use the slider / arrow keys.'
           : `Showing ${Math.round(position)}% ${right} over ${left}.`}

@@ -7,11 +7,18 @@
  * one - the map, the answer and the artifacts were reachable only in the tab
  * that happened to submit the query. This makes a run addressable, which is
  * also what lets the map viewer be checked against a run someone else made.
+ *
+ * Re-skinned to the deck, and given the two things the live page gained: the
+ * verification panel, and the same confidence card, so a stored run and a live
+ * one cannot end up saying different things about the same numbers.
  */
 
 import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import MapView from '@/MapView';
+import Checks from '@/components/Checks';
+import ConfidenceCard from '@/components/ConfidenceCard';
+import { hasGeoreference, sceneFootprint } from '@/lib/footprint';
 
 const API = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000';
 
@@ -37,87 +44,181 @@ export default function RunPage() {
 
   if (error) {
     return (
-      <main className="page">
+      <main className="shell">
+        <div className="page-head">
+          <span className="label">/runs/{runId}</span>
+          <h1>Run not available</h1>
+        </div>
         <p className="load-error">
           Could not load run {runId}: {error}
         </p>
       </main>
     );
   }
+
   if (!record) {
     return (
-      <main className="page">
-        <p>Loading…</p>
+      <main className="shell">
+        <div className="page-head">
+          <span className="label">/runs/{runId}</span>
+          <h1>Stored run</h1>
+          <p>Reading the persisted trace…</p>
+        </div>
       </main>
     );
   }
 
-  const confidence = record.confidence;
-  // An abstained run returned no answer, so a confidence *for that answer* is
-  // not applicable (limitation L18). Rendering "HIGH 0.7937" directly above
-  // "Abstained" reads as a contradiction even though the number is
-  // arithmetically right - it abstained on input validation, not on low
-  // confidence. Presentation only: the combiner is untouched.
+  const confidence = record.confidence ?? null;
   const abstained = Boolean(record.abstained);
-  const failedChecks = (record.ingest?.checks ?? []).filter(
-    (c: any) => c.status === 'FAIL',
-  );
+  const checks = record.ingest?.checks ?? [];
+  const steps = record.execution ?? record.steps ?? [];
+  const gate = record.verification?.entailment_gate;
+  const conflicts: string[] = record.verification?.conflicts ?? [];
+  const footprint = sceneFootprint(record.ingest?.images);
+  const geolocatable = hasGeoreference(record.ingest?.images);
 
   return (
-    <main className="page">
-      <h1>Run {runId}</h1>
-      <p className="note">{record.query}</p>
+    <main className="shell">
+      <div className="page-head">
+        <span className="label">/runs/{runId}</span>
+        <h1>{abstained ? <span className="accent">Abstained</span> : 'Stored run'}</h1>
+        <p>{record.query}</p>
+      </div>
 
-      <section className="card">
-        <h3>{abstained ? 'Status: Abstained' : 'Answer'}</h3>
-        {abstained ? (
-          <>
-            {failedChecks.length > 0 && (
-              <ul className="checks">
-                {failedChecks.map((c: any, i: number) => (
-                  <li key={i} className="check-FAIL">
-                    Input validation failed: <code>{c.name}</code> — {c.message}
-                  </li>
-                ))}
-              </ul>
-            )}
-            <p className="caveat">
-              Trigger: {record.abstain_trigger}. {record.abstain_resolving_input}
-            </p>
-          </>
-        ) : (
-          <p>{record.answer}</p>
-        )}
-      </section>
-
-      {confidence && (
-        <div className="stats">
-          <div className="stat">
-            <div className="label">confidence</div>
-            <div className="value">
-              {abstained ? '—' : Number(confidence.final).toFixed(4)}
-            </div>
-            <div className="sub">
-              {abstained ? 'not applicable — the run abstained' : confidence.band}
-            </div>
+      <div className="vitals" style={{ marginTop: 'var(--s3)' }}>
+        <div className="vital">
+          <div className="k">Run id</div>
+          <div className="v">{String(runId)}</div>
+          <div className="n">replayed, not re-run</div>
+        </div>
+        <div className="vital">
+          <div className="k">Task</div>
+          <div className="v">{record.routing?.selected_task ?? '—'}</div>
+          <div className="n">routed from the question</div>
+        </div>
+        <div className="vital">
+          <div className="k">Steps</div>
+          <div className="v">{Array.isArray(steps) ? steps.length : '—'}</div>
+          <div className="n">tools the plan ran</div>
+        </div>
+        <div className="vital">
+          <div className="k">Confidence</div>
+          <div className="v accent">
+            {confidence && !abstained ? Number(confidence.final).toFixed(2) : '—'}
           </div>
+          <div className="n">
+            {abstained ? 'n/a — the run abstained' : (confidence?.band ?? 'not recorded')}
+          </div>
+        </div>
+      </div>
+
+      <div className="deck">
+        <div className="deck-row row-2">
+          <section className="panel">
+            <div className="panel-head">
+              <span className="label">{abstained ? 'Abstained' : 'Answer'}</span>
+              <span className="spacer" />
+              <span className="meta">from the stored trace</span>
+            </div>
+
+            {abstained ? (
+              <>
+                <p className="answer">
+                  {record.abstain_reason ?? 'The run returned no answer.'}
+                </p>
+                <p className="caveat">
+                  Trigger: {record.abstain_trigger}. {record.abstain_resolving_input}
+                </p>
+              </>
+            ) : (
+              <p className="answer">{record.answer}</p>
+            )}
+
+            {gate && (
+              <p className="caveat">
+                <b>
+                  {gate.retained}/{gate.sentences} sentences retained
+                </b>{' '}
+                by the {gate.backend} entailment gate — {gate.flagged} flagged,{' '}
+                {gate.unverifiable ?? 0} unverifiable. Unverifiable means nothing in
+                the payload could speak to the sentence either way; it is not a pass.
+                {conflicts.length > 0 && <> Conflicts: {conflicts.join('; ')}.</>}
+              </p>
+            )}
+
+            <Checks checks={checks} />
+
+            <p style={{ marginTop: 'var(--s4)' }}>
+              <a className="permalink" href={`${API}/runs/${runId}/report.pdf`}>
+                Download the PDF report
+                <svg className="icon" viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M12 3v12" />
+                  <path d="M8 11l4 4 4-4" />
+                  <path d="M4 19h16" />
+                </svg>
+              </a>
+            </p>
+          </section>
+
           {/* Components stay visible even when abstained: they are the
               diagnosis of *why*, and input_quality is usually the low one. */}
-          {Object.entries(confidence.components ?? {}).map(([k, v]) => (
-            <div className="stat" key={k}>
-              <div className="label">{k}</div>
-              <div className="value">{Number(v).toFixed(3)}</div>
-            </div>
-          ))}
+          <ConfidenceCard confidence={confidence} abstained={abstained} />
         </div>
-      )}
 
-      <h2>Map</h2>
-      <MapView runId={String(runId)} />
+        {Array.isArray(steps) && steps.length > 0 && (
+          <section className="panel">
+            <div className="panel-head">
+              <span className="label">Steps</span>
+              <span className="spacer" />
+              <span className="meta">{steps.length} executed</span>
+            </div>
+            <div className="tablewrap">
+              <table className="reg">
+                <thead>
+                  <tr>
+                    <th>Tool</th>
+                    <th>Version</th>
+                    <th>Rationale</th>
+                    <th style={{ textAlign: 'right' }}>Runtime</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {steps.map((step: any, i: number) => (
+                    <tr key={`${step.tool}-${i}`}>
+                      <td className="name">{step.tool}</td>
+                      <td>{step.version ?? '—'}</td>
+                      <td>{step.rationale_tag ?? '—'}</td>
+                      <td className="num">
+                        {Number.isFinite(Number(step.runtime_ms))
+                          ? `${Math.round(Number(step.runtime_ms))} ms`
+                          : '—'}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </section>
+        )}
 
-      <p className="note" style={{ marginTop: 12 }}>
-        <a href={`${API}/runs/${runId}/report.pdf`}>Download the PDF report</a>
-      </p>
+        <section className="panel">
+          <div className="panel-head">
+            <span className="label">Georeferenced overlays</span>
+            <span className="spacer" />
+            <span className="meta">/runs/{runId}/overlays</span>
+          </div>
+          <MapView
+            runId={String(runId)}
+            footprint={footprint}
+            geolocatable={geolocatable}
+          />
+        </section>
+      </div>
+
+      <footer className="foot">
+        <span>SatQuery AI · stored run</span>
+        <span>{record.run_id ?? runId}</span>
+      </footer>
     </main>
   );
 }
