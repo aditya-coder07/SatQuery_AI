@@ -63,7 +63,13 @@ jobs:
         with:
           python-version: "3.12"
       - run: pip install -e ".[dev]" pip-audit
-      - run: pip-audit --strict
+        # `--skip-editable` skips `satquery` itself. The package is installed
+        # editable by the line above and is not published to PyPI, and under
+        # `--strict` pip-audit treats "could not be audited" as a failure -
+        # so without this the job fails on the project rather than on any
+        # dependency of it. `--strict` is kept, because the value of this job
+        # is failing when a real dependency cannot be checked.
+      - run: pip-audit --strict --skip-editable
 
   frontend:
     runs-on: ubuntu-latest
