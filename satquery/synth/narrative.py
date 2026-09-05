@@ -196,6 +196,58 @@ def describe_georeferencing(
     )
 
 
+def _coordinate(value: float, positive: str, negative: str) -> str:
+    """A signed degree as a hemisphere-lettered coordinate.
+
+    Four decimals is about 11 m at the equator - finer than the GSD of any
+    product this system ingests, and coarse enough not to imply the footprint
+    is known to the centimetre.
+    """
+    hemisphere = positive if value >= 0 else negative
+    return f"{abs(value):.4f}° {hemisphere}"
+
+
+def _distance(metres: float) -> str:
+    if metres >= 1000.0:
+        return f"{metres / 1000.0:.1f} km"
+    return f"{round(metres, -1):.0f} m"
+
+
+def describe_location(
+    georeferenced: bool,
+    container_format: str | None = None,
+    centroid: tuple[float, float] | None = None,
+    extent_m: tuple[float, float] | None = None,
+) -> str:
+    """One sentence saying where the scene is, or why that cannot be said.
+
+    Every number here is transformed from the container's own CRS and
+    geotransform at ingest (`ingest/reader._footprint`). Nothing is inferred:
+    a file that does not carry a footprint produces the disclosure instead,
+    and a file that carries one but whose CRS measures in degrees gets the
+    centre without a ground extent, because `gsd_m` is only exact for a
+    projected CRS.
+    """
+    if not georeferenced:
+        return describe_georeferencing(georeferenced, container_format)
+    if centroid is None:
+        # Georeferenced, but the footprint would not transform. Saying
+        # nothing is right: the alternative is a coordinate we do not have.
+        return ""
+
+    latitude, longitude = centroid
+    sentence = (
+        f"The scene is centred at {_coordinate(latitude, 'N', 'S')}, "
+        f"{_coordinate(longitude, 'E', 'W')}"
+    )
+    if extent_m:
+        sentence += (
+            f" and covers about {_distance(extent_m[0])} by "
+            f"{_distance(extent_m[1])} on the ground"
+        )
+    return sentence + "."
+
+
 def compose_answer(
     task: str,
     tool_answer: str,
@@ -204,6 +256,8 @@ def compose_answer(
     artifacts: list[str] | None = None,
     georeferenced: bool = True,
     container_format: str | None = None,
+    centroid: tuple[float, float] | None = None,
+    extent_m: tuple[float, float] | None = None,
 ) -> str:
     """Combine a tool's prose with the measured description of the scene.
 
@@ -229,5 +283,7 @@ def compose_answer(
         return tool_answer or synthesised
 
     parts = [_terminated(tool_answer), _terminated(synthesised)]
-    parts.append(describe_georeferencing(georeferenced, container_format))
+    parts.append(
+        describe_location(georeferenced, container_format, centroid, extent_m)
+    )
     return " ".join(p for p in parts if p)

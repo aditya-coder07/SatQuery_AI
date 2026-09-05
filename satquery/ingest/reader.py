@@ -7,12 +7,14 @@ set (Sentinel-1/2) in band layout, GSD and dtype.
 
 from __future__ import annotations
 
+import math
 from datetime import datetime
 from pathlib import Path
 from typing import Literal
 
 import numpy as np
 import rasterio
+from rasterio.warp import transform_bounds
 
 from satquery.contracts.input_manifest import ImageMeta
 
@@ -104,6 +106,44 @@ def _gsd_metres(src) -> float:
     return float(x_res)
 
 
+def _footprint(
+    src,
+) -> tuple[tuple[float, float, float, float] | None, tuple[float, float] | None]:
+    """WGS84 bounds and centre of a raster, or `(None, None)`.
+
+    Returns nothing rather than a guess in every case where the file does not
+    actually say where it is:
+
+    * no CRS - a PNG or JPEG cannot carry one;
+    * the identity transform - GDAL hands this back for an ungeoreferenced
+      raster, and a GeoTIFF written without a geotransform gets it too. The
+      bounds would come out as pixel indices dressed as coordinates, which is
+      worse than silence because they look plausible;
+    * a projection that will not transform - a broken or exotic CRS must
+      degrade the answer, not fail the ingest.
+
+    `densify_pts=21` matches `report/evidence_pack.raster_footprint`: a
+    reprojected rectangle has curved edges, and sampling the sides keeps the
+    envelope from cutting the corners off the real footprint.
+    """
+    if src.crs is None or src.transform.is_identity:
+        return None, None
+    try:
+        west, south, east, north = transform_bounds(
+            src.crs, "EPSG:4326", *src.bounds, densify_pts=21
+        )
+    except Exception:  # noqa: BLE001 - a bad CRS must not fail the ingest
+        return None, None
+
+    if not all(map(math.isfinite, (west, south, east, north))):
+        return None, None
+
+    bounds = (float(west), float(south), float(east), float(north))
+    # (latitude, longitude), in that order - the order a reader says them in.
+    centroid = ((south + north) / 2.0, (west + east) / 2.0)
+    return bounds, (float(centroid[0]), float(centroid[1]))
+
+
 def read_canonical_band(meta: ImageMeta, band: str) -> np.ndarray:
     """Read one canonical band (e.g. "RED") from an image as float64.
 
@@ -174,6 +214,8 @@ def read_image(
         finite = sample[np.isfinite(sample)]
         nodata_pct = float(100.0 * (1.0 - finite.size / sample.size)) if sample.size else 0.0
 
+        bounds_wgs84, centroid_wgs84 = _footprint(src)
+
         sensor_guess = (
             tags.get("SATELLITE")
             or tags.get("SENSOR")
@@ -205,4 +247,7 @@ def read_image(
             look_count_est=layout.metadata.get("equivalent_looks"),
             container_format=src.driver,
             georeferenced=src.crs is not None,
+            bounds_wgs84=bounds_wgs84,
+            centroid_wgs84=centroid_wgs84,
+            crs_is_projected=bool(src.crs is not None and src.crs.is_projected),
         )

@@ -303,6 +303,8 @@ class Executor:
             artifacts=artifacts,
             georeferenced=first.georeferenced if first else True,
             container_format=first.container_format if first else None,
+            centroid=first.centroid_wgs84 if first else None,
+            extent_m=first.ground_extent_m if first else None,
         )
 
         # `model_confidence == 0.0` means a learned tool ran and explicitly

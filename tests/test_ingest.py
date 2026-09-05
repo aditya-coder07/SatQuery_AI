@@ -410,3 +410,72 @@ class TestFootprintOverlap:
         image = ingest([build_no_crs_raster(tmp_path / "a.tif")]).images[0]
         assert footprint_overlap_pct(image, image) is None
         assert check_footprint_overlap(image, image).status == "WARN"
+
+
+class TestSceneFootprint:
+    """`bounds_wgs84` / `centroid_wgs84` on ImageMeta.
+
+    The answer path had no idea where a scene was: ImageMeta carried `crs`
+    and `gsd_m` and nothing else, so "describe this image" could never say
+    where the image is. The footprint is transformed once at ingest, and it
+    is `None` in every case where the file does not actually say.
+    """
+
+    def test_a_projected_geotiff_gets_a_footprint(self, msi_6band):
+        from satquery.ingest import ingest
+
+        image = ingest([msi_6band]).images[0]
+        west, south, east, north = image.bounds_wgs84
+        assert west < east and south < north
+        latitude, longitude = image.centroid_wgs84
+        # Centre lies inside its own envelope, and is (lat, lon) - the order
+        # a reader says them in, which is the opposite of the bounds order.
+        assert south <= latitude <= north
+        assert west <= longitude <= east
+
+    def test_the_ground_extent_is_pixels_times_gsd(self, msi_6band):
+        from satquery.ingest import ingest
+
+        image = ingest([msi_6band]).images[0]
+        assert image.crs_is_projected
+        assert image.ground_extent_m == (
+            image.width * image.gsd_m,
+            image.height * image.gsd_m,
+        )
+
+    def test_an_ungeoreferenced_container_has_no_footprint(self, tmp_path):
+        """A PNG cannot carry a CRS, and GDAL hands back the identity
+        transform. Bounds derived from that are pixel indices dressed as
+        coordinates - plausible-looking and wrong."""
+        import numpy as np
+        import rasterio
+        from satquery.ingest import ingest
+
+        path = tmp_path / "scene.png"
+        with rasterio.open(
+            path, "w", driver="PNG", width=64, height=64, count=3, dtype="uint8"
+        ) as dst:
+            dst.write(np.full((3, 64, 64), 128, dtype="uint8"))
+
+        image = ingest([path]).images[0]
+        assert image.georeferenced is False
+        assert image.bounds_wgs84 is None
+        assert image.centroid_wgs84 is None
+        assert image.ground_extent_m is None
+
+    def test_a_geotiff_without_a_crs_has_no_footprint(self, no_crs_raster):
+        from satquery.ingest import ingest
+
+        image = ingest([no_crs_raster]).images[0]
+        assert image.bounds_wgs84 is None
+        assert image.centroid_wgs84 is None
+
+    def test_ground_extent_is_withheld_for_a_geographic_crs(self, msi_6band):
+        """`gsd_m` converts degrees at a flat 111320 m, which is wrong by
+        the cosine of the latitude in x. That is fine for ordering-of-
+        magnitude routing and not fine as a distance shown to a reader."""
+        from satquery.ingest import ingest
+
+        image = ingest([msi_6band]).images[0]
+        geographic = image.model_copy(update={"crs_is_projected": False})
+        assert geographic.ground_extent_m is None

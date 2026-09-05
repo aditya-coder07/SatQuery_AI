@@ -15,6 +15,7 @@ from satquery.synth.narrative import (
     ENRICHABLE_TASKS,
     compose_answer,
     describe_georeferencing,
+    describe_location,
 )
 
 # 82% water, 18% vegetation - the shape the index engine emits.
@@ -137,4 +138,63 @@ class TestGeoreferencingDisclosure:
             "SINGLE_CAPTION", "a coastal scene", [], INDEX_PAYLOAD
         )
         for word in ("latitude", "longitude", "°", "EPSG"):
+            assert word not in answer
+
+
+class TestLocation:
+    """The location sentence. Every number in it is transformed from the
+    file's own CRS and geotransform at ingest; nothing is inferred."""
+
+    def test_a_located_scene_reports_its_centre_and_extent(self):
+        sentence = describe_location(True, "GTiff", (18.0829, 75.0060), (1280.0, 1280.0))
+        assert "18.0829° N" in sentence
+        assert "75.0060° E" in sentence
+        assert "1.3 km by 1.3 km" in sentence
+
+    def test_southern_and_western_hemispheres_get_the_right_letters(self):
+        """A bare minus sign in front of a coordinate is easy to misread,
+        and easy to lose entirely when the text is reflowed."""
+        sentence = describe_location(True, "GTiff", (-33.86, -70.66), None)
+        assert "33.8600° S" in sentence
+        assert "70.6600° W" in sentence
+        assert "-" not in sentence
+
+    def test_a_geographic_crs_gets_a_centre_but_no_extent(self):
+        """`extent_m` is None for a geographic CRS because `gsd_m` is only
+        approximate there. The centre is exact either way."""
+        sentence = describe_location(True, "GTiff", (18.08, 75.01), None)
+        assert "centred at" in sentence
+        assert "on the ground" not in sentence
+
+    def test_a_georeferenced_file_that_will_not_transform_says_nothing(self):
+        """The alternative is a coordinate we do not have."""
+        assert describe_location(True, "GTiff", None, None) == ""
+
+    def test_an_ungeoreferenced_file_still_gets_the_disclosure(self):
+        sentence = describe_location(False, "PNG", None, None)
+        assert "no georeferencing" in sentence
+
+    def test_a_sub_kilometre_scene_is_reported_in_metres(self):
+        sentence = describe_location(True, "GTiff", (18.08, 75.01), (640.0, 320.0))
+        assert "640 m by 320 m" in sentence
+
+    def test_the_location_reaches_a_composed_answer(self):
+        answer = compose_answer(
+            "SINGLE_CAPTION",
+            "a coastal scene",
+            [],
+            INDEX_PAYLOAD,
+            centroid=(18.0829, 75.0060),
+            extent_m=(1280.0, 1280.0),
+        )
+        assert "a coastal scene." in answer
+        assert "82% water" in answer
+        assert "18.0829° N" in answer
+
+    def test_no_location_is_claimed_without_a_footprint(self):
+        """compose_answer defaults carry no centroid, and must not invent
+        one to fill the slot."""
+        answer = compose_answer("SINGLE_CAPTION", "a coastal scene", [], INDEX_PAYLOAD)
+        assert "centred at" not in answer
+        for word in ("latitude", "longitude", "°"):
             assert word not in answer
