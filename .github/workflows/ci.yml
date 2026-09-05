@@ -63,7 +63,22 @@ jobs:
         with:
           python-version: "3.12"
       - run: pip install -e ".[dev]" pip-audit
-      - run: pip-audit --strict
+      # `--skip-editable`, and NOT `--strict`.
+      #
+      # The step installs this project with `pip install -e .`, so the
+      # environment always contains an editable `satquery` distribution that
+      # does not exist on PyPI. `--strict` means "fail if dependency
+      # collection fails on ANY dependency", and collection can never succeed
+      # for a local package - so the job failed on every run since the
+      # editable install was added, whether or not anything was actually
+      # vulnerable. A check that cannot pass teaches people to ignore it.
+      #
+      # Dropping `--strict` keeps what the audit is for: pip-audit still exits
+      # non-zero when it finds a vulnerability. What is lost is only the
+      # guarantee that every distribution was collectable, which is
+      # unattainable here by construction. `--skip-editable` states the
+      # exemption explicitly rather than leaving it as an unexplained warning.
+      - run: pip-audit --skip-editable
 
   frontend:
     runs-on: ubuntu-latest
