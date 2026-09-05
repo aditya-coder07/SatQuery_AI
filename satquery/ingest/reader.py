@@ -14,6 +14,7 @@ from typing import Literal
 
 import numpy as np
 import rasterio
+from rasterio.warp import transform_bounds
 
 from satquery.contracts.input_manifest import ImageMeta
 
@@ -135,12 +136,22 @@ def wgs84_bounds(src) -> tuple[float, float, float, float] | None:
     transform - and surfaced none of it, so "where is this?" was answered
     with "satellite imagery does not carry that information" on a GeoTIFF
     that carried exactly that. Measured from the file, never inferred.
+
+    None rather than a guess in all three cases where the file does not
+    actually say where it is: no CRS (a PNG or JPEG cannot carry one), the
+    identity transform, or a projection that will not transform. The identity
+    case is the subtle one - GDAL hands it back for any ungeoreferenced
+    raster, and a GeoTIFF written without a geotransform gets it too, so the
+    bounds would come out as pixel indices dressed as coordinates. That is
+    worse than silence, because they look plausible.
+
+    `densify_pts=21` matches `report/evidence_pack.raster_footprint`: a
+    reprojected rectangle has curved edges, and sampling the sides keeps the
+    envelope from cutting the corners off the real footprint.
     """
-    if src.crs is None:
+    if src.crs is None or src.transform.is_identity:
         return None
     try:
-        from rasterio.warp import transform_bounds
-
         west, south, east, north = transform_bounds(
             src.crs, "EPSG:4326", *src.bounds, densify_pts=21
         )
@@ -291,4 +302,5 @@ def read_image(
             container_format=src.driver,
             georeferenced=src.crs is not None,
             lonlat_bounds=wgs84_bounds(src),
+            crs_is_projected=bool(src.crs is not None and src.crs.is_projected),
         )
