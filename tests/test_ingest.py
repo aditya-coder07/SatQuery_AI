@@ -413,7 +413,7 @@ class TestFootprintOverlap:
 
 
 class TestSceneFootprint:
-    """`bounds_wgs84` / `centroid_wgs84` on ImageMeta.
+    """`lonlat_bounds` and the centre derived from it.
 
     The answer path had no idea where a scene was: ImageMeta carried `crs`
     and `gsd_m` and nothing else, so "describe this image" could never say
@@ -425,9 +425,9 @@ class TestSceneFootprint:
         from satquery.ingest import ingest
 
         image = ingest([msi_6band]).images[0]
-        west, south, east, north = image.bounds_wgs84
+        west, south, east, north = image.lonlat_bounds
         assert west < east and south < north
-        latitude, longitude = image.centroid_wgs84
+        latitude, longitude = image.centroid_latlon
         # Centre lies inside its own envelope, and is (lat, lon) - the order
         # a reader says them in, which is the opposite of the bounds order.
         assert south <= latitude <= north
@@ -459,16 +459,16 @@ class TestSceneFootprint:
 
         image = ingest([path]).images[0]
         assert image.georeferenced is False
-        assert image.bounds_wgs84 is None
-        assert image.centroid_wgs84 is None
+        assert image.lonlat_bounds is None
+        assert image.centroid_latlon is None
         assert image.ground_extent_m is None
 
     def test_a_geotiff_without_a_crs_has_no_footprint(self, no_crs_raster):
         from satquery.ingest import ingest
 
         image = ingest([no_crs_raster]).images[0]
-        assert image.bounds_wgs84 is None
-        assert image.centroid_wgs84 is None
+        assert image.lonlat_bounds is None
+        assert image.centroid_latlon is None
 
     def test_ground_extent_is_withheld_for_a_geographic_crs(self, msi_6band):
         """`gsd_m` converts degrees at a flat 111320 m, which is wrong by
