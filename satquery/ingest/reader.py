@@ -319,11 +319,11 @@ def read_image(
             container_format=src.driver,
             georeferenced=src.crs is not None,
             lonlat_bounds=wgs84_bounds(src),
-            crs_is_projected=bool(src.crs is not None and src.crs.is_projected),
             # Written into the GeoTIFF by the API when an area was selected on
             # the map. Read back here rather than threaded through the
             # controller, so the provenance travels with the pixels and cannot
             # be separated from them by a later copy.
             aoi_applied=_tag_bounds(tags, "SATQUERY_AOI"),
             source_lonlat_bounds=_tag_bounds(tags, "SATQUERY_SOURCE_BOUNDS"),
+            crs_is_projected=bool(src.crs is not None and src.crs.is_projected),
         )
