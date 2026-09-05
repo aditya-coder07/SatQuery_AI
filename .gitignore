@@ -39,7 +39,7 @@ artifacts/
 # large binaries, and per docs/03 section 4.3 the Bhoonidhi products are a
 # held-out cross-sensor generalisation set that must never be trained on.
 data/
-models/
+/models/
 
 # `models/` above is meant for downloaded weights, but it matches at any depth,
 # and that silently swallowed the /models Next.js route - the page whose
