@@ -75,7 +75,9 @@ class Example:
     source: str = "unknown"
 
 
-def load_examples(data_dir: Path, limit: int | None = None) -> list[Example]:
+def load_examples(
+    data_dir: Path, limit: int | None = None, filename: str = "instruct.jsonl"
+) -> list[Example]:
     """Load examples from a prepared JSONL file.
 
     Expected format, one object per line:
@@ -85,7 +87,7 @@ def load_examples(data_dir: Path, limit: int | None = None) -> list[Example]:
     format here: keeping dataset-specific parsing in training/prepare/ means
     this script stays the same regardless of which corpus is being used.
     """
-    jsonl = data_dir / "instruct.jsonl"
+    jsonl = data_dir / filename
     if not jsonl.exists():
         raise FileNotFoundError(
             f"{jsonl} not found. Build it first with a prepare script, e.g.\n"
@@ -136,6 +138,28 @@ def build_chat(example: Example) -> list[dict[str, Any]]:
     ]
 
 
+def supervised_start(processor, prompt_text: str, image) -> int:
+    """Index of the first assistant token in the PROCESSED sequence.
+
+    This must be measured with the image, not without it. A Qwen2.5-VL prompt
+    renders one `<|image|>` marker that the processor then expands into one
+    `<|image_pad|>` per visual patch - 323 of them for a 512x512 input. Taking
+    the length of the text-only tokenisation instead returns the length before
+    that expansion, so the mask cuts hundreds of tokens too early and the model
+    is trained to predict image placeholders.
+
+    Measured on data/instruct_mix before this was fixed: the boundary came back
+    as 52 where the processed sequence needed 375, leaving 341 supervised
+    tokens of which 312 were `<|image_pad|>`. Across six examples 89.1% of the
+    supervised tokens were placeholders and 10.9% were the answer, and the run
+    that produced checkpoints/track_b_v3 sat at loss ~6.8 for 1,950 steps
+    because of it - a 0.3% change over 1,800 steps, inside the noise.
+    """
+    return processor(
+        text=[prompt_text], images=[image], return_tensors="pt"
+    )["input_ids"].shape[1]
+
+
 def mask_prompt_labels(input_ids, assistant_start: int, pad_token_id: int):
     """Train only on the assistant's tokens.
 
@@ -149,6 +173,58 @@ def mask_prompt_labels(input_ids, assistant_start: int, pad_token_id: int):
     labels[:assistant_start] = -100
     labels[labels == pad_token_id] = -100
     return labels
+
+
+def encode_supervised(processor, example: Example, device=None):
+    """One example -> a batch whose labels cover the answer and nothing else.
+
+    Extracted so training and validation cannot drift apart. The image-token
+    bug was possible because the boundary was computed inline; computing it in
+    two places would let it reappear on the validation side alone, which is
+    worse than the original bug - the number you trust to stop training would
+    be the wrong one.
+    """
+    from PIL import Image
+
+    chat = build_chat(example)
+    text = processor.apply_chat_template(chat, tokenize=False)
+    image = Image.open(example.image_path).convert("RGB")
+    batch = processor(text=[text], images=[image], return_tensors="pt", padding=True)
+    if device is not None:
+        batch = batch.to(device)
+
+    prompt_text = processor.apply_chat_template(chat[:-1], tokenize=False)
+    prompt_len = supervised_start(processor, prompt_text, image)
+    pad_id = processor.tokenizer.pad_token_id or 0
+    batch["labels"] = mask_prompt_labels(
+        batch["input_ids"][0], prompt_len, pad_id
+    ).unsqueeze(0)
+    return batch
+
+
+def evaluate(model, processor, examples, torch) -> float:
+    """Mean loss over held-out examples, using the training encode path.
+
+    `model.eval()` and `no_grad` for the duration, then training mode is
+    restored by the caller. Examples whose labels are entirely masked - an
+    empty answer would do it - are skipped rather than counted as zero, since
+    a zero would drag the mean down and read as improvement.
+    """
+    was_training = model.training
+    model.eval()
+    total, counted = 0.0, 0
+    try:
+        with torch.no_grad():
+            for example in examples:
+                batch = encode_supervised(processor, example, model.device)
+                if int((batch["labels"] != -100).sum()) == 0:
+                    continue
+                total += float(model(**batch).loss)
+                counted += 1
+    finally:
+        if was_training:
+            model.train()
+    return total / counted if counted else float("nan")
 
 
 def require_gpu_stack() -> tuple[Any, Any, Any]:
@@ -260,6 +336,14 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--lora-alpha", type=int, default=32)
     p.add_argument("--lora-dropout", type=float, default=0.05)
     p.add_argument("--lora-targets", nargs="*", default=DEFAULT_LORA_TARGETS)
+    p.add_argument("--val-file", default="val.jsonl",
+                   help="held-out split inside --data; empty string disables")
+    p.add_argument("--val-every", type=int, default=100,
+                   help="run validation every N optimiser steps")
+    p.add_argument("--val-limit", type=int, default=160,
+                   help="validate on the first N held-out examples. A fixed "
+                        "prefix, not a sample, so the number is comparable "
+                        "across steps; the full 534 costs ~4x more per check.")
     p.add_argument(
         "--optim",
         choices=["adamw8bit", "adamw"],
@@ -331,6 +415,19 @@ def main() -> int:
     examples = load_examples(args.data, limit=args.limit)
     print(f"Loaded {len(examples)} examples")
 
+    val_examples: list[Example] = []
+    if args.val_file:
+        try:
+            val_examples = load_examples(
+                args.data, limit=args.val_limit, filename=args.val_file
+            )
+            print(f"Loaded {len(val_examples)} validation examples "
+                  f"from {args.val_file}")
+        except (FileNotFoundError, ValueError) as exc:
+            # A missing held-out split must not kill a training run that was
+            # going to succeed; it costs the stopping signal, not the run.
+            print(f"[warn] validation disabled: {exc}")
+
     model, processor = build_model(args, torch, peft, transformers)
 
     trainable = [p for p in model.parameters() if p.requires_grad]
@@ -377,11 +474,16 @@ def main() -> int:
             },
             "lr": args.lr,
             "optim": args.optim,
+            "val_file": args.val_file,
+            "val_every": args.val_every,
+            "n_val": len(val_examples),
             "effective_batch": args.batch_size * args.grad_accum,
             "max_steps": args.max_steps,
             "seed": args.seed,
         },
     )
+
+    val_history: list[dict] = []
 
     model.train()
     step = state.step
@@ -395,25 +497,8 @@ def main() -> int:
             example = examples[index % len(examples)]
             index += 1
 
-            chat = build_chat(example)
-            text = processor.apply_chat_template(chat, tokenize=False)
-            from PIL import Image
-
-            image = Image.open(example.image_path).convert("RGB")
-            batch = processor(
-                text=[text], images=[image], return_tensors="pt", padding=True
-            ).to(model.device)
-
-            # Supervise only the assistant span. The prompt length is measured
-            # by re-rendering the chat without the final turn.
-            prompt_text = processor.apply_chat_template(chat[:-1], tokenize=False)
-            prompt_len = len(
-                processor.tokenizer(prompt_text, return_tensors="pt")["input_ids"][0]
-            )
-            pad_id = processor.tokenizer.pad_token_id or 0
-            batch["labels"] = mask_prompt_labels(
-                batch["input_ids"][0], prompt_len, pad_id
-            ).unsqueeze(0)
+            # The same encode path validation uses, so the two cannot drift.
+            batch = encode_supervised(processor, example, model.device)
 
             loss = model(**batch).loss / args.grad_accum
             loss.backward()
@@ -426,8 +511,43 @@ def main() -> int:
         scheduler.step()
         step += 1
 
+        lr_now = scheduler.get_last_lr()[0]
         if step % 5 == 0:
-            print(f"step {step}/{args.max_steps}  loss {total_loss:.4f}", flush=True)
+            print(
+                f"step {step}/{args.max_steps}  loss {total_loss:.4f}  "
+                f"lr {lr_now:.3e}",
+                flush=True,
+            )
+
+        if val_examples and (
+            step % args.val_every == 0 or step == args.max_steps
+        ):
+            val_loss = evaluate(model, processor, val_examples, torch)
+            val_history.append(
+                {"step": step, "train_loss": round(total_loss, 6),
+                 "val_loss": round(val_loss, 6), "lr": lr_now,
+                 "n_val": len(val_examples)}
+            )
+            best = min(val_history, key=lambda r: r["val_loss"])
+            marker = "  <-- best so far" if best["step"] == step else (
+                f"  (best {best['val_loss']:.4f} @ step {best['step']})"
+            )
+            print(
+                f"VAL step {step}  train {total_loss:.4f}  val {val_loss:.4f}"
+                f"  lr {lr_now:.3e}{marker}",
+                flush=True,
+            )
+            # Written every time, so an interrupted run still says which
+            # checkpoint was best rather than losing the record.
+            args.ckpt_dir.mkdir(parents=True, exist_ok=True)
+            (args.ckpt_dir / "val_history.json").write_text(
+                json.dumps(
+                    {"history": val_history, "best": best,
+                     "best_checkpoint": f"ckpt_step_{best['step']}.pt"},
+                    indent=2,
+                ),
+                encoding="utf-8",
+            )
 
         if step % args.save_every == 0 or step == args.max_steps:
             state.step = step
