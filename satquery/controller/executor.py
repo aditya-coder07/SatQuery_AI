@@ -12,6 +12,7 @@ rather than reporting a fabricated number.
 from __future__ import annotations
 
 import math
+import re
 from datetime import datetime, timezone
 from collections.abc import Callable
 from typing import Any
@@ -34,7 +35,8 @@ from satquery.controller.abstention import AbstentionPolicy, decide
 from satquery.controller.calibration import CALIBRATABLE_CONFIDENCE_METHODS
 from satquery.controller.confidence import compute_confidence
 from satquery.controller.intent import CLASSIFIER_NAME, IntentPrediction
-from satquery.synth.narrative import synthesise_answer
+from satquery.geo import lookup as lookup_place
+from satquery.synth.narrative import compose_answer
 from satquery.verify.entailment import run_gate
 from satquery.verify.verifier import verify as verify_claims
 from satquery.tools.provenance import hashes_for as weights_hashes_for
@@ -81,6 +83,87 @@ def built_up_path(payload: dict) -> str:
     if "builtup_proxy" in indices:
         return "swir_free_proxy"
     return "not_computed"
+
+
+# Phrases the VQA adapter emits when it declines a question it reads as
+# out-of-scope. Matched, not parsed: the point is only to notice that the tool
+# declined, so that a decline about LOCATION on a georeferenced input can be
+# corrected with evidence the manifest already holds.
+_REFUSAL_MARKERS = ("i cannot answer that", "i can't answer that")
+
+# The specific claim that is FALSE on a georeferenced input. Only this clause
+# is dropped, and only when the manifest contradicts it - "I cannot answer that
+# from this image" is left standing, because it is true: the pixels do not
+# carry the location, the header does.
+_FALSE_ON_GEOREFERENCED = (
+    "does not carry that information",
+    "doesn't carry that information",
+    "do not carry that information",
+)
+
+_LOCATION_TERMS = (
+    "where", "place", "location", "located", "city", "town", "country",
+    "region", "coordinates", "latitude", "longitude", "which part of the world",
+)
+
+
+def _drop_false_location_claim(answer: str) -> str:
+    """Remove the one sentence the manifest proves wrong, keep the rest.
+
+    Appending a correction after "Satellite imagery does not carry that
+    information." leaves the answer arguing with itself, and the false half
+    is the half a reader sees first. Only sentences making that specific
+    claim are dropped; the accompanying "I cannot answer that from this
+    image" stays, because it is true - the pixels do not carry the location,
+    the header does.
+    """
+    kept = []
+    for sentence in re.split(r"(?<=[.!?])\s+", answer.strip()):
+        if any(claim in sentence.lower() for claim in _FALSE_ON_GEOREFERENCED):
+            continue
+        if sentence:
+            kept.append(sentence)
+    return " ".join(kept)
+
+
+def _location_disclosure(query: str, answer: str, manifest: InputManifest) -> str | None:
+    """Coordinates for a location question the tool wrongly called unanswerable.
+
+    `rs_vqa_v1` declines location questions with "Satellite imagery does not
+    carry that information." On a GeoTIFF that sentence is simply false - the
+    file carries a CRS and an affine transform, which is precisely that
+    information - and the adapter cannot know the difference because it never
+    sees the georeferencing.
+
+    So the correction is made here, from the manifest, and only when all three
+    hold: the question was about location, the tool declined, and the input is
+    actually georeferenced. An ungeoreferenced PNG keeps the decline, because
+    for a PNG the decline is true.
+
+    What is deliberately NOT done is name the place. Coordinates are measured;
+    a place name would need a gazetteer, and this system has none and runs
+    offline. Saying so is the honest half of the answer.
+    """
+    lowered = query.lower()
+    if not any(term in lowered for term in _LOCATION_TERMS):
+        return None
+    if not any(marker in answer.lower() for marker in _REFUSAL_MARKERS):
+        return None
+
+    located = [img for img in manifest.images if img.lonlat_bounds]
+    if not located:
+        return None
+
+    west, south, east, north = located[0].lonlat_bounds  # type: ignore[misc]
+    lat, lon = (south + north) / 2.0, (west + east) / 2.0
+    return (
+        f"The input is georeferenced, so the location IS known: this scene is "
+        f"centred at {abs(lat):.4f}°{'N' if lat >= 0 else 'S'}, "
+        f"{abs(lon):.4f}°{'E' if lon >= 0 else 'W'} "
+        f"({located[0].crs}), spanning {west:.4f} to {east:.4f} longitude and "
+        f"{south:.4f} to {north:.4f} latitude. Naming the place would need a "
+        f"gazetteer, which this system does not have and cannot reach offline."
+    )
 
 
 class Executor:
@@ -135,6 +218,11 @@ class Executor:
                     # measured is the kind of quiet fabrication the trace
                     # exists to prevent.
                     "gsd_m": img.gsd_m if img.georeferenced else None,
+                    # Where the scene actually is. The CRS and transform were
+                    # always in the manifest and nothing ever reported them,
+                    # so a run's own trace could not answer "where is this?".
+                    "lonlat_bounds": list(img.lonlat_bounds)
+                    if img.lonlat_bounds else None,
                     "bands": img.bands,
                     "nodata_pct": img.nodata_pct,
                     "sensor_guess": img.sensor_guess,
@@ -159,6 +247,10 @@ class Executor:
         # paths, and they were previously written to disk without ever
         # reaching the trace, so nothing downstream could find them.
         artifact_paths: dict[str, str] = {}
+        # Prose emitted by a tool, if any. Kept separate from `final_answer`
+        # so the composition step below can put the measured description
+        # alongside it instead of one silently overwriting the other.
+        tool_answer = ""
         final_answer = ""
         model_confidence = 1.0
         # The `confidence_method` of the tool that set the running minimum.
@@ -262,7 +354,7 @@ class Executor:
 
             for key in _ANSWER_KEYS:
                 if key in data:
-                    final_answer = str(data[key])
+                    tool_answer = str(data[key])
                     break
 
             execution_traces.append(
@@ -283,17 +375,32 @@ class Executor:
             artifact_paths.update({a.key: str(a.path) for a in result.artifacts})
             emit("step", execution_traces[-1].model_dump())
 
-        if not final_answer:
-            # Tools that return structure rather than prose (land cover,
-            # grounding) still owe the user a sentence. It is synthesised
-            # deterministically from the numbers already computed, so it
-            # cannot assert anything the index engine did not measure.
-            final_answer = synthesise_answer(
-                plan.tasks[0],
-                [t.outputs for t in execution_traces],
-                index_payload,
-                artifacts=artifacts,
-            )
+        # Tools that return structure rather than prose (land cover, grounding)
+        # still owe the user a sentence, and tools that DO return prose return
+        # one short one - the captioner's whole output is a single clause. Both
+        # are handled here: the synthesised description is built deterministically
+        # from the numbers already computed, so it cannot assert anything the
+        # index engine did not measure, and for descriptive tasks it is appended
+        # to the tool's answer rather than only standing in for a missing one.
+        first = manifest.images[0] if manifest.images else None
+        # Degrees to words. Returns an empty Place when no gazetteer is
+        # installed, which is the normal case and not a degraded one - the
+        # answer then reports the coordinate and says nothing about the
+        # region, rather than guessing at a country.
+        centre = first.centroid_latlon if first else None
+        place = lookup_place(*centre) if centre else None
+        final_answer = compose_answer(
+            plan.tasks[0],
+            tool_answer,
+            [t.outputs for t in execution_traces],
+            index_payload,
+            artifacts=artifacts,
+            georeferenced=first.georeferenced if first else True,
+            container_format=first.container_format if first else None,
+            centroid=centre,
+            extent_m=first.ground_extent_m if first else None,
+            place=place,
+        )
 
         # `model_confidence == 0.0` means a learned tool ran and explicitly
         # reported that it could not measure anything - change_vqa_v1's
@@ -436,6 +543,13 @@ class Executor:
             # only trace metadata: an abstention nobody can act on is just a
             # refusal.
             abstain_reason = f"{decision.reason} - {decision.resolving_input}"
+        location = _location_disclosure(query, final_answer, manifest)
+        if location:
+            # The tool was right that it could not answer from the pixels, so
+            # that half stays; the claim the manifest disproves is dropped
+            # rather than left to be argued with.
+            final_answer = f"{_drop_false_location_claim(final_answer)} {location}"
+
         if abstained:
             final_answer = abstain_reason or final_answer
         elif config_excluded:
@@ -474,5 +588,6 @@ class Executor:
             # Empty when every step ran from a stub or from deterministic
             # arithmetic, which is the CI and no-checkpoint case: a stub loads
             # no bytes, so it gets no digest. See satquery/tools/provenance.py.
+            data_sources=list(place.sources) if place else [],
             weights_hashes=weights_hashes_for(t.tool for t in execution_traces),
         )

@@ -28,6 +28,7 @@
     },
     "final": 0.44
   },
+  "data_sources": [],
   "execution": [
     {
       "confidence": 1.0,
@@ -276,6 +277,12 @@
         "crs": "EPSG:32643",
         "georeferenced": true,
         "gsd_m": 10.0,
+        "lonlat_bounds": [
+          75.0,
+          18.0771,
+          75.0121,
+          18.0887
+        ],
         "modality": "MSI",
         "modality_reason": "optical_band_names_present",
         "nodata_pct": 0.0,
@@ -297,6 +304,12 @@
         "crs": "EPSG:32643",
         "georeferenced": true,
         "gsd_m": 10.0,
+        "lonlat_bounds": [
+          75.0,
+          18.0771,
+          75.0121,
+          18.0887
+        ],
         "modality": "MSI",
         "modality_reason": "optical_band_names_present",
         "nodata_pct": 0.0,

@@ -148,6 +148,51 @@ class TestPipelineOffline:
         assert controller.router.classifier.classes_
 
 
+class TestGazetteerOffline:
+    """The gazetteer reads operator-installed rasters from disk. It must do
+    so without a socket - it is on the query path, and task 3.9's guarantee
+    covers the query path whether or not optional data is installed."""
+
+    @pytest.fixture
+    def installed(self, tmp_path, monkeypatch):
+        import json
+
+        import numpy as np
+        import rasterio
+        from rasterio.transform import from_origin
+
+        from satquery.geo import gazetteer
+
+        with rasterio.open(
+            tmp_path / "country.tif", "w", driver="GTiff", height=180,
+            width=360, count=1, dtype="uint8", crs="EPSG:4326",
+            transform=from_origin(-180, 90, 1, 1), nodata=255,
+        ) as dst:
+            dst.write(np.ones((180, 360), dtype="uint8"), 1)
+        (tmp_path / "country.json").write_text(
+            json.dumps({"labels": {"1": "Testland"}, "attribution": "synthetic"}),
+            encoding="utf-8",
+        )
+        monkeypatch.setenv("SATQUERY_GAZETTEER", str(tmp_path))
+        gazetteer._Handle.reset()
+        yield tmp_path
+        gazetteer._Handle.reset()
+
+    def test_a_lookup_needs_no_network(self, no_network, installed):
+        from satquery.geo import lookup
+
+        assert lookup(0.0, 90.0).country == "Testland"
+
+    def test_a_full_run_with_a_gazetteer_needs_no_network(
+        self, no_network, installed, msi_6band
+    ):
+        """The layer that turns coordinates into names is the one most
+        likely to be tempted into a lookup service. It never is."""
+        trace = Controller().run([msi_6band], "Describe this image.", run_id="r")
+        assert "Testland" in trace.answer
+        assert trace.data_sources == ["synthetic"]
+
+
 class TestComponentsOffline:
     def test_calibration_registry_loads_offline(self, no_network):
         from satquery.controller.calibration import load_registry, reset_cache

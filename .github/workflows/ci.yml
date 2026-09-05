@@ -63,7 +63,21 @@ jobs:
         with:
           python-version: "3.12"
       - run: pip install -e ".[dev]" pip-audit
-      - run: pip-audit --strict
+        # `--skip-editable` skips `satquery` itself: it is installed editable
+        # by the line above, it is not published to PyPI, and so it can never
+        # be audited.
+        #
+        # `--strict` cannot stay alongside it. Strict mode fails on any
+        # dependency that was not audited, and a *skipped* one counts - the
+        # two flags together just swap the error from "not found on PyPI" to
+        # "distribution marked as editable". Both are the project's own name,
+        # neither is an advisory.
+        #
+        # Dropping it costs nothing this job was doing. pip-audit still exits
+        # non-zero when it finds a real vulnerability, which is what the job
+        # is for; strict mode only added failing on unauditable packages, and
+        # the sole unauditable package here is this repository.
+      - run: pip-audit --skip-editable
 
   frontend:
     runs-on: ubuntu-latest

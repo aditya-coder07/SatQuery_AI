@@ -35,6 +35,50 @@ class ImageMeta(BaseModel):
     # reject. Defaulted so existing constructions stay valid.
     container_format: str | None = None
     georeferenced: bool = True
+    # Geographic extent in EPSG:4326 as (west, south, east, north), when
+    # the raster carries enough georeferencing to compute one. This is
+    # measured from the file's own CRS and transform - it is not a guess,
+    # and it is None rather than zeroed when it cannot be measured.
+    #
+    # This one field is the only stored footprint; the centre and the ground
+    # extent below are derived from it and from `gsd_m`. Two branches added
+    # this measurement independently - `lonlat_bounds` here and a
+    # `bounds_wgs84` / `centroid_wgs84` pair on the answer-composition branch -
+    # and carrying both would have put the same number on the manifest twice.
+    # This name won because the running API image and the frontend map already
+    # read it.
+    lonlat_bounds: tuple[float, float, float, float] | None = None
+    # Whether the CRS measures in metres. `gsd_m` is exact for a projected
+    # CRS and an approximation for a geographic one (see `_gsd_metres`, which
+    # converts degrees at a flat 111320 m and is therefore wrong by the
+    # cosine of the latitude in x). Ground extent is only reported for the
+    # exact case; the approximation is fine for ordering-of-magnitude routing
+    # decisions but not for a number shown to a reader as a distance.
+    crs_is_projected: bool = False
+
+    @property
+    def centroid_latlon(self) -> tuple[float, float] | None:
+        """Centre of the footprint as (latitude, longitude).
+
+        Latitude first - the order a reader says them in, and deliberately
+        the opposite of `lonlat_bounds`, which is in the (west, south, east,
+        north) order every GIS tool expects. Derived rather than stored so
+        the two can never disagree.
+        """
+        if self.lonlat_bounds is None:
+            return None
+        west, south, east, north = self.lonlat_bounds
+        return ((south + north) / 2.0, (west + east) / 2.0)
+
+    @property
+    def ground_extent_m(self) -> tuple[float, float] | None:
+        """Scene width and height on the ground, in metres.
+
+        Only defined where `gsd_m` is a real measurement in metres.
+        """
+        if not self.georeferenced or not self.crs_is_projected:
+            return None
+        return (self.width * self.gsd_m, self.height * self.gsd_m)
 
 class CheckResult(BaseModel):
     name: str

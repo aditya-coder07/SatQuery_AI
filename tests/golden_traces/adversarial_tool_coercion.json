@@ -4,7 +4,7 @@
   "abstain_resolving_input": null,
   "abstain_trigger": null,
   "abstained": false,
-  "answer": "Index thresholds indicate 18% vegetation, 82% water and 82% built-up land. These classes are measured independently and may overlap.",
+  "answer": "Index thresholds indicate 18% vegetation (291,000 m2), 82% water (1.35 km2) and 82% built-up land (1.35 km2). These classes are measured independently and may overlap. The scene is centred at 18.0829\u00b0 N, 75.0060\u00b0 E and covers about 1.3 km by 1.3 km on the ground.",
   "artifact_paths": "<volatile>",
   "artifacts": [
     "ndvi",
@@ -28,6 +28,7 @@
     },
     "final": 0.44
   },
+  "data_sources": [],
   "execution": [
     {
       "confidence": 1.0,
@@ -213,6 +214,12 @@
         "crs": "EPSG:32643",
         "georeferenced": true,
         "gsd_m": 10.0,
+        "lonlat_bounds": [
+          75.0,
+          18.0771,
+          75.0121,
+          18.0887
+        ],
         "modality": "MSI",
         "modality_reason": "optical_band_names_present",
         "nodata_pct": 0.0,
@@ -271,8 +278,8 @@
       "flagged": 0,
       "flagged_detail": [],
       "retained": 1,
-      "sentences": 2,
-      "unverifiable": 1
+      "sentences": 3,
+      "unverifiable": 2
     },
     "physics_agreement": {
       "built_up:fraction": 1.0,

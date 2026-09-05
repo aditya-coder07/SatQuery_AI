@@ -22,6 +22,7 @@
     },
     "final": 0.7937
   },
+  "data_sources": [],
   "execution": [],
   "ingest": {
     "checks": [
@@ -53,6 +54,7 @@
         "crs": "UNKNOWN",
         "georeferenced": false,
         "gsd_m": null,
+        "lonlat_bounds": null,
         "modality": "OPTICAL",
         "modality_reason": "band_count_lt_4_no_names_assumed_optical",
         "nodata_pct": 0.0,
