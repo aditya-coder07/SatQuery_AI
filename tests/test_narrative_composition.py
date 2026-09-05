@@ -16,7 +16,10 @@ from satquery.synth.narrative import (
     compose_answer,
     describe_georeferencing,
     describe_location,
+    describe_place,
 )
+
+from satquery.geo import Place
 
 # 82% water, 18% vegetation - the shape the index engine emits.
 INDEX_PAYLOAD = {
@@ -198,3 +201,58 @@ class TestLocation:
         assert "centred at" not in answer
         for word in ("latitude", "longitude", "°"):
             assert word not in answer
+
+
+class TestPlace:
+    """`describe_place`. The gazetteer measures against a dataset; this
+    renders what it found without adding confidence it did not report."""
+
+    def test_a_country_and_climate_are_named(self):
+        sentence = describe_place(
+            Place(country="Lithuania", climate="Dfb",
+                  climate_description="cold, no dry season, warm summer")
+        )
+        assert "in Lithuania" in sentence
+        assert "Dfb" in sentence
+        assert "cold, no dry season, warm summer" in sentence
+
+    def test_an_ambiguous_country_is_hedged_not_asserted(self):
+        """A scene on a national border is exactly the case where naming one
+        country confidently is wrong."""
+        sentence = describe_place(
+            Place(country="Lithuania", ambiguous=frozenset({"country"}))
+        )
+        assert "nearest match is Lithuania" in sentence
+        assert "in Lithuania" not in sentence
+
+    def test_an_ambiguous_climate_is_hedged(self):
+        sentence = describe_place(
+            Place(climate="Dfb", ambiguous=frozenset({"climate"}))
+        )
+        assert "near the edge of" in sentence
+
+    def test_a_climate_without_a_description_still_renders(self):
+        assert "Dfb" in describe_place(Place(climate="Dfb"))
+
+    def test_an_empty_place_says_nothing(self):
+        assert describe_place(Place()) == ""
+
+    def test_no_place_at_all_says_nothing(self):
+        assert describe_place(None) == ""
+
+    def test_the_place_reaches_a_composed_answer(self):
+        answer = compose_answer(
+            "SINGLE_CAPTION", "a coastal scene", [], INDEX_PAYLOAD,
+            centroid=(54.9, 21.08),
+            place=Place(country="Lithuania", climate="Dfb"),
+        )
+        assert "Lithuania" in answer
+        assert "54.9000" in answer
+
+    def test_no_region_is_named_without_a_gazetteer(self):
+        """The default path - no gazetteer installed - must add nothing."""
+        answer = compose_answer(
+            "SINGLE_CAPTION", "a coastal scene", [], INDEX_PAYLOAD,
+            centroid=(54.9, 21.08),
+        )
+        assert "The scene lies" not in answer

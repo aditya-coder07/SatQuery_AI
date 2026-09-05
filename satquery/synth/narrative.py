@@ -248,6 +248,46 @@ def describe_location(
     return sentence + "."
 
 
+def describe_place(place) -> str:
+    """Name the region a scene falls in, hedging where the data hedges.
+
+    Takes a `geo.gazetteer.Place`. Duck-typed rather than imported so this
+    module keeps its "no imports" property - every other function here turns
+    numbers into words and needs nothing from the rest of the package.
+
+    A label whose 3x3 window disagreed is reported as a nearest match, never
+    as fact. The distinction matters most exactly where it is most tempting
+    to drop: a scene on a national border is precisely the case where naming
+    one country confidently is wrong.
+    """
+    if place is None or not place:
+        return ""
+
+    ambiguous = getattr(place, "ambiguous", frozenset())
+    parts: list[str] = []
+
+    if place.country:
+        if "country" in ambiguous:
+            parts.append(
+                f"close to a national boundary in the reference data - the "
+                f"nearest match is {place.country}"
+            )
+        else:
+            parts.append(f"in {place.country}")
+
+    if place.climate:
+        zone = f"Koppen climate zone {place.climate}"
+        if place.climate_description:
+            zone += f" ({place.climate_description})"
+        if "climate" in ambiguous:
+            zone = f"near the edge of {zone}"
+        parts.append(zone)
+
+    if not parts:
+        return ""
+    return "The scene lies " + ", ".join(parts) + "."
+
+
 def compose_answer(
     task: str,
     tool_answer: str,
@@ -258,6 +298,7 @@ def compose_answer(
     container_format: str | None = None,
     centroid: tuple[float, float] | None = None,
     extent_m: tuple[float, float] | None = None,
+    place=None,
 ) -> str:
     """Combine a tool's prose with the measured description of the scene.
 
@@ -286,4 +327,5 @@ def compose_answer(
     parts.append(
         describe_location(georeferenced, container_format, centroid, extent_m)
     )
+    parts.append(describe_place(place))
     return " ".join(p for p in parts if p)

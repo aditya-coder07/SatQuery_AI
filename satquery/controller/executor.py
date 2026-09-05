@@ -35,6 +35,7 @@ from satquery.controller.abstention import AbstentionPolicy, decide
 from satquery.controller.calibration import CALIBRATABLE_CONFIDENCE_METHODS
 from satquery.controller.confidence import compute_confidence
 from satquery.controller.intent import CLASSIFIER_NAME, IntentPrediction
+from satquery.geo import lookup as lookup_place
 from satquery.synth.narrative import compose_answer
 from satquery.verify.entailment import run_gate
 from satquery.verify.verifier import verify as verify_claims
@@ -382,6 +383,12 @@ class Executor:
         # index engine did not measure, and for descriptive tasks it is appended
         # to the tool's answer rather than only standing in for a missing one.
         first = manifest.images[0] if manifest.images else None
+        # Degrees to words. Returns an empty Place when no gazetteer is
+        # installed, which is the normal case and not a degraded one - the
+        # answer then reports the coordinate and says nothing about the
+        # region, rather than guessing at a country.
+        centre = first.centroid_latlon if first else None
+        place = lookup_place(*centre) if centre else None
         final_answer = compose_answer(
             plan.tasks[0],
             tool_answer,
@@ -390,8 +397,9 @@ class Executor:
             artifacts=artifacts,
             georeferenced=first.georeferenced if first else True,
             container_format=first.container_format if first else None,
-            centroid=first.centroid_latlon if first else None,
+            centroid=centre,
             extent_m=first.ground_extent_m if first else None,
+            place=place,
         )
 
         # `model_confidence == 0.0` means a learned tool ran and explicitly
@@ -580,5 +588,6 @@ class Executor:
             # Empty when every step ran from a stub or from deterministic
             # arithmetic, which is the CI and no-checkpoint case: a stub loads
             # no bytes, so it gets no digest. See satquery/tools/provenance.py.
+            data_sources=list(place.sources) if place else [],
             weights_hashes=weights_hashes_for(t.tool for t in execution_traces),
         )
