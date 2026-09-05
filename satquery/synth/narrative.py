@@ -30,8 +30,33 @@ def _percent(fraction: float) -> str:
     return f"{fraction * 100:.0f}%"
 
 
-def describe_indices(index_payload: dict) -> str:
-    """One sentence describing scene composition from index statistics."""
+def _area(square_metres: float) -> str:
+    """A ground area, in the unit that keeps it readable.
+
+    Two decimals of a square kilometre is 10,000 m2 - finer than any
+    threshold-derived fraction deserves, and coarse enough not to imply the
+    boundary between "vegetation" and "not vegetation" is known to the pixel.
+    """
+    if square_metres >= 1_000_000.0:
+        return f"{square_metres / 1_000_000.0:.2f} km2"
+    return f"{round(square_metres, -3):,.0f} m2"
+
+
+def describe_indices(index_payload: dict, scene_area_m2: float | None = None) -> str:
+    """One sentence describing scene composition from index statistics.
+
+    `scene_area_m2` turns each fraction into a ground area. It is optional
+    because it is only *knowable* for a projected CRS - it comes from
+    `ImageMeta.ground_extent_m`, which is withheld where `gsd_m` is the
+    degrees-to-metres approximation. Without it the sentence reports
+    percentages alone, exactly as before.
+
+    The areas inherit the overlap the fractions have: they are per-index
+    thresholds measured independently, so they do not partition the scene
+    and must not be added up. The closing clause already says so, and it is
+    load-bearing once these are areas rather than percentages - a reader who
+    would not sum percentages might well try to sum square kilometres.
+    """
     indices = index_payload.get("indices", {})
     parts: list[str] = []
 
@@ -51,7 +76,10 @@ def describe_indices(index_payload: dict) -> str:
         if fraction is None or fraction < MENTION_THRESHOLD:
             continue
         seen_meanings.add(meaning)
-        parts.append(f"{_percent(fraction)} {meaning}")
+        described = f"{_percent(fraction)} {meaning}"
+        if scene_area_m2:
+            described += f" ({_area(fraction * scene_area_m2)})"
+        parts.append(described)
 
     if not parts:
         return "No dominant land-cover class exceeded its detection threshold."
@@ -84,6 +112,7 @@ def synthesise_answer(
     step_outputs: list[dict],
     index_payload: dict,
     artifacts: list[str] | None = None,
+    scene_area_m2: float | None = None,
 ) -> str:
     """Build an answer for tasks whose tools return structure, not prose.
 
@@ -100,7 +129,7 @@ def synthesise_answer(
         boxes.extend(out.get("bounding_boxes", []) or [])
 
     if task == "SINGLE_LANDCOVER":
-        pieces = [describe_labels(labels), describe_indices(index_payload)]
+        pieces = [describe_labels(labels), describe_indices(index_payload, scene_area_m2)]
         return " ".join(p for p in pieces if p)
 
     if task == "SINGLE_GROUND":
@@ -114,11 +143,11 @@ def synthesise_answer(
         # so any class it was confident enough to assert belongs in the prose.
         # It usually asserts none - recall is 0.25% at the measured threshold -
         # and `describe_labels` returns "" for that, which is the honest result.
-        pieces = [describe_labels(labels), describe_indices(index_payload)]
+        pieces = [describe_labels(labels), describe_indices(index_payload, scene_area_m2)]
         return " ".join(p for p in pieces if p)
 
     if task == "TEMPORAL_CHANGE_DESC":
-        return describe_indices(index_payload)
+        return describe_indices(index_payload, scene_area_m2)
 
     if task == "TEMPORAL_CHANGE_MAP":
         # `artifacts` also carries the index engine's own COGs, so a bare
@@ -128,7 +157,7 @@ def synthesise_answer(
             return "Produced a change mask; see the exported raster artifact."
         return (
             "No change raster was produced - the change tool did not run in "
-            "this profile. " + describe_indices(index_payload)
+            "this profile. " + describe_indices(index_payload, scene_area_m2)
         ).strip()
 
     if task == "XMODAL_JOINT_EXTRACT":
@@ -137,7 +166,7 @@ def synthesise_answer(
         # supplied the bands, so there is always something measured to say.
         return (
             "Optical-SAR fusion did not run in this profile, so this "
-            "describes the optical bands alone. " + describe_indices(index_payload)
+            "describes the optical bands alone. " + describe_indices(index_payload, scene_area_m2)
         ).strip()
 
     # VQA-style tasks are answered by the model itself. An empty string here
@@ -159,7 +188,7 @@ def synthesise_answer(
 # already means "the model's own answer stands alone" - a question like "did
 # vegetation increase?" wants a direction, not a paragraph of scene statistics.
 ENRICHABLE_TASKS = frozenset(
-    {"SINGLE_CAPTION", "SINGLE_LANDCOVER", "TEMPORAL_CHANGE_DESC"}
+    {"SINGLE_CAPTION", "SINGLE_LANDCOVER", "TEMPORAL_CHANGE_DESC", "SINGLE_GROUND"}
 )
 
 
@@ -313,8 +342,14 @@ def compose_answer(
     what was actually measured after it, so the answer says what the model saw
     *and* what the physics found.
     """
+    # The scene's own footprint area, which is what turns a fraction into
+    # square kilometres. None for a geographic CRS, where `extent_m` is
+    # withheld because `gsd_m` is approximate there - so those answers keep
+    # percentages and gain no areas, rather than gaining wrong ones.
+    scene_area_m2 = extent_m[0] * extent_m[1] if extent_m else None
     synthesised = synthesise_answer(
-        task, step_outputs, index_payload, artifacts=artifacts
+        task, step_outputs, index_payload, artifacts=artifacts,
+        scene_area_m2=scene_area_m2,
     )
     tool_answer = tool_answer.strip()
 

@@ -15,6 +15,7 @@ from satquery.synth.narrative import (
     ENRICHABLE_TASKS,
     compose_answer,
     describe_georeferencing,
+    describe_indices,
     describe_location,
     describe_place,
 )
@@ -103,10 +104,17 @@ class TestScoping:
         assert answer == "Fused optical and SAR bands."
 
     def test_the_enrichable_set_is_the_additive_tasks_only(self):
+        """Pinned deliberately. Adding a task here changes what every answer
+        of that shape says, and the two exclusions above are the ones that
+        would break if the set grew carelessly."""
         assert ENRICHABLE_TASKS == {
             "SINGLE_CAPTION",
             "SINGLE_LANDCOVER",
             "TEMPORAL_CHANGE_DESC",
+            # Joined the set when grounding answers gained the scene
+            # coordinate: its synthesised sentence IS the whole answer, so
+            # enriching it appends location without displacing anything.
+            "SINGLE_GROUND",
         }
 
 
@@ -256,3 +264,67 @@ class TestPlace:
             centroid=(54.9, 21.08),
         )
         assert "The scene lies" not in answer
+
+
+class TestAreas:
+    """Ground areas alongside the percentages. Every one is
+    `fraction_above_threshold` x the scene's own footprint area, so it is as
+    measured as the fraction it came from."""
+
+    def test_percentages_alone_without_a_scene_area(self):
+        sentence = describe_indices(INDEX_PAYLOAD)
+        assert "82% water" in sentence
+        assert "km2" not in sentence and "m2" not in sentence
+
+    def test_an_area_is_added_when_the_scene_area_is_known(self):
+        # 1280 m x 1280 m = 1,638,400 m2; 82% of that is 1.34 km2.
+        sentence = describe_indices(INDEX_PAYLOAD, 1280.0 * 1280.0)
+        assert "82% water (1.34 km2)" in sentence
+
+    def test_small_areas_stay_in_square_metres(self):
+        sentence = describe_indices(INDEX_PAYLOAD, 250_000.0)
+        assert "205,000 m2" in sentence
+        assert "km2" not in sentence
+
+    def test_the_overlap_caveat_survives(self):
+        """It is load-bearing once these are areas: a reader who would not
+        sum percentages might well try to sum square kilometres."""
+        sentence = describe_indices(INDEX_PAYLOAD, 1280.0 * 1280.0)
+        assert "measured independently and may overlap" in sentence
+
+    def test_areas_reach_a_composed_answer(self):
+        answer = compose_answer(
+            "SINGLE_CAPTION", "a coastal scene", [], INDEX_PAYLOAD,
+            extent_m=(1280.0, 1280.0),
+        )
+        assert "1.34 km2" in answer
+
+    def test_no_area_without_a_ground_extent(self):
+        """A geographic CRS withholds `extent_m` because `gsd_m` is
+        approximate there, so those answers keep percentages and gain no
+        areas rather than gaining wrong ones."""
+        answer = compose_answer(
+            "SINGLE_CAPTION", "a coastal scene", [], INDEX_PAYLOAD
+        )
+        assert "km2" not in answer
+
+
+class TestGroundingIsEnriched:
+    def test_a_grounding_answer_carries_the_scene_location(self):
+        """"Where is the water" got "Localised 1 matching region." and
+        nothing else - no coordinate, on an input that carried one."""
+        answer = compose_answer(
+            "SINGLE_GROUND", "", [{"bounding_boxes": [[0, 0, 1, 1]]}], INDEX_PAYLOAD,
+            centroid=(18.0829, 75.0060),
+        )
+        assert "Localised 1 matching region." in answer
+        assert "18.0829" in answer
+
+    def test_grounding_does_not_gain_index_prose(self):
+        """`synthesise_answer` returns only the localisation sentence for
+        this task; enriching it adds location, not scene statistics."""
+        answer = compose_answer(
+            "SINGLE_GROUND", "", [{"bounding_boxes": []}], INDEX_PAYLOAD,
+            centroid=(18.0829, 75.0060),
+        )
+        assert "Index thresholds" not in answer
