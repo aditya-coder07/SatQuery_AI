@@ -105,3 +105,10 @@ class Trace(BaseModel):
     abstain_resolving_input: str | None = None
     abstain_limiting_component: str | None = None
     weights_hashes: dict[str, str]
+    # Attribution for any third-party reference data an answer drew on - the
+    # gazetteer rasters, today. The sibling of `weights_hashes`: that one
+    # names the weights that produced an answer, this one names the data.
+    # CC BY layers require the credit to travel with the output, and an
+    # answer that names a country without saying whose boundaries it used is
+    # not reproducible either. Empty when no such data was consulted.
+    data_sources: list[str] = []
