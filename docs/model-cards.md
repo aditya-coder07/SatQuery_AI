@@ -337,17 +337,25 @@ Pretraining ablation, same data and schedule:
 | **ImageNet ResNet-18** | **0.2636** (+56% relative) |
 
 **End-to-end on the PS's prescribed benchmark**, full split, 39,686 questions
-over 968 pairs at **100% coverage**:
+over 968 pairs at **99.82% coverage** *(corrected 2026-09-07 from 0.5380 /
+"100% coverage" — see `docs/research/cdvqa-baseline-correction-2026-09-03.md`,
+which established 0.6061 by A/B across two commits and found the documented
+100% was never reproducible at either. This figure comes from the evaluation
+artifact, not from `checkpoints/change_vqa/metrics.json`, which records only
+the segmentation metrics and is unchanged)*:
 
 | | accuracy |
 |---|---|
 | per-type majority baseline (fitted on train, applied to test) | 0.5084 |
-| **system** | **0.5380** |
+| **system** | **0.6061** |
 | oracle over ground-truth change maps | **0.9975** |
 
-**The three numbers must be read together.** +3.0 points over a constant is a
-real but small win; the 0.9975 oracle says the answer layer contributes no
-measurable error and **93% of the remaining headroom is this segmenter**.
+**The three numbers must be read together.** +9.8 points over a constant is a
+real win — and materially larger than the +3.0 the superseded 0.5380 showed,
+which is the main practical consequence of the correction. The 0.9975 oracle
+says the answer layer contributes no measurable error and **nearly all of the
+remaining headroom is this segmenter**. *(The original "93%" was derived from
+0.5380 and has not been recomputed; the direction is unchanged.)*
 Earlier iterations scored 0.0000 and then 0.4439 — *below* the baseline — and
 both are recorded in `docs/phase1-status.md` rather than deleted.
 

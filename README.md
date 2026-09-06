@@ -61,9 +61,11 @@ deliberately unenforced on evidence: `max_coreg_shift_px`, because the
 cross-modal shift estimator reports 38.1 px on a pair with identical
 footprints, and `require_dates`, because enforcing it would refuse the
 prescribed benchmarks, which ship undated (limitation L16). I6 (large scenes)
-is built but is **not a PS clause**. Of the three prescribed benchmarks,
-RSVQA-LR and CDVQA are evaluated; **VRSBench is not** (imagery lives in DOTA,
-not on disk). Twenty-eight known limitations are recorded in `docs/00` §3.6 —
+is built but is **not a PS clause**. **All three prescribed benchmarks are now
+evaluated** — RSVQA-LR on its official test split, CDVQA on official test1,
+and VRSBench zero-shot (updated 2026-09-07; the earlier claim that VRSBench's
+imagery "lives in DOTA, not on disk" was false — the HuggingFace repo hosts it
+directly, see L11). Twenty-eight known limitations are recorded in `docs/00` §3.6 —
 open and closed alike, with dates — rather than left to be discovered.
 
 The matrix was checked clause-by-clause against
@@ -80,16 +82,26 @@ published in `docs/model-cards.md`. **No number was re-derived or adjusted at
 any point.** The account is `docs/00` §3.6 **L26**; the root cause and its
 containment are **L27**.
 
-**Three components remain unavailable.** Twelve small JSON sidecars came back
-as NUL bytes — their size reached the volume, their contents did not — which
-leaves `caption_v1` and `grounding_v1` on their stubs and the Track A
-*multires* variant unnormalisable (the *base* variant is unaffected). See
-**L29**, and **L30** for the availability check that used to report such a
-tool as ready and then fail inside its loader.
+**Update 2026-09-07 — the three are no longer unavailable, and every learned
+tool answers.** All seven `is_available()` checks return ready against the
+checkpoints on disk, and two real queries were put through the controller end
+to end: a caption (`SINGLE_CAPTION`, confidence 0.702 MEDIUM) and a grounding
+query (`SINGLE_GROUND`, confidence 0.402 LOW — consistent with that head's
+measured Acc@0.5 of 0.0762). The three components below are exactly the three
+sidecars **L29** records as repaired on 2026-08-31, each validated by
+reproducing its published metric: `caption/vocab.json`, `grounding/vocab.json`
+and `track_a_full_multires/band_stats.json`.
 
-Everything else loads and answers: `landcover_v1` (base), `change_mask_v1`,
-`change_caption_v1`, `optsar_fusion_v1`, `change_vqa_v1` (semantic path), and
-the Track B QLoRA adapter.
+**Superseded, kept because it was true when written (2026-08-31).** Twelve
+small JSON sidecars came back as NUL bytes — their size reached the volume,
+their contents did not — which left `caption_v1` and `grounding_v1` on their
+stubs and the Track A *multires* variant unnormalisable (the *base* variant
+was unaffected). See **L29**, and **L30** for the availability check that used
+to report such a tool as ready and then fail inside its loader.
+
+Everything loads and answers: `landcover_v1` (base), `caption_v1`,
+`grounding_v1`, `change_mask_v1`, `change_caption_v1`, `optsar_fusion_v1`,
+`change_vqa_v1` (semantic path), and the Track B QLoRA adapter.
 
 ## 4. Unverified claims register
 

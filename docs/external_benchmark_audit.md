@@ -2,6 +2,50 @@
 
 **Written 2026-09-03.** Research and evaluation task. **No model architecture, training code or inference code was changed to produce it, and no training was run.** The only additions to the repository are this document and its machine-readable companion, `docs/external_benchmark_results.json`.
 
+---
+
+> ## ⚠ CORRECTION BANNER — added 2026-09-07. Read before any CDVQA number below.
+>
+> **Every CDVQA figure in this document is 0.5380. The correct figure is 0.6061.** Nothing below has been edited: this document is a dated audit, and rewriting its numbers in place would destroy the record of what was measured on 2026-09-03. This banner supplies the corrected values instead.
+>
+> **Cause.** `docs/research/cdvqa-baseline-correction-2026-09-03.md` established by A/B across two commits that the 0.5380 run fed **channel-reversed (BGR) images** to the semantic-change head. That head is an **ImageNet-pretrained ResNet-18**, and ImageNet pretraining is RGB-specific, so channel reversal degrades it substantially. The pre-fix commit reproduces 0.5380 exactly on all eight question types and overall; the post-fix commit returns **0.606133**. The only variable changed was the code. **0.6061 is the first CDVQA measurement taken on correctly-ordered input.**
+>
+> ### Figures that change
+>
+> | Quantity | This document says | Corrected |
+> |---|---|---|
+> | CDVQA test1 overall accuracy | 0.5380 | **0.6061** |
+> | Coverage | "100%" | **99.82%** (73 deferrals, all in `change_to_what`; the documented 100% was never reproducible at either commit) |
+> | Deficit vs SOTA (Qwen3.5-2B, 0.7474) | −20.9 pts | **−14.1 pts** |
+> | Deficit vs the 2021 CDVQA baseline (0.6590) | −12.1 pts | **−5.3 pts** |
+> | Deficit vs VisTA (0.7310) | −19.3 pts | **−12.5 pts** |
+> | Deficit vs SOBA (0.6920) | −15.4 pts | **−8.6 pts** |
+> | Margin over the per-type majority constant (0.5084) | +3.0 pts | **+9.8 pts** |
+> | Types where SatQuery beats its own per-type constant | 5 of 8 | **7 of 8** |
+> | `largest_gaps[G1].delta` in the JSON companion | −0.2094 | **−0.1413** |
+>
+> ### Per-type, re-diffed against Qwen3.5-2B
+>
+> | question type | n | this doc (0.5380 run) | **corrected** | Qwen3.5-2B | corrected Δ |
+> |---|---|---|---|---|---|
+> | `change_or_not` | 13,882 | 0.6772 | **0.7093** | 0.8395 | −0.1302 |
+> | `change_ratio_types` | 5,811 | 0.4791 | **0.5564** | 0.7986 | −0.2422 |
+> | `decrease_or_not` | 4,658 | 0.6496 | **0.7548** | 0.8270 | −0.0722 |
+> | `increase_or_not` | 4,600 | 0.6437 | **0.7178** | 0.8324 | −0.1146 |
+> | `change_to_what` | 2,991 | 0.3714 | **0.5219** | 0.6172 | −0.0953 |
+> | `largest_change` | 2,904 | 0.4497 | **0.6167** | 0.6446 | −0.0279 |
+> | `smallest_change` | 2,904 | 0.1319 | **0.1522** | 0.3523 | −0.2001 |
+> | `change_ratio` | 1,936 | 0.1952 | **0.1875** | 0.5755 | −0.3880 |
+> | **overall** | **39,686** | **0.5380** | **0.6061** | **0.7474** | **−0.1413** |
+>
+> ### What the correction does *not* change
+>
+> **§1.1's verdict stands.** SatQuery still loses the CDVQA Category-A comparison to all four published comparators, and still **loses on all eight question types** — the gaps narrow, none closes, and the nearest (`largest_change`, −0.028) is the only one within striking distance. The audit's central claim, that the two Category-A comparisons are both losses, is unaffected. **§11 G1 stands too:** the cause is still the segmenter, and the oracle ceiling is still 0.9975.
+>
+> What *does* change is the margin over a constant. At 0.5380 the system beat a per-type constant by 3.0 points on five of eight types; at 0.6061 it beats it by 9.8 points on seven of eight. The "beats a constant by only 3.0 points" characterisation in §10.2 is superseded.
+
+---
+
 Read §1 and §8 first. If you read only one table, read the one in §6.1 — and read its *comparable?* column before you read its numbers.
 
 **Two rules govern every number below.**

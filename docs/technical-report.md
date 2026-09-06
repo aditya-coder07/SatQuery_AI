@@ -312,7 +312,7 @@ a reviewer should know about without asking:
 
 ```bash
 make report          # regenerates every evaluation artifact under docs/assets/
-python -m pytest -q  # 855 tests
+python -m pytest -q  # 1,247 tests (855 at the freeze)
 python evaluation/adversarial.py            # illegal-plan rate
 python evaluation/cdvqa_oracle.py --split Test
 python evaluation/cdvqa_baseline.py --compare artifacts/cdvqa/head_test_pretrained.json

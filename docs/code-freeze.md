@@ -45,7 +45,8 @@ A change qualifies as a bug fix if all four hold:
 1. Something is **measured** to be wrong — a failing test, a wrong number, a
    defect reproduced in the browser or against the live API.
 2. The fix is **scoped to that defect** and does not add capability.
-3. The **full regression set** is re-run: `pytest` (855), the no-torch CI
+3. The **full regression set** is re-run: `pytest` (**1,247** as of 2026-09-07;
+   it was 855 at the freeze — the suite grew with the fixes), the no-torch CI
    simulation, `evaluation/adversarial.py` for the 0/600 guarantee, matrix
    validation, and `make_demo_bundle.py --verify` if any beat could be
    affected.

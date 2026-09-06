@@ -125,10 +125,10 @@ the metric table.
 > The problem statement names CDVQA as the benchmark for change VQA. Our first
 > measurement was **0.0000**. Our second was **0.4439** — which is *below* what
 > a constant answer scores, 0.5084. We published that as a failure. The third
-> is **0.5380**.
+> is **0.6061**.
 
 > The oracle over ground-truth change maps is **0.9975**. That tells us the
-> answer layer is not the problem — 93% of the remaining gap is one
+> answer layer is not the problem — nearly all of the remaining gap is one
 > segmentation model. A vague "improve the VQA" became a well-posed problem.
 
 > We also found a 20-point gap between calling the tool and running the
@@ -164,7 +164,7 @@ Do not skip this slide.
 > reasoning. Physics verifies neural, because a confident wrong answer is
 > worse than an abstention.
 
-> 855 tests. Zero illegal plans in 600. It runs offline, on a laptop.
+> 1,247 tests. Zero illegal plans in 600. It runs offline, on a laptop.
 
 ---
 

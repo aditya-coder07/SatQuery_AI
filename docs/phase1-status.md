@@ -2083,3 +2083,69 @@ coverage, the pipeline agrees with its own tool to six decimal places, and the
 remaining gap is one number: the segmenter's 0.2636 change-class mIoU. Longer
 training, a stronger backbone and full-resolution crops are the obvious moves,
 in that order of cost.
+
+---
+
+## Correction — 2026-09-07: CDVQA is 0.6061, not 0.5380
+
+**Appended, not edited.** Every CDVQA figure above stays exactly as written.
+This file is append-only in spirit — later sections correct earlier ones and
+nothing is deleted when it turns out to be wrong, which is the property that
+keeps the 0.0000 → 0.4439 → 0.5380 history readable. This section adds the
+fourth number in that sequence and the reason for it.
+
+### The number
+
+| | recorded above | corrected |
+|---|---|---|
+| CDVQA test1 overall accuracy | **0.5380** | **0.606133** |
+| coverage | 39,686 / 39,686 (100%) | **99.82%** — 73 deferrals, all in `change_to_what` |
+| margin over the per-type majority constant (0.5084) | +3.0 pts | **+9.8 pts** |
+| question types beating that constant | 5 of 8 | **7 of 8** |
+
+### The cause — a channel-order bug, not a model change
+
+The 0.5380 run fed **channel-reversed (BGR) images** to the semantic-change
+head. That head is an **ImageNet-pretrained ResNet-18**, and ImageNet
+pretraining is RGB-specific, so reversing the channels degrades it
+substantially. Nothing about the model, its weights or its training changed.
+
+The A/B is what makes this a correction rather than a claim: at commit
+`a93982d` (pre-fix) the benchmark returns **0.5380 on all eight question types
+and overall — reproducing the recorded number exactly**; at `8b46ebd`
+(post-fix) it returns **0.606133**. The only variable changed was the code.
+**0.6061 is the first CDVQA measurement taken on correctly-ordered input.**
+
+### Per-type
+
+| question type | n | above | corrected | Δ |
+|---|---|---|---|---|
+| `largest_change` | 2,904 | 0.4497 | **0.616736** | **+16.70** |
+| `change_to_what` | 2,991 | 0.3714 | **0.521899** | **+15.05** |
+| `decrease_or_not` | 4,658 | 0.6496 | **0.754830** | +10.52 |
+| `change_ratio_types` | 5,811 | 0.4791 | **0.556359** | +7.73 |
+| `increase_or_not` | 4,600 | 0.6437 | **0.717826** | +7.41 |
+| `change_or_not` | 13,882 | 0.6772 | **0.709336** | +3.21 |
+| `smallest_change` | 2,904 | 0.1319 | **0.152204** | +2.03 |
+| `change_ratio` | 1,936 | 0.1952 | **0.187500** | −0.77 |
+| **OVERALL** | **39,686** | **0.5380** | **0.606133** | **+6.81** |
+
+### Two things it does not change
+
+* **The coverage claim above was never reproducible.** "39,686 / 39,686, 100%"
+  does not hold at either commit: the pre-fix run defers 122 questions and the
+  post-fix run 73. The fix *improved* coverage; it did not regress it. The
+  discrepancy with the recorded 100% is unexplained and is logged rather than
+  resolved.
+* **The conclusion stands.** The remaining gap is still one number — the
+  segmenter's 0.2636 change-class mIoU against a 0.9975 oracle — and the moves
+  are still longer training, a stronger backbone and full-resolution crops, in
+  that order of cost. Against the literature SatQuery still loses the CDVQA
+  Category-A comparison on all eight question types; every gap narrows and
+  none closes.
+
+**Source of truth:** `docs/research/cdvqa-baseline-correction-2026-09-03.md`.
+Corrections propagated the same day to `docs/00` §3.1/§3.5/L10,
+`docs/model-cards.md`, `docs/deck.md` and `docs/judge-qa.md`;
+`docs/external_benchmark_audit.md` and its JSON companion carry a correction
+banner instead, being dated audits.

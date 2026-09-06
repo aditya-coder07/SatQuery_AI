@@ -12,6 +12,49 @@
     }
   },
 
+  "corrections": {
+    "added": "2026-09-07",
+    "convention": "Additive. No original field in this file was edited - it is the companion to a dated audit, and its fields record what was measured on 2026-09-03. Consumers should prefer the corrected values here over the superseded fields they name.",
+    "cdvqa_overall_accuracy": {
+      "superseded_value": 0.5380,
+      "corrected_value": 0.606133,
+      "coverage_superseded": "100%",
+      "coverage_corrected": 0.9982,
+      "cause": "the 0.5380 run fed channel-reversed (BGR) images to an ImageNet-pretrained ResNet-18 semantic-change head, and ImageNet pretraining is RGB-specific. Established by A/B across commits a93982d (pre-fix, reproduces 0.5380 exactly on all eight types and overall) and 8b46ebd (post-fix, 0.606133). Only the code changed.",
+      "source": "docs/research/cdvqa-baseline-correction-2026-09-03.md",
+      "supersedes_fields": [
+        "satquery_published_component_metrics.change_vqa_v1.overall_accuracy",
+        "satquery_published_component_metrics.change_vqa_v1.coverage",
+        "satquery_published_component_metrics.change_vqa_v1.per_type",
+        "category_a_comparisons[0].satquery",
+        "category_a_comparisons[0].delta_vs_best",
+        "category_a_comparisons[0].delta_vs_oldest_baseline",
+        "category_a_comparisons[0].per_type_vs_qwen35_2b",
+        "largest_gaps[0].satquery",
+        "largest_gaps[0].delta"
+      ],
+      "corrected_deltas": {
+        "vs_qwen35_2b_0_7474": -0.1413,
+        "vs_vista_0_7310": -0.1249,
+        "vs_soba_0_6920": -0.0859,
+        "vs_cdvqa_baseline_2021_0_6590": -0.0529,
+        "vs_per_type_majority_constant_0_5084": 0.0977
+      },
+      "corrected_per_type": {
+        "change_or_not": 0.709336,
+        "change_ratio": 0.187500,
+        "change_ratio_types": 0.556359,
+        "change_to_what": 0.521899,
+        "decrease_or_not": 0.754830,
+        "increase_or_not": 0.717826,
+        "largest_change": 0.616736,
+        "smallest_change": 0.152204
+      },
+      "verdict_unchanged": "SatQuery still loses this Category-A comparison to all four published comparators and still loses on all eight question types; every gap narrows, none closes. competitive_position.change_understanding stays red, and largest_gaps G1 keeps its diagnosis - the segmenter, against an oracle ceiling of 0.99748.",
+      "verdict_changed": "The margin over a per-type majority constant rises from +3.0 to +9.8 points, and the number of question types beating that constant rises from 5 of 8 to 7 of 8."
+    }
+  },
+
   "satquery": {
     "parameters": {
       "base_model": "Qwen2.5-VL-3B-Instruct",

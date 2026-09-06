@@ -131,8 +131,8 @@ Weight Sharing: 4 core trainings produce 9 tools (efficient on free-tier GPUs!)
 * **Architecture:** Siamese **ImageNet-pretrained ResNet-18** backbone with dual per-date semantic decoders connected to a structured deterministic arithmetic answer generator.
 * **Training Data:** **SECOND** dataset mapped through **CDVQA** benchmark IDs (1,600 training pairs, 400 validation, 968 held-out test pairs).
 * **Benchmark & Accuracy:**
-  - **CDVQA Benchmark Accuracy:** **0.5380 (53.80%)** across 39,686 questions.
-  - **Beats Majority Baseline:** The constant majority baseline scores **0.5084**; our model beats it with 100% evaluation coverage!
+  - **CDVQA Benchmark Accuracy:** **0.6061 (60.61%)** across 39,686 questions *(corrected 2026-09-07 from 0.5380; see `docs/research/cdvqa-baseline-correction-2026-09-03.md`)*.
+  - **Beats Majority Baseline:** The constant majority baseline scores **0.5084**; our model beats it at **99.82%** evaluation coverage. *(The "100% coverage" previously claimed here was never reproducible — the same run defers 73 questions, all in `change_to_what`.)*
   - **Change-Class mIoU:** **0.2636** (ImageNet pretraining improved this by **+56% relative** over training from scratch at 0.1691).
   - **Oracle Ceiling:** When given perfect ground-truth change maps, our arithmetic answer head scores **0.9975 (99.75%)**, proving the reasoning logic is essentially flawless and all headroom lies in segmentation!
 
