@@ -257,19 +257,40 @@ def build_bundle(out: Path) -> list[DemoInput]:
         expect="rejected_or_abstained",
     ))
 
-    # 1b - the rejection that DOES work: a PNG in operational mode.
+    # 1b - a PNG in operational mode: answered, with the geospatial loss named.
     #
-    # The demo opens on a refusal, and the overlap rejection above is not
-    # enforced yet (L16). This one is: the PS says PNG/JPEG are admissible
-    # "only for the prescribed public benchmark datasets", and operational
-    # mode abstains with `crs_present` named as the failing check. It is the
-    # stronger opening beat anyway - it quotes the PS's own rule back.
+    # This beat used to expect a refusal, on two premises that have both since
+    # expired:
+    #
+    #   * "the overlap rejection above is not enforced yet (L16)" - it has been
+    #     enforced since 2026-08-30, and beat 1 now genuinely abstains, so the
+    #     demo no longer needs a second rejection to open on.
+    #   * "operational mode abstains with `crs_present` as the failing check" -
+    #     289ed77 (2026-09-01) changed that deliberately, under PS item 10. A
+    #     missing CRS in a container that CANNOT CARRY ONE is a format
+    #     property, not a defect; a GeoTIFF with no CRS is still a defective
+    #     product and still fails. So a PNG now WARNs instead of failing.
+    #
+    # The expectation was left behind by that change and asserted a behaviour
+    # the system had deliberately stopped having, which is why `--verify` read
+    # 8/9 while the documents said 9/9.
+    #
+    # Kept as a beat rather than deleted, because what it demonstrates now is
+    # worth more than a second refusal: the system accepts the image, answers
+    # the visual question from pixels, and states plainly in the same breath
+    # that no coordinates, ground extent or areas in metres are available for
+    # it. Capability and its limit in one answer.
     inputs.append(DemoInput(
         key="png_operational",
-        beat="0:30 - the rejection that works. PNG outside benchmark mode.",
+        beat="0:30 - PNG accepted for a visual question, geospatial loss named "
+             "in the answer.",
         query="Describe the land-cover and major objects visible in this image.",
         images=[build_benchmark_png(synth / "benchmark_tile.png")],
-        expect="rejected_or_abstained",
+        expect="answered",
+        notes=[
+            "PNG carries no CRS, so `crs_present` WARNs rather than failing "
+            "(PS item 10); the answer says no georeferenced output is possible",
+        ],
     ))
 
     # 2 - single optical, real if we have it.
