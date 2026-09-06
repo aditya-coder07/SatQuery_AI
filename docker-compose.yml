@@ -20,10 +20,11 @@
 
 services:
   api:
+    image: satquery_ai-api:latest
     build:
       context: .
       dockerfile: docker/api.Dockerfile
-      target: cpu-image
+      target: gpu-image
     ports:
       - "8000:8000"
     volumes:
@@ -36,15 +37,25 @@ services:
       # not wanted - the image stays small and the data stays current.
       - ./models:/app/models
       - ./data:/app/data
+      - ./checkpoints:/app/checkpoints
     environment:
       - HF_HUB_OFFLINE=1
       - TRANSFORMERS_OFFLINE=1
       # satquery/controller/profiles.py reads SATQUERY_PROFILE.
       # This said PROFILE, so choosing lite through compose did nothing.
-      - SATQUERY_PROFILE=${SATQUERY_PROFILE:-lite}
+      - SATQUERY_PROFILE=${SATQUERY_PROFILE:-full}
       # Which browser origins may call the API. Defaults inside the app are
       # localhost only; a deployment sets this to its real origin. Never "*".
       - SATQUERY_CORS_ORIGINS=${SATQUERY_CORS_ORIGINS:-http://localhost:3000,http://127.0.0.1:3000}
+      - SATQUERY_VQA_BASE=/app/models/qwen25_vl_3b
+      - SATQUERY_VQA_ADAPTER=/app/checkpoints/track_b_v2/adapter_final
+      - SATQUERY_CAPTION=/app/checkpoints/caption
+      - SATQUERY_LANDCOVER=/app/checkpoints/track_a_full_base
+      - SATQUERY_GROUNDING=/app/checkpoints/grounding
+      - SATQUERY_CHANGE_MASK=/app/checkpoints/change_mask
+      - SATQUERY_CHANGE_CAPTION=/app/checkpoints/change_caption
+      - SATQUERY_CHANGE_VQA=/app/checkpoints/change_vqa/best.pt
+      - SATQUERY_FUSION=/app/checkpoints/optsar_fusion
     healthcheck:
       # /health is the liveness endpoint the API already exposes. Without a
       # healthcheck `depends_on` only waits for the container to start, not
@@ -64,10 +75,11 @@ services:
         reservations:
           devices:
             - driver: nvidia
-              count: ${GPU_COUNT:-0}
+              count: ${GPU_COUNT:-1}
               capabilities: [gpu]
 
   web:
+    image: satquery_ai-web:latest
     build:
       context: frontend
       dockerfile: Dockerfile

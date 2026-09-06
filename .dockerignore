@@ -25,6 +25,7 @@ satquery_runs.db
 .git/
 .github/
 .gitignore
+.claude/
 .venv/
 venv/
 

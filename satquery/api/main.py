@@ -57,6 +57,7 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["GET", "POST"],
     allow_headers=["*"],
+    expose_headers=["X-Extent", "X-Projection", "X-Overlay-Rendering"],
 )
 
 # Built once: the controller fits the intent classifier on construction, and
@@ -464,6 +465,18 @@ def _client_safe_error(exc: Exception) -> str:
         # These carry our own validation messages, which are safe and useful.
         return str(exc).replace(str(Path.cwd()), ".")
     return f"the input could not be processed ({name})"
+
+
+@app.get("/")
+def root():
+    return {
+        "service": "SatQuery AI API",
+        "status": "online",
+        "version": app.version,
+        "docs": "/docs",
+        "health": "/health",
+        "web_ui": "http://localhost:3000",
+    }
 
 
 @app.get("/health")
@@ -1014,8 +1027,9 @@ def get_device():
     # "not instrumented" while a working nvidia-smi sits on the PATH was
     # honest about the wrong thing.
     try:
-        import pynvml
+        import importlib
 
+        pynvml = importlib.import_module("pynvml")
         pynvml.nvmlInit()
         handle = pynvml.nvmlDeviceGetHandleByIndex(index)
         sample["utilisation"] = int(pynvml.nvmlDeviceGetUtilizationRates(handle).gpu)

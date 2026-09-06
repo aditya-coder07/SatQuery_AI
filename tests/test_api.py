@@ -26,6 +26,12 @@ def upload(path, name="image.tif"):
 
 
 class TestHealth:
+    def test_root_ok(self, client):
+        r = client.get("/")
+        assert r.status_code == 200
+        assert r.json()["status"] == "online"
+        assert "/docs" in r.json()["docs"]
+
     def test_health_ok(self, client):
         r = client.get("/health")
         assert r.status_code == 200
