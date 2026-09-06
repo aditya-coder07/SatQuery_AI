@@ -38,6 +38,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from training.common.checkpointing import (  # noqa: E402
     TrainingState, maybe_resume, save_checkpoint, set_seed, write_run_metadata,
 )
+from training.common.eval_only import (  # noqa: E402
+    add_eval_only_args, epochs_for, resume_or_load_for_eval,
+    save_checkpoint_unless_eval, write_metrics, write_run_metadata_unless_eval,
+)
 from training.stage_a2_transfer import N_WHU_CLASSES  # noqa: E402
 from training.track_a_encoder import average_precision  # noqa: E402
 
@@ -202,6 +206,7 @@ def main() -> int:
     p.add_argument("--seed", type=int, default=42)
     p.add_argument("--save-every", type=int, default=50)
     p.add_argument("--resume", action="store_true")
+    add_eval_only_args(p)
     args = p.parse_args()
 
     import torch
@@ -227,9 +232,9 @@ def main() -> int:
 
     optimizer = torch.optim.AdamW(model.parameters(), lr=args.lr)
     criterion = nn.BCEWithLogitsLoss()
-    state, _ = maybe_resume(args.ckpt_dir, model, optimizer, enabled=args.resume)
+    state = resume_or_load_for_eval(args, model, optimizer)
 
-    write_run_metadata(args.ckpt_dir, {
+    write_run_metadata_unless_eval(args, {
         "task": "optsar_fusion_triad", "n_train": len(train_ds),
         "epochs": args.epochs, "lr": args.lr, "dim": args.dim,
         "classes": index["classes"], "split_method": index.get("split_method"),
@@ -239,7 +244,7 @@ def main() -> int:
     step = state.step
     started = time.time()
 
-    for epoch in range(state.epoch, args.epochs):
+    for epoch in range(state.epoch, epochs_for(args)):
         model.train()
         running, seen = 0.0, 0
         for o, s, t in batches(train_ds, args.batch_size, rng):
@@ -261,13 +266,13 @@ def main() -> int:
             step += 1
             if step % args.save_every == 0:
                 state.step, state.epoch = step, epoch
-                save_checkpoint(args.ckpt_dir, step, model, optimizer, state=state)
+                save_checkpoint_unless_eval(args, step, model, optimizer, state=state)
 
         print(f"epoch {epoch+1}/{args.epochs}  loss {running/max(seen,1):.4f}  "
               f"({time.time()-started:.0f}s)", flush=True)
 
     state.step, state.epoch = step, args.epochs
-    save_checkpoint(args.ckpt_dir, step, model, optimizer, state=state)
+    save_checkpoint_unless_eval(args, step, model, optimizer, state=state)
 
     if val_ds:
         m = evaluate_triad(model, val_ds, torch, args.batch_size, device)
@@ -276,9 +281,7 @@ def main() -> int:
         print(f"  B SAR-only     : {m['sar']:.4f}")
         print(f"  C fused        : {m['fused']:.4f}")
         print(f"  complementarity gain (C - best single): {m['complementarity_gain']:+.4f}")
-        (args.ckpt_dir / "metrics.json").write_text(
-            json.dumps(m, indent=2), encoding="utf-8"
-        )
+        write_metrics(args, m)
     return 0
 
 

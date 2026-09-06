@@ -37,6 +37,11 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from training.common.checkpointing import (  # noqa: E402
     TrainingState, maybe_resume, save_checkpoint, set_seed, write_run_metadata,
 )
+from training.common.eval_only import (  # noqa: E402
+    add_eval_only_args, epochs_for, resume_or_load_for_eval, vocab_for,
+    write_vocab_unless_eval,
+    save_checkpoint_unless_eval, write_metrics, write_run_metadata_unless_eval,
+)
 
 PATCH = 256
 MAX_LEN = 24
@@ -179,6 +184,7 @@ def main() -> int:
     p.add_argument("--seed", type=int, default=42)
     p.add_argument("--save-every", type=int, default=100)
     p.add_argument("--resume", action="store_true")
+    add_eval_only_args(p)
     args = p.parse_args()
 
     import torch
@@ -200,7 +206,9 @@ def main() -> int:
 
     # Vocabulary is built from TRAIN captions only. Including the test split
     # would leak test vocabulary into the model and inflate BLEU.
-    vocab = build_vocab([r["caption"] for r in train_rows])
+    vocab = vocab_for(
+        args, lambda: build_vocab([r["caption"] for r in train_rows])
+    )
     inverse = {i: w for w, i in vocab.items()}
     print(f"train {len(train_rows)} | test {len(test_rows)} | vocab {len(vocab)}")
 
@@ -212,20 +220,20 @@ def main() -> int:
 
     optimizer = torch.optim.AdamW(model.parameters(), lr=args.lr)
     criterion = nn.CrossEntropyLoss(ignore_index=PAD)
-    state, _ = maybe_resume(args.ckpt_dir, model, optimizer, enabled=args.resume)
+    state = resume_or_load_for_eval(args, model, optimizer)
 
-    write_run_metadata(args.ckpt_dir, {
+    write_run_metadata_unless_eval(args, {
         "task": "change_caption_mask_conditioned", "n_train": len(train_rows),
         "epochs": args.epochs, "lr": args.lr, "dim": args.dim,
         "vocab_size": len(vocab),
     })
-    (args.ckpt_dir / "vocab.json").write_text(json.dumps(vocab), encoding="utf-8")
+    write_vocab_unless_eval(args, vocab)
 
     rng = np.random.default_rng(args.seed)
     step = state.step
     started = time.time()
 
-    for epoch in range(state.epoch, args.epochs):
+    for epoch in range(state.epoch, epochs_for(args)):
         model.train()
         running, seen = 0.0, 0
         for a, b, m, t in batches(train_ds, args.batch_size, rng):
@@ -242,12 +250,12 @@ def main() -> int:
             step += 1
             if step % args.save_every == 0:
                 state.step, state.epoch = step, epoch
-                save_checkpoint(args.ckpt_dir, step, model, optimizer, state=state)
+                save_checkpoint_unless_eval(args, step, model, optimizer, state=state)
         print(f"epoch {epoch+1}/{args.epochs}  loss {running/max(seen,1):.4f}  "
               f"({time.time()-started:.0f}s)", flush=True)
 
     state.step, state.epoch = step, args.epochs
-    save_checkpoint(args.ckpt_dir, step, model, optimizer, state=state)
+    save_checkpoint_unless_eval(args, step, model, optimizer, state=state)
 
     if test_ds and len(test_ds):
         model.eval()
@@ -268,10 +276,7 @@ def main() -> int:
         for hyp, ref in samples:
             print(f"  pred: {hyp[:70]}")
             print(f"  ref : {ref[:70]}")
-        (args.ckpt_dir / "metrics.json").write_text(
-            json.dumps({"bleu4_sentence_mean": value, "n": len(scores)}, indent=2),
-            encoding="utf-8",
-        )
+        write_metrics(args, {"bleu4_sentence_mean": value, "n": len(scores)})
     return 0
 
 

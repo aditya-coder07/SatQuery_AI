@@ -40,6 +40,11 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from training.common.checkpointing import (  # noqa: E402
     TrainingState, maybe_resume, save_checkpoint, set_seed, write_run_metadata,
 )
+from training.common.eval_only import (  # noqa: E402
+    add_eval_only_args, epochs_for, resume_or_load_for_eval,
+    write_sidecar_unless_eval,
+    save_checkpoint_unless_eval, write_metrics, write_run_metadata_unless_eval,
+)
 from training.track_a_encoder import (  # noqa: E402
     average_precision, band_dropout_mask, mean_average_precision,
 )
@@ -245,6 +250,7 @@ def main() -> int:
     p.add_argument("--save-every", type=int, default=200)
     p.add_argument("--resume", action="store_true")
     p.add_argument("--ablation", action="store_true")
+    add_eval_only_args(p)
     args = p.parse_args()
 
     import torch
@@ -286,7 +292,7 @@ def main() -> int:
 
     optimizer = torch.optim.AdamW(model.parameters(), lr=args.lr)
     criterion = nn.BCEWithLogitsLoss()
-    state, _ = maybe_resume(args.ckpt_dir, model, optimizer, enabled=args.resume)
+    state = resume_or_load_for_eval(args, model, optimizer)
 
     # The band statistics are part of the model: inference MUST apply the same
     # transform, and recomputing them needs the training shards, which a
@@ -295,22 +301,18 @@ def main() -> int:
     # and the head asserted class 0 on every patch at 0.9 confidence, wrong
     # every time. Saved beside the weights so the tool can refuse to run
     # without them.
-    args.ckpt_dir.mkdir(parents=True, exist_ok=True)
-    (args.ckpt_dir / "band_stats.json").write_text(
-        json.dumps({
-            "bands": BAND_NAMES_12,
-            "reflectance_scale": REFLECTANCE_SCALE,
-            "mean": [float(v) for v in stats[0]],
-            "std": [float(v) for v in stats[1]],
-            "provenance": (
-                f"compute_stats(seed=0, sample=2000) over "
-                f"{[p.name for p in train_paths]}"
-            ),
-        }, indent=2),
-        encoding="utf-8",
-    )
+    write_sidecar_unless_eval(args, "band_stats.json", {
+        "bands": BAND_NAMES_12,
+        "reflectance_scale": REFLECTANCE_SCALE,
+        "mean": [float(v) for v in stats[0]],
+        "std": [float(v) for v in stats[1]],
+        "provenance": (
+            f"compute_stats(seed=0, sample=2000) over "
+            f"{[p.name for p in train_paths]}"
+        ),
+    }, indent=2)
 
-    write_run_metadata(args.ckpt_dir, {
+    write_run_metadata_unless_eval(args, {
         "task": "track_a_full", "bands": BAND_NAMES_12,
         "n_train": len(train_ds), "epochs": args.epochs, "lr": args.lr,
         "dim": args.dim, "band_dropout": args.band_dropout,
@@ -322,7 +324,7 @@ def main() -> int:
     step = state.step
     started = time.time()
 
-    for epoch in range(state.epoch, args.epochs):
+    for epoch in range(state.epoch, epochs_for(args)):
         model.train()
         running, seen = 0.0, 0
         for x, y in batches(train_ds, args.batch_size, rng):
@@ -348,14 +350,14 @@ def main() -> int:
             step += 1
             if step % args.save_every == 0:
                 state.step, state.epoch = step, epoch
-                save_checkpoint(args.ckpt_dir, step, model, optimizer, state=state)
+                save_checkpoint_unless_eval(args, step, model, optimizer, state=state)
                 print(f"  step {step}  loss {running/max(seen,1):.4f}", flush=True)
 
         print(f"epoch {epoch+1}/{args.epochs}  loss {running/max(seen,1):.4f}  "
               f"({time.time()-started:.0f}s)", flush=True)
 
     state.step, state.epoch = step, args.epochs
-    save_checkpoint(args.ckpt_dir, step, model, optimizer, state=state)
+    save_checkpoint_unless_eval(args, step, model, optimizer, state=state)
 
     results = {}
     if test_ds:
@@ -378,10 +380,7 @@ def main() -> int:
             f"class_{i}": (None if np.isnan(v) else round(v, 6))
             for i, v in enumerate(per_class)
         }
-        (args.ckpt_dir / "metrics.json").write_text(
-            json.dumps(results, indent=2), encoding="utf-8"
-        )
-        print(f"\nMetrics -> {args.ckpt_dir / 'metrics.json'}")
+        write_metrics(args, results)
 
     train_ds.close()
     if test_ds:

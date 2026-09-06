@@ -46,6 +46,11 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from training.common.checkpointing import (  # noqa: E402
     TrainingState, maybe_resume, save_checkpoint, set_seed, write_run_metadata,
 )
+from training.common.eval_only import (  # noqa: E402
+    add_eval_only_args, epochs_for, resume_or_load_for_eval, vocab_for,
+    write_vocab_unless_eval,
+    save_checkpoint_unless_eval, write_metrics, write_run_metadata_unless_eval,
+)
 
 IMAGE_SIZE = 224
 MAX_TOKENS = 16
@@ -261,6 +266,7 @@ def main() -> int:
     p.add_argument("--seed", type=int, default=42)
     p.add_argument("--save-every", type=int, default=100)
     p.add_argument("--resume", action="store_true")
+    add_eval_only_args(p)
     args = p.parse_args()
 
     import torch
@@ -301,7 +307,9 @@ def main() -> int:
         return 1
     print(f"split: {split_note}")
 
-    vocab = build_vocab([r["phrase"] for r in train_rows])
+    vocab = vocab_for(
+        args, lambda: build_vocab([r["phrase"] for r in train_rows])
+    )
     print(f"train {len(train_rows)} | test {len(test_rows)} | vocab {len(vocab)}")
 
     train_ds, test_ds = DiorRSVG(train_rows, vocab), DiorRSVG(test_rows, vocab)
@@ -310,21 +318,21 @@ def main() -> int:
 
     optimizer = torch.optim.AdamW(model.parameters(), lr=args.lr)
     criterion = nn.SmoothL1Loss()
-    state, _ = maybe_resume(args.ckpt_dir, model, optimizer, enabled=args.resume)
+    state = resume_or_load_for_eval(args, model, optimizer)
 
-    write_run_metadata(args.ckpt_dir, {
+    write_run_metadata_unless_eval(args, {
         "task": "referring_grounding", "n_train": len(train_rows),
         "epochs": args.epochs, "lr": args.lr, "dim": args.dim,
         "vocab_size": len(vocab), "backbone": "from scratch (no remote code)",
         "split_note": split_note,
     })
-    (args.ckpt_dir / "vocab.json").write_text(json.dumps(vocab), encoding="utf-8")
+    write_vocab_unless_eval(args, vocab)
 
     rng = np.random.default_rng(args.seed)
     step = state.step
     started = time.time()
 
-    for epoch in range(state.epoch, args.epochs):
+    for epoch in range(state.epoch, epochs_for(args)):
         model.train()
         running, seen = 0.0, 0
         for img, tok, box in batches(train_ds, args.batch_size, rng):
@@ -340,12 +348,12 @@ def main() -> int:
             step += 1
             if step % args.save_every == 0:
                 state.step, state.epoch = step, epoch
-                save_checkpoint(args.ckpt_dir, step, model, optimizer, state=state)
+                save_checkpoint_unless_eval(args, step, model, optimizer, state=state)
         print(f"epoch {epoch+1}/{args.epochs}  loss {running/max(seen,1):.4f}  "
               f"({time.time()-started:.0f}s)", flush=True)
 
     state.step, state.epoch = step, args.epochs
-    save_checkpoint(args.ckpt_dir, step, model, optimizer, state=state)
+    save_checkpoint_unless_eval(args, step, model, optimizer, state=state)
 
     model.eval()
     ious = []
@@ -366,9 +374,7 @@ def main() -> int:
     print("\nDIOR-RSVG referring grounding:")
     for k, v in metrics.items():
         print(f"  {k:<10} {v:.4f}" if isinstance(v, float) else f"  {k:<10} {v}")
-    (args.ckpt_dir / "metrics.json").write_text(
-        json.dumps(metrics, indent=2), encoding="utf-8"
-    )
+    write_metrics(args, metrics)
     return 0
 
 
