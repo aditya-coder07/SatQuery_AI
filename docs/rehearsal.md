@@ -6,6 +6,85 @@ actual venue laptop with networking off."**
 That item has two halves and only one of them is automatable. This file
 records what was measured, and states plainly what was not.
 
+## Venue checklist - do this before the judges arrive
+
+**The whole of it: bring the stack up, put ONE cross-modal query through the
+API, wait for it to come back, then start.** Everything below is why, and the
+variants.
+
+### If you have one minute
+
+```bash
+docker compose up -d
+# wait until `docker compose ps` shows satquery_ai-api-1 as (healthy)
+
+curl -s -X POST http://localhost:8000/runs   -F "query=Use the optical and SAR images together to identify built-up and water-covered regions."   -F "images=@data/demo_bundle/synthetic/optical_t1.tif"   -F "images=@data/demo_bundle/synthetic/sar_dualpol.tif" > /dev/null
+```
+
+**That curl takes about 70-80 seconds** (79 s measured 2026-09-07). **Wait
+for it to return.** It is slow
+*because* it is the warm-up - it is paying the model-load cost so the demo
+does not. The next cross-modal query costs **3.6-3.8 s**, measured three times
+in a row.
+
+> **Do not start the demo 2-3 seconds after firing it.** The wait is for the
+> command to *finish*, not a pause before it works. Starting early means the
+> first live beat is still the slow one, or queues behind the warm-up.
+
+### If you have three minutes
+
+Run the one-minute sequence, then warm the real-product path as well:
+
+```bash
+curl -s -X POST http://localhost:8000/runs   -F "query=Describe the land-cover and major objects visible in this image."   -F "images=@data/bhoonidhi/cartosat2s_mx_5132611/5132611/BAND1.tif"   -F "images=@data/bhoonidhi/cartosat2s_mx_5132611/5132611/BAND2.tif"   -F "images=@data/bhoonidhi/cartosat2s_mx_5132611/5132611/BAND3.tif"   -F "images=@data/bhoonidhi/cartosat2s_mx_5132611/5132611/BAND4.tif" > /dev/null
+```
+
+**About 40 s** (39 s measured, run second - it is quicker than the first
+because the stack is already up). It buys less than the cross-modal warm-up -
+the Cartosat beat is mostly raster I/O, so it goes from ~73 s to ~58 s rather
+than collapsing - but that beat is the one that overruns its slot in **every**
+run, so the 15 seconds are worth having.
+
+Both commands were run end to end on 2026-09-07 and returned
+`XMODAL_JOINT_EXTRACT` and `SINGLE_CAPTION` respectively. The four BAND files
+arrive as **one** logical image - the API groups them (limitation L17), and the
+trace confirms `n_images: 1`.
+
+### Two ways to lose the warm-up
+
+1. **Restarting anything.** The warm state lives in the running `uvicorn`
+   process. `docker compose restart`, a crash, or a laptop sleep/resume that
+   kills the container puts you back to cold. Warm again if that happens.
+2. **Warming from the CLI.** `docker compose exec ... satquery ask` warms a
+   process that then exits. **Measured: it does not help** - a full pass after
+   a CLI warm-up still took 219.9 s, versus 131 s genuinely warm. It has to go
+   through the API.
+
+### If you are on the CPU fallback
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.cpu.yml up -d
+```
+
+**Do not bother warming it** - the learned tools are stubs, nothing loads, and
+a full pass is already 104 s.
+
+**One change to the script there:** `clouded_optical` **answers instead of
+abstaining** on this config, so the 4:50 abstention beat does not demonstrate
+abstention. Close the live portion on `incompatible_pair` instead - it abstains
+in both configurations. See `docs/00` **L36** and the note on deck Slide 5.
+
+### Sanity check, if there is time
+
+```bash
+docker compose exec -T api python scripts/make_demo_bundle.py --verify
+```
+
+Expect **9/9 beats behave as scripted**. Takes about 4-5 minutes, so this is a
+morning-of check rather than a five-minutes-before one.
+
+---
+
 ## What was measured — on the HOST, 2026-08-30
 
 > **Still broadly valid.** An earlier revision of this file claimed the
