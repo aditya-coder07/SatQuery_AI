@@ -102,6 +102,15 @@ Live: the heavily clouded optical.
 > **A system that knows what it cannot see is the one you can actually
 > deploy.**
 
+> ⚠️ **Do not present this slide on the CPU/stub fallback.** Measured
+> 2026-09-07: this beat abstains on the GPU configuration and **answers** on
+> the CPU one, because the learned tools are stubs there and the plan falls
+> back to the deterministic index engine. Demonstrating "the system abstains"
+> on a config where it does not abstain gives exactly the wrong impression -
+> and it would be the one slide a judge remembers. On the CPU fallback, close
+> the live portion on the `incompatible_pair` rejection instead, which
+> abstains in both configurations. See `docs/00` §3.6 **L36**.
+
 ---
 
 ## Slide 6 — The engineering
@@ -149,7 +158,7 @@ Do not skip this slide.
 | Optical–SAR fusion gain | **−0.0064** — does not help |
 | Tier-1 routing, never-tuned holdout | **0.5862** |
 | Image-conditional refusal | **2/12** learned |
-| VRSBench | not evaluated — imagery lives in DOTA |
+| VRSBench, zero-shot | **0.2968** — below GeoChat's 0.408 and below a test-fitted constant |
 | Two-track ablation | **not comparable** — reasoned, not demonstrated |
 
 > Twenty limitations are written down with evidence and consequence. These six
