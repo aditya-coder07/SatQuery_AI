@@ -44,6 +44,7 @@ from training.common.checkpointing import (  # noqa: E402
     TrainingState, find_latest_checkpoint, load_checkpoint, maybe_resume,
     safe_torch_load, save_checkpoint, set_seed, write_run_metadata,
 )
+from training.common.paths import index_path  # noqa: E402
 from training.track_a_encoder import (  # noqa: E402
     BAND_NAMES, CARTOSAT_INDICES, band_dropout_mask, build_model,
     iterate_batches, mean_average_precision,
@@ -80,7 +81,7 @@ class WHUOptSar:
         import rasterio
 
         row = self.rows[i]
-        with rasterio.open(row["optical"]) as src:
+        with rasterio.open(index_path(row["optical"])) as src:
             arr = src.read(
                 out_shape=(src.count, PATCH, PATCH), masked=True
             ).astype("float32")
@@ -98,7 +99,7 @@ class WHUOptSar:
             cube[slot] = np.nan_to_num(band)
             present[slot] = 1.0
 
-        with rasterio.open(row["label"]) as src:
+        with rasterio.open(index_path(row["label"])) as src:
             mask = src.read(1, out_shape=(PATCH, PATCH))
         target = np.zeros(N_WHU_CLASSES, dtype="float32")
         for value in np.unique(mask):

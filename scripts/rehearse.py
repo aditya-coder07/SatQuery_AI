@@ -34,6 +34,7 @@ import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from training.common.paths import index_path  # noqa: E402
 
 # The seven-minute script, beat by beat, as (beat, budget_seconds, bundle_key).
 # Budgets come from docs/04 §10's own timings; they bound the *system* time,
@@ -94,7 +95,7 @@ def one_rehearsal(controller, bundle: dict[str, dict], index: int) -> dict:
         record: dict = {"beat": beat, "key": key, "budget_s": budget}
         try:
             trace = controller.run(
-                [Path(p) for p in item["images"]], item["query"],
+                [index_path(p) for p in item["images"]], item["query"],
                 run_id=f"rehearsal_{index}_{key}",
             )
             record.update(

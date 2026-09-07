@@ -61,6 +61,7 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+from training.common.paths import index_path  # noqa: E402
 
 REFUSAL_FRACTION = 0.05
 
@@ -147,7 +148,7 @@ def rsvqa_examples(root: Path) -> list[Example]:
     rows = load_jsonl(root / "instruct.jsonl")
     return [
         Example(
-            image=str(root / row["image"]),
+            image=str(root / index_path(row["image"])),
             question=row["question"],
             answer=str(row["answer"]),
             source="rsvqa_lr",

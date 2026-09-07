@@ -42,6 +42,7 @@ from training.common.eval_only import (  # noqa: E402
     add_eval_only_args, epochs_for, resume_or_load_for_eval,
     save_checkpoint_unless_eval, write_metrics, write_run_metadata_unless_eval,
 )
+from training.common.paths import index_path  # noqa: E402
 from training.stage_a2_transfer import N_WHU_CLASSES  # noqa: E402
 from training.track_a_encoder import average_precision  # noqa: E402
 
@@ -140,10 +141,10 @@ class WHUPair:
                     stacked = np.concatenate([stacked, stacked[-1:]])
             return stacked
 
-        optical = read(row["optical"], 4)
-        sar = read(row["sar"], 1)
+        optical = read(index_path(row["optical"]), 4)
+        sar = read(index_path(row["sar"]), 1)
 
-        with rasterio.open(row["label"]) as src:
+        with rasterio.open(index_path(row["label"])) as src:
             mask = src.read(1, out_shape=(PATCH, PATCH))
         target = np.zeros(N_WHU_CLASSES, dtype="float32")
         for value in np.unique(mask):

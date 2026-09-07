@@ -42,6 +42,7 @@ from training.common.eval_only import (  # noqa: E402
     write_vocab_unless_eval,
     save_checkpoint_unless_eval, write_metrics, write_run_metadata_unless_eval,
 )
+from training.common.paths import index_path  # noqa: E402
 
 PATCH = 256
 MAX_LEN = 24
@@ -150,10 +151,10 @@ class LevirCC:
         from PIL import Image
 
         row = self.rows[i]
-        a = np.asarray(Image.open(row["a"]).convert("RGB"), dtype="float32") / 255.0
-        b = np.asarray(Image.open(row["b"]).convert("RGB"), dtype="float32") / 255.0
-        if row.get("label") and Path(row["label"]).exists():
-            m = np.asarray(Image.open(row["label"]).convert("L"), dtype="float32")
+        a = np.asarray(Image.open(index_path(row["a"])).convert("RGB"), dtype="float32") / 255.0
+        b = np.asarray(Image.open(index_path(row["b"])).convert("RGB"), dtype="float32") / 255.0
+        if row.get("label") and index_path(row["label"]).exists():
+            m = np.asarray(Image.open(index_path(row["label"])).convert("L"), dtype="float32")
             m = (m > 127).astype("float32")
         else:
             m = np.zeros((PATCH, PATCH), dtype="float32")

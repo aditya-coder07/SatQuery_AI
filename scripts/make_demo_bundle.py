@@ -45,6 +45,7 @@ from evaluation.scenes import (  # noqa: E402
     structured_scene,
     write_raster,
 )
+from training.common.paths import index_path  # noqa: E402
 
 # Real products, held out from every training run (docs/03 §4.3). Paths are
 # relative to the repo root; each is optional and the bundle degrades to a
@@ -202,16 +203,16 @@ def build_change_pair(directory: Path) -> tuple[list[Path], bool, list[str]]:
     best = max(
         rows[:400],
         key=lambda r: float(
-            (np.asarray(Image.open(r["label"]).convert("L")) > 127).mean()
+            (np.asarray(Image.open(index_path(r["label"])).convert("L")) > 127).mean()
         ),
     )
     changed = float(
-        (np.asarray(Image.open(best["label"]).convert("L")) > 127).mean()
+        (np.asarray(Image.open(index_path(best["label"])).convert("L")) > 127).mean()
     )
 
     paths = []
     for role, key in (("t1", "a"), ("t2", "b")):
-        rgb = np.asarray(Image.open(best[key]).convert("RGB")).transpose(2, 0, 1)
+        rgb = np.asarray(Image.open(index_path(best[key])).convert("RGB")).transpose(2, 0, 1)
         paths.append(write_raster(
             directory / f"levir_{role}.tif",
             rgb,

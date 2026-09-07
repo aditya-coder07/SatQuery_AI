@@ -47,6 +47,7 @@ from training.common.checkpointing import (  # noqa: E402
     set_seed,
     write_run_metadata,
 )
+from training.common.paths import index_path  # noqa: E402
 
 # reBEN 10-band order (60 m atmospheric bands dropped, per docs/03 section 4.1).
 BAND_NAMES = [
@@ -86,7 +87,7 @@ class BigEarthNetS2:
         import rasterio
 
         row = self.rows[i]
-        with rasterio.open(row["s2"]) as src:
+        with rasterio.open(index_path(row["s2"])) as src:
             arr = src.read().astype("float32")  # (C, H, W)
 
         arr /= REFLECTANCE_SCALE
@@ -108,7 +109,7 @@ def compute_band_stats(rows: list[dict], sample: int = 400, seed: int = 0):
     picks = rng.choice(len(rows), size=min(sample, len(rows)), replace=False)
     acc = []
     for i in picks:
-        with rasterio.open(rows[int(i)]["s2"]) as src:
+        with rasterio.open(index_path(rows[int(i)]["s2"])) as src:
             acc.append(src.read().astype("float32").reshape(src.count, -1))
     stacked = np.concatenate(acc, axis=1) / REFLECTANCE_SCALE
     mean = stacked.mean(axis=1)
