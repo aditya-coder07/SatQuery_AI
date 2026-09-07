@@ -1,5 +1,24 @@
 # Session handoff — 2026-08-30 (post-freeze audit, and a data loss)
 
+> **Newer than this file — 2026-09-07.** This handoff is dated 2026-08-30 and
+> its numbers are the numbers of that day. Kept as written; superseded here.
+>
+> | | 2026-08-30 (below) | **2026-09-07** |
+> |---|---|---|
+> | Tests | 1,070 | **1,274 passed, 0 failed** |
+> | No-torch CI simulation | 851 passed, 32 skipped | **1,121 passed, 35 skipped, 0 failed** |
+> | Illegal plans | 0 / 600 | **0 / 600** (re-verified) |
+> | Demo bundle | 9 / 9 | **9 / 9** (was 8/9 for six days - see `docs/00` **L34**) |
+> | CDVQA | 0.5380 | **0.6061** - the earlier run was fed BGR images (`docs/research/cdvqa-baseline-correction-2026-09-03.md`) |
+> | Prescribed benchmarks | RSVQA-LR + CDVQA | **all three** - VRSBench evaluated zero-shot; `docs/00` **L11** closed |
+>
+> Also new: **`docs/checkpoint-decision.md`** - whether to deploy `track_b_v3`
+> over the deployed `track_b_v2`, what it would cost, and the four
+> preconditions. It is a decision document, not a decision; `v2` stays
+> deployed until someone acts on it. And **W16 is closed** - the six
+> specialist heads now have `--eval-only`, so re-measuring one no longer
+> overwrites the number being checked (`docs/00` **L35**).
+
 **Start here.** The project is past the Phase-4 code freeze and has since had a
 full-repository audit. Read `docs/phase4-status.md` first — its last section,
 §"Post-freeze audit", is the newest state — then `docs/code-freeze.md` for what
