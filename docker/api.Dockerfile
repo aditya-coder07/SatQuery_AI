@@ -51,4 +51,27 @@ RUN pip install --no-cache-dir \
     accelerate==1.14.0 \
     --extra-index-url https://download.pytorch.org/whl/cu126
 
+# Pre-warm the ImageNet ResNet-18 the change-VQA head's encoder is built from.
+# Without this the FIRST bi-temporal query in a FRESH container reaches out to
+# download.pytorch.org for resnet18-f37072fd.pth (46.8 MB) - measured
+# 2026-09-07 in a container built from this file - and a venue with no network
+# stalls on the demo's change beat. The weight only ever landed in the
+# container's writable layer, so every `compose down` + `up` paid for it again.
+#
+# HF_HUB_OFFLINE and TRANSFORMERS_OFFLINE do NOT cover this: the fetch is
+# torch.hub's, not HuggingFace's.
+#
+# The download is driven by the same torchvision call the head itself makes
+# (training/train_change_vqa.py:build_pretrained_model) rather than by curling
+# a URL into a guessed directory, so the file lands under exactly the name and
+# path torch.hub will later look for - and this layer fails loudly at build
+# time if torchvision ever changes either.
+#
+# TORCH_HOME is set so the cache sits at a fixed path in the image rather than
+# in a per-user home, and /opt/torch is chowned because the container runs as
+# `satquery`, not root.
+ENV TORCH_HOME=/opt/torch
+RUN python -c "from torchvision.models import ResNet18_Weights, resnet18; resnet18(weights=ResNet18_Weights.IMAGENET1K_V1)" \
+    && chown -R satquery:satquery /opt/torch
+
 USER satquery
