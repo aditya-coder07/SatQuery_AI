@@ -8,12 +8,13 @@ records what was measured, and states plainly what was not.
 
 ## What was measured — on the HOST, 2026-08-30
 
-> **These are host numbers and they are no longer the ones to plan against.**
-> The demo runs in a container, and one in-container pass measured **239.8 s
-> against this table's 118.5 s median** - near the slow end of the observed
-> host range (111.0-268.2 s), on a **single run**. See "In-container timings"
-> below, which supersedes this section for pacing. This section is kept
-> because it is a 20-run record and the container figures are n=1.
+> **Still broadly valid.** An earlier revision of this file claimed the
+> container was much slower and told you to plan against container numbers
+> instead. With n=4 that is **half right**: a *cold* container pass is slow
+> (224.6 s median), but a *warm* one is **131.4 s** - close to this table's
+> 118.5 s median and well inside its 111.0-268.2 s range. The difference is
+> cold start, not the container. See "In-container timings" below for the
+> per-beat picture and the one beat that genuinely overruns.
 
 `scripts/rehearse.py` executes every beat of the `docs/04` §10 script through
 the real controller, in the scripted order, and checks that each beat produces
@@ -52,9 +53,9 @@ claimed.
 | **5:40 the large scene, real Cartosat** | **55.36 s** | 60 s | ⚠ marginal |
 
 **The finding: the two real-Cartosat beats cost about 56 seconds each.**
-*(Superseded 2026-09-07 — in-container they cost **73.16 s** and **66.47 s**,
-and a third beat, the cross-modal flagship, joins them at **83.35 s**. See
-below.)* That
+*(Holds up in-container at n=4: single optical **63.0 s** median, large scene
+**57.4 s** median. An n=1 revision of this file briefly claimed a third slow
+beat; four runs showed that was cold start. See below.)* That
 is the full 7687×7640, four-band product going through ingest, tiling and the
 index engine — it is honest work, not a bug, and it is roughly the entire slot
 those beats have in a seven-minute script. Together they are **112 of the
@@ -76,82 +77,135 @@ under three seconds.
 The other seven beats total under 2 seconds, so the script has slack
 everywhere except here.
 
-## In-container timings — 2026-09-07. **Plan against these.**
+## In-container timings - 2026-09-07, **n=4**
 
-Measured with the same `scripts/rehearse.py`, unmodified, one pass per
-configuration, inside the running containers. **This is where the demo
-actually runs**, so these supersede the host figures above for pacing.
+Same `scripts/rehearse.py`, unmodified, four passes inside the running GPU
+container: one standalone pass, then a `--runs 3` invocation. The CPU column
+is a single pass, kept for the fallback comparison.
 
-**Caveat that travels with them: n=1 per configuration**, against the host
-table's median of ten. Treat individual beats as indicative and the shape -
-which beats dominate - as solid, because it reproduces the host's shape.
+**Read the cold/warm split before the numbers.** `--runs 3` executes all
+three passes in one process, so its first pass is cold and the other two are
+warm. Combined with the standalone pass, the four runs are **2 cold + 2
+warm** - and the two groups are not close to each other.
 
-| beat | slot | **GPU (in-container)** | CPU fallback | |
-|---|---|---|---|---|
-| 0:30 rejection - incompatible pair | 40 s | 0.29 s | 0.31 s | ✅ |
-| 0:30 rejection - PNG in operational mode | 40 s | 2.26 s | 0.03 s | ✅ |
-| **1:10 cross-modal flagship** | 70 s | **83.35 s** | 0.71 s | ❌ **over by 13.4 s** |
-| **2:20 single optical, real Cartosat** | 50 s | **73.16 s** | 48.48 s | ❌ **over by 23.2 s** |
-| 2:20 single SAR, real EOS-04 | 50 s | 11.59 s | 7.58 s | ✅ |
-| 3:10 bi-temporal - what changed and where | 60 s | 0.88 s | 0.22 s | ✅ |
-| 3:10 bi-temporal - increased or decreased | 60 s | 0.91 s | 0.18 s | ✅ |
-| 4:50 abstention - clouded optical | 50 s | 0.89 s | 0.56 s ⚠ **answers, does not abstain** - see `docs/00` **L36** | ✅ |
-| **5:40 the large scene** | 60 s | **66.47 s** | 46.10 s | ❌ **over by 6.5 s** |
-| **total system time** | | **239.80 s** | **104.17 s** | |
+| | total system time |
+|---|---|
+| Cold passes (2) | 239.8 s, 209.5 s - **median 224.6 s** |
+| **Warm passes (2)** | 132.7 s, 130.2 s - **median 131.4 s** |
+| **All four** | **median 171.1 s**, range **130.2-239.8 s** |
+| Host, for comparison (10 runs) | median 118.5 s, range 111.0-268.2 s |
 
-All nine beats produced their scripted result in both configurations.
+**A warm container is close to the host** - 131.4 s against 118.5 s - and
+every one of the four runs sits inside the host's own observed range. The
+slowness is **cold start**, not the container.
+
+### Per-beat, four runs
+
+| beat | slot | cold | cold | warm | warm | **median** | over slot |
+|---|---|---|---|---|---|---|---|
+| 0:30 rejection - incompatible pair | 40 s | 0.29 | 0.20 | 0.17 | 0.11 | **0.19** | 0/4 |
+| 0:30 rejection - PNG in operational mode | 40 s | 2.26 | 1.94 | 0.19 | 0.17 | **1.06** | 0/4 |
+| 1:10 cross-modal flagship | 70 s | 83.34 | 69.48 | 4.25 | 4.14 | **36.87** | **1/4** |
+| **2:20 single optical, real Cartosat** | 50 s | 73.16 | 67.68 | 58.33 | 55.13 | **63.01** | **4/4** ❌ |
+| 2:20 single SAR, real EOS-04 | 50 s | 11.59 | 11.21 | 12.61 | 11.18 | **11.40** | 0/4 |
+| 3:10 bi-temporal - what changed and where | 60 s | 0.88 | 0.67 | 0.33 | 0.39 | **0.53** | 0/4 |
+| 3:10 bi-temporal - increased or decreased | 60 s | 0.91 | 0.88 | 0.42 | 0.33 | **0.65** | 0/4 |
+| 4:50 abstention - clouded optical | 50 s | 0.89 | 0.67 | 0.91 | 0.66 | **0.78** | 0/4 |
+| 5:40 the large scene | 60 s | 66.47 | 56.75 | 55.52 | 58.02 | **57.39** | **1/4** |
+
+All nine beats produced their scripted result in all four runs.
+
+### Exactly one beat overruns consistently
+
+* **2:20 single optical, real Cartosat - over in 4 of 4**, median 63.0 s
+  against a 50 s slot. This is the real one. Plan for it every time.
+* **1:10 cross-modal flagship - over in 1 of 4.** Cold it costs 69-83 s;
+  warm it costs **4.2 s**, a 17x swing. Nearly all of that beat's apparent
+  cost was first-call model initialisation, not the fusion work.
+* **5:40 the large scene - over in 1 of 4**, and its median of 57.4 s is
+  *inside* its 60 s slot. Marginal, as the host record already said.
+
+### Warming works - but only through the API, and this was measured
+
+**The single highest-value thing you can do is warm the API before the demo.**
+Both halves of that sentence were verified rather than inferred, because the
+first version of this note was inferred and was wrong.
+
+| what was tested | result |
+|---|---|
+| Throwaway CLI query, then `rehearse.py` in a **new** process | **219.9 s - a cold run.** Cross-modal came back at 81.3 s, no benefit at all |
+| **Cross-modal beat POSTed to `/runs` three times, same container** | **70.0 s, then 3.8 s, then 3.6 s** |
+
+**Why the difference:** the tool model handles are per-process singletons, and
+`docker compose exec` starts a fresh process every time - so a CLI warm-up
+warms a process that then exits. The API is one long-lived `uvicorn` process
+serving every request, so warming it warms the thing that actually serves the
+demo. **The demo drives the API, so warming applies.**
+
+**Warm with the cross-modal input specifically.** A warm-up only warms the
+tools it touches: a caption query does not load `optsar_fusion_v1`, and the
+cross-modal beat is the one with the 18x swing. One POST of the cross-modal
+pair before the judges walk in is the whole mitigation.
+
+Warmed, the total drops to roughly **131 s** (the two warm `rehearse.py`
+passes, same mechanism, in-process) from ~225 s cold, and takes two of the
+three "slow" beats off the board.
+
+### Filler cues
+
+**Needed every run:**
+
+* **2:20 single optical, real Cartosat (63 s median, 50 s slot).**
+  *While this runs, say:* "This is a real Cartosat-2S product, 7687 by 7640
+  pixels, four bands, going through ingest, tiling and the index engine. Most
+  of this wait is reading the scene off disk, not the model - we measured it
+  at 48 seconds with every learned tool switched off. It is the price of not
+  substituting a synthetic image for the sensor you actually care about."
+
+**Cold-start contingency only** - if the stack was not warmed, or the venue
+machine restarts it between beats:
+
+* **1:10 cross-modal flagship (4 s warm, up to 83 s cold).**
+  *While this runs, say:* "It is computing the triad - optical alone, SAR
+  alone, and fused - as three separate passes, because that is the only way
+  to measure whether fusion actually helps. Ours says it does not: optical
+  0.7778, fused 0.7714, a gain of minus 0.0064. We report all three rather
+  than one fused number that hides it."
+* **5:40 the large scene (57 s median, 60 s slot - usually fits).**
+  *While this runs, say:* "Same product path, and while it works: every
+  neural claim in the answer is checked against NDVI, NDWI, NDBI and SAR
+  backscatter computed deterministically from the pixels. The verifier has no
+  opinion and no training - it is arithmetic - which is what makes a
+  confident wrong answer catchable rather than merely unlikely."
+
+**Still the better option where it is available:** pre-warm the two
+real-product runs before the demo and show the stored `/runs/{id}`
+permalinks, as the host section recommends. The cues are for when a judge
+asks to see it run live.
 
 ### The slot math
 
 | | |
 |---|---|
 | Demo slot | **420 s** (7 minutes) |
-| System time, in-container GPU | **239.80 s** - **57% of the slot** |
-| System time, on the host (for comparison) | 118.5 s - 28% |
-| **Left for narration** | **180 s (3:00)** across nine beats, down from 5:02 |
+| System time, warm container | **131.4 s** - 31% of the slot |
+| System time, n=4 median | **171.1 s** - 41% |
+| System time, cold container | 224.6 s - 53% |
+| **Left for narration, warm** | **289 s (4:49)** across nine beats |
 
-**The seven-minute script still fits end to end** - 239.8 s of 420 s - but it
-no longer fits *as written*, because the three beats above overrun their own
-slots by **43.0 s combined**. Everything scheduled after 1:10 drifts late by
-that much unless the narration below absorbs it. The other six beats total
-**6.5 s**, so there is no slack to borrow from anywhere else.
+**Warmed, the seven-minute script fits comfortably** - 131.4 s of 420 s, with
+4:49 for narration, which is close to the 5:02 the host figures implied. The
+one structural problem that survives four runs is the single-optical beat,
+**13 s over its slot at the median**; the narration cue above is sized to
+cover it. Cold, the script still fits end to end at 224.6 s but the two
+cold-only beats push everything after 1:10 late.
 
-Two facts worth knowing before optimising the wrong thing:
+### CPU fallback, single pass
 
-* **The Cartosat cost is raster I/O, not inference.** That beat still takes
-  48.5 s with every learned tool stubbed, so roughly two thirds of it is
-  reading a 7687x7640 four-band product off disk.
-* **The cross-modal cost is entirely the model.** 83.35 s on GPU against
-  0.71 s stubbed.
-
-### Filler cues for the three over-budget beats
-
-The pauses are real work and they are long enough to be uncomfortable in
-silence. One talking point each, all of them things the audience should hear
-anyway:
-
-* **1:10 cross-modal flagship (83 s).** *While this runs, say:* "It is
-  computing the triad - optical alone, SAR alone, and fused - as three
-  separate passes, because that is the only way to measure whether fusion
-  actually helps. Ours says it does not: optical 0.7778, fused 0.7714, a gain
-  of minus 0.0064. We report all three rather than one fused number that
-  hides it."
-* **2:20 single optical, real Cartosat (73 s).** *While this runs, say:*
-  "This is a real Cartosat-2S product, 7687 by 7640 pixels, four bands, going
-  through ingest, tiling and the index engine. Most of this wait is reading
-  the scene off disk, not the model - we measured it at 48 seconds with every
-  learned tool switched off. It is the price of not substituting a synthetic
-  image for the sensor you actually care about."
-* **5:40 the large scene (66 s).** *While this runs, say:* "Same product
-  path, and while it works: every neural claim in the answer is checked
-  against NDVI, NDWI, NDBI and SAR backscatter computed deterministically
-  from the pixels. The verifier has no opinion and no training - it is
-  arithmetic - which is what makes a confident wrong answer catchable rather
-  than merely unlikely."
-
-**Still the better option where it is available:** pre-warm the two real-product
-runs before the demo and show the stored `/runs/{id}` permalinks, as the host
-section recommends. The cues above are for when a judge asks to see it run live.
+104.2 s total, zero beats over slot, all nine correct - the stubs skip the
+model work, so the fallback is *faster* than the real system. Worth knowing
+before a judge notices. `clouded_optical` **answers rather than abstains**
+there; see `docs/00` **L36** and the do-not-present note on deck Slide 5.
 
 ## What was NOT measured, and is not done
 
