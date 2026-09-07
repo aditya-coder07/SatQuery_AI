@@ -50,6 +50,10 @@ Live: optical + SAR, the PS's own query —
 *"Use the optical and SAR images together to identify built-up and
 water-covered regions."*
 
+⏱ **This beat takes ~83 s in-container (slot: 70 s).** Do not wait in
+silence — the "say the fusion result honestly" paragraph below is what to say
+*while it runs*, not after. Full cue in `docs/rehearsal.md`.
+
 Point at the trace as it fills: `index_engine_v1` → `optsar_fusion_v1` (triad)
 → narrative. Then at the line reading *"NDBI unavailable on this 4-band
 product; built-up via SAR σ⁰ + optical texture."*
@@ -205,7 +209,23 @@ and verifies all nine beats; `scripts/rehearse.py` runs the whole sequence ten
 times and reports per-beat timings. The recording is a session, not a
 construction task.
 
-**One timing fact to plan around, measured over ten rehearsals:** the two beats
-that use the real Cartosat product take about **56 seconds each** of system
-time — over their slots in the seven-minute script. Either pre-warm those runs
-and show stored permalinks, or budget the silence. See `docs/rehearsal.md`.
+**One timing fact to plan around — updated 2026-09-07 to in-container GPU
+numbers, which is where the demo actually runs.** The old figure here said the
+two real-Cartosat beats take "about 56 seconds each", measured on the host.
+In-container the picture is worse and there are **three** slow beats, not two:
+
+| beat | slot | in-container GPU | |
+|---|---|---|---|
+| 1:10 cross-modal flagship | 70 s | **83.35 s** | over by 13.4 s |
+| 2:20 single optical, real Cartosat | 50 s | **73.16 s** | over by 23.2 s |
+| 5:40 the large scene | 60 s | **66.47 s** | over by 6.5 s |
+
+**Total system time is 239.8 s of the 420 s slot — 57%**, against 118.5 s on
+the host. The script still fits end to end, but it no longer fits as written:
+those three beats overrun by **43 s combined**, so everything after 1:10 drifts
+late unless the narration absorbs it. The other six beats total 6.5 s, so there
+is no slack elsewhere.
+
+Either pre-warm the two real-product runs and show stored permalinks, or use
+the **filler cues in `docs/rehearsal.md` §"Filler cues for the three
+over-budget beats"** — one talking point per pause, so the wait has content.
