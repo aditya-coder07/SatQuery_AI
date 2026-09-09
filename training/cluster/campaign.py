@@ -282,7 +282,35 @@ class Campaign:
 
     # --- scheduling ---------------------------------------------------------
 
-    def ready(self) -> list[str]:
+    def data_missing(self, run_id: str) -> list[str]:
+        """Datasets this run needs that are not on disk yet.
+
+        A PRESENCE check, not a digest check: this runs before every
+        scheduling decision and re-hashing 66 GB each time would cost more
+        than the training. `stage_data.py verify` remains the real gate and is
+        run once, deliberately, before the campaign starts.
+
+        Without this the scheduler asks only "are my dependencies done?", so
+        while a transfer is still in flight it starts a run whose data has not
+        arrived, the trainer dies at the first open, and the run is marked
+        `failed` - a status this queue deliberately never retries. Ten minutes
+        of missing data would cost the run entirely.
+        """
+        from training.cluster import stage_data
+
+        root = Path(os.environ.get("SATQUERY_DATA_ROOT", REPO_ROOT / "data"))
+        missing = []
+        for key in self.runs[run_id].needs_data:
+            dataset = stage_data.BY_KEY.get(key)
+            if dataset is None:
+                missing.append(f"{key} (unknown dataset)")
+                continue
+            path = root / dataset.subdir
+            if not path.is_dir() or not any(path.iterdir()):
+                missing.append(key)
+        return missing
+
+    def ready(self, check_data: bool = True) -> list[str]:
         """Runs that could start now, in dependency order."""
         out = []
         for run_id in self._toposort():
@@ -290,8 +318,11 @@ class Campaign:
             if state.status not in RESUMABLE:
                 continue
             deps = self.runs[run_id].depends_on
-            if all(self.state[d].status == DONE for d in deps):
-                out.append(run_id)
+            if not all(self.state[d].status == DONE for d in deps):
+                continue
+            if check_data and self.data_missing(run_id):
+                continue
+            out.append(run_id)
         return out
 
     def remaining_minutes(self, run_id: str) -> float:
@@ -366,6 +397,17 @@ class Campaign:
         if state.status == RUNNING and state.owner_alive():
             print(f"'{run_id}' is already running (host={state.owner_host} "
                   f"pid={state.owner_pid}); refusing to start a second copy")
+            return 1
+
+        # Refuse rather than fail. A run started without its data dies at the
+        # first file open and is recorded `failed`, which this queue never
+        # retries - so a transfer that had not finished would cost the run.
+        missing = self.data_missing(run_id)
+        if missing:
+            print(f"'{run_id}' needs data that is not on disk yet: "
+                  f"{', '.join(missing)}")
+            print("    not starting it; it stays pending and will be picked up "
+                  "once the data arrives")
             return 1
 
         resume = state.attempts > 0
@@ -551,10 +593,18 @@ class Campaign:
             if state.status == DONE:
                 done += 1
             hours = state.seconds / 3600
+            shown = state.status
+            missing = self.data_missing(run_id) if state.status in RESUMABLE else []
+            if missing:
+                # Distinguishable from `pending`, because "waiting for a
+                # transfer" and "waiting for its turn" want different actions.
+                shown = "no-data"
             lines.append(
-                f"{run_id:<18} {run.tool:<20} {state.status:<12} "
+                f"{run_id:<18} {run.tool:<20} {shown:<12} "
                 f"{state.attempts:<9} {hours:<7.2f} {', '.join(run.depends_on) or '-'}"
             )
+            if missing:
+                lines.append(f"    waiting for: {', '.join(missing)}")
             if state.error:
                 lines.append(f"    {state.error}")
         total = sum(s.seconds for s in self.state.values()) / 3600

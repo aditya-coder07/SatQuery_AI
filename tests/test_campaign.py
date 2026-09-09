@@ -543,3 +543,63 @@ def test_watch_reports_from_disk_not_from_being_the_parent(tmp_path, capsys):
     observer = _campaign_with(script, state_dir, 30)
     assert observer.state["noisy"].status == DONE
     assert "step 29" in observer.tail("noisy", lines=5)
+
+
+# --- Data-aware scheduling --------------------------------------------------
+
+
+def _campaign_with_data(tmp_path, monkeypatch, present: list[str]):
+    """A campaign whose runs need real dataset keys, with `present` on disk."""
+    import training.cluster.campaign as campaign_module
+
+    root = tmp_path / "data"
+    for key in present:
+        subdir = root / stage_data.BY_KEY[key].subdir
+        subdir.mkdir(parents=True, exist_ok=True)
+        (subdir / "file.bin").write_bytes(b"x")
+    monkeypatch.setenv("SATQUERY_DATA_ROOT", str(root))
+    monkeypatch.setattr(campaign_module, "REPO_ROOT", REPO, raising=False)
+
+    config = minimal_config()
+    config["runs"][0]["needs_data"] = ["ben_full"]
+    config["runs"][2]["needs_data"] = ["levircd"]
+    return Campaign(config, tmp_path / "state")
+
+
+def test_runs_without_their_data_are_not_scheduled(tmp_path, monkeypatch):
+    """The regression this exists for.
+
+    While 66 GB is still transferring, the scheduler must not start a run
+    whose data has not landed. The trainer would die at the first file open
+    and the run would be recorded `failed` - a status the queue never retries,
+    so ten minutes of missing data would cost the whole run.
+    """
+    campaign = _campaign_with_data(tmp_path, monkeypatch, present=["levircd"])
+    ready = campaign.ready()
+    assert "c" in ready, "levircd is present, so run c is startable"
+    assert "a" not in ready, "ben_full is absent, so run a must not start"
+
+
+def test_data_arriving_unblocks_the_run(tmp_path, monkeypatch):
+    campaign = _campaign_with_data(tmp_path, monkeypatch, present=["levircd"])
+    assert "a" not in campaign.ready()
+
+    subdir = tmp_path / "data" / stage_data.BY_KEY["ben_full"].subdir
+    subdir.mkdir(parents=True, exist_ok=True)
+    (subdir / "shard.h5").write_bytes(b"x")
+    assert "a" in campaign.ready()
+
+
+def test_an_empty_dataset_directory_counts_as_missing(tmp_path, monkeypatch):
+    """`mkdir` happens before the bytes arrive; a directory is not the data."""
+    campaign = _campaign_with_data(tmp_path, monkeypatch, present=["levircd"])
+    (tmp_path / "data" / stage_data.BY_KEY["ben_full"].subdir).mkdir(
+        parents=True, exist_ok=True)
+    assert campaign.data_missing("a") == ["ben_full"]
+
+
+def test_launch_refuses_a_run_whose_data_is_absent(tmp_path, monkeypatch):
+    campaign = _campaign_with_data(tmp_path, monkeypatch, present=["levircd"])
+    assert campaign.launch("a", dry_run=True) == 1
+    # And crucially it stays pending rather than being recorded as failed.
+    assert campaign.state["a"].status == PENDING
