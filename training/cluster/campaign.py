@@ -180,8 +180,46 @@ class Run:
     resume_flag: str = "--resume"
     note: str = ""
 
-    def command(self, python: str, resume: bool, extra: list[str] | None = None) -> list[str]:
-        cmd = [python, str(REPO_ROOT / self.script), *self.args, *(extra or [])]
+    def accepts_batch_size(self) -> bool:
+        """Does the target script actually declare `--batch-size`?
+
+        Injecting a flag a script does not define turns a working run into an
+        argparse error, so this is checked against the source rather than
+        assumed. All eight current trainers declare it; the check exists
+        because the ninth might not, and the failure would look like the
+        campaign being broken rather than one flag being wrong.
+        """
+        script = REPO_ROOT / self.script
+        try:
+            return 'add_argument("--batch-size"' in script.read_text(
+                encoding="utf-8", errors="replace")
+        except OSError:
+            return False
+
+    def command(self, python: str, resume: bool, extra: list[str] | None = None,
+                batch_size: int | None = None) -> list[str]:
+        """The command line for this run, sized to the card it will run on.
+
+        `batch_size` comes from `env_probe.recipe_for(self.family, profile)`
+        and is appended only when the config does not name one itself.
+
+        THE GAP THIS CLOSES
+
+        `env_probe` computed a batch shape from the free VRAM and nothing ever
+        used it: `configs/campaign.yaml` carried `--batch-size 64`, so the
+        probe was an elaborate way of printing a number. On the lab GPU, with
+        ~10 GB free and a stem that reshapes to `batch x 12 bands`, that 64
+        became 768 images in one forward pass and `track_a` died on an OOM
+        after loading 43 GB of shards.
+
+        A run may still pin its own batch size - that wins, because a config
+        that says 64 should get 64 - but the default is now the measurement.
+        """
+        args = list(self.args)
+        if (batch_size is not None and "--batch-size" not in args
+                and self.accepts_batch_size()):
+            args += ["--batch-size", str(batch_size)]
+        cmd = [python, str(REPO_ROOT / self.script), *args, *(extra or [])]
         if resume and self.resume_flag:
             cmd.append(self.resume_flag)
         return cmd
@@ -217,6 +255,7 @@ class Campaign:
         self.state_dir = Path(state_dir)
         self.state_path = self.state_dir / "campaign_state.json"
         self.state: dict[str, RunState] = {}
+        self._gpu_profile = None      # probed lazily, once
         self._validate()
         self.load()
 
@@ -427,6 +466,24 @@ class Campaign:
 
     # --- execution ----------------------------------------------------------
 
+    def batch_size_for(self, run: Run) -> int | None:
+        """Micro-batch for this run, measured from the card it will run on.
+
+        Probed once per campaign object and cached: `mem_get_info` is cheap
+        but importing torch is not, and a queue that re-imports it per
+        scheduling decision spends real time on it.
+
+        Returns None when there is no GPU or the family has no recipe, in
+        which case the trainer keeps its own default.
+        """
+        from training.cluster.env_probe import BASE_RECIPES, probe, recipe_for
+
+        if self._gpu_profile is None:
+            self._gpu_profile = probe(REPO_ROOT)
+        if not self._gpu_profile.available or run.family not in BASE_RECIPES:
+            return None
+        return recipe_for(run.family, self._gpu_profile)["micro_batch"]
+
     def launch(self, run_id: str, python: str = sys.executable,
                extra: list[str] | None = None, dry_run: bool = False,
                echo: str = "throttled", echo_every_s: float = 30.0) -> int:
@@ -464,7 +521,8 @@ class Campaign:
             return 1
 
         resume = state.attempts > 0
-        cmd = run.command(python, resume=resume, extra=extra)
+        cmd = run.command(python, resume=resume, extra=extra,
+                          batch_size=self.batch_size_for(run))
 
         log_dir = self.state_dir / "logs"
         log_dir.mkdir(parents=True, exist_ok=True)

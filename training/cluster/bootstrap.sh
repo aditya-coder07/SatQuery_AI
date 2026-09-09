@@ -140,8 +140,14 @@ if [ -n "$missing" ]; then
     say "    # then pick the matching wheel index, e.g. for CUDA 12.1:"
     say "    pip install torch --index-url https://download.pytorch.org/whl/cu121"
     say ""
-    say "  Only track_b_vqa needs peft/bitsandbytes/transformers/accelerate;"
-    say "  every other run trains without them."
+    say "  track_b_vqa additionally needs:"
+    say "    pip install peft bitsandbytes accelerate datasets transformers"
+    say "    pip install torchvision --index-url https://download.pytorch.org/whl/cu124"
+    say ""
+    say "  torchvision is not optional there despite no video being involved:"
+    say "  transformers 5.x resolves Qwen2.5-VL through a processor that pulls"
+    say "  in Qwen2VLVideoProcessor, which hard-requires it. Every other run"
+    say "  trains without any of these."
 fi
 
 head2 "DATA"

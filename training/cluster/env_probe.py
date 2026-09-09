@@ -204,6 +204,12 @@ def probe(data_root: str | Path = ".") -> GpuProfile:
 
 BASE_RECIPES: dict[str, dict] = {
     "encoder": {"micro_batch": 32, "grad_accum": 1, "workers": 4},
+    # Track A's stem reshapes to (batch * bands, 1, H, W), so activation
+    # memory scales with batch x 12, not batch. `track_a_full.py` says so in a
+    # comment and the v1 defaults respected it; the v2 residual stem makes it
+    # worse again. Measured: batch 64 became 768 images in one forward pass
+    # and OOMed on a card with ~10 GB free. Effective batch stays 32.
+    "encoder_multiband": {"micro_batch": 8, "grad_accum": 4, "workers": 4},
     "vlm_qlora": {"micro_batch": 1, "grad_accum": 16, "workers": 2},
     "grounding": {"micro_batch": 32, "grad_accum": 1, "workers": 4},
     "change": {"micro_batch": 16, "grad_accum": 1, "workers": 4},

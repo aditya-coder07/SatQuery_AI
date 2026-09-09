@@ -712,3 +712,83 @@ def test_a_live_owner_is_never_reclaimed_however_old_the_heartbeat(tmp_path):
     state.owner_pid = os.getpid()
     state.heartbeat = time.time() - 100_000
     assert not state.is_stale()
+
+
+# --- Batch size comes from the card, not the config -------------------------
+
+
+def test_command_appends_the_measured_batch_size(tmp_path):
+    """The gap this closes: env_probe computed a size nothing ever used.
+
+    `configs/campaign.yaml` pinned `--batch-size 64`, so the probe was an
+    elaborate way of printing a number. On the lab GPU with ~10 GB free and a
+    stem that reshapes to `batch x 12 bands`, that 64 became 768 images in one
+    forward pass and track_a OOMed after loading 43 GB of shards.
+    """
+    campaign = Campaign(minimal_config(), tmp_path)
+    cmd = campaign.runs["a"].command("python", resume=False, batch_size=8)
+    assert "--batch-size" in cmd
+    assert cmd[cmd.index("--batch-size") + 1] == "8"
+
+
+def test_a_config_that_pins_its_batch_size_wins(tmp_path):
+    """An explicit 64 in the config must not be silently overridden."""
+    config = minimal_config()
+    config["runs"][0]["args"] = ["--batch-size", "64"]
+    campaign = Campaign(config, tmp_path)
+    cmd = campaign.runs["a"].command("python", resume=False, batch_size=8)
+    assert cmd.count("--batch-size") == 1
+    assert cmd[cmd.index("--batch-size") + 1] == "64"
+
+
+def test_no_batch_size_is_appended_without_a_gpu(tmp_path):
+    """On CPU the trainer's own default is the right answer."""
+    campaign = Campaign(minimal_config(), tmp_path)
+    cmd = campaign.runs["a"].command("python", resume=False, batch_size=None)
+    assert "--batch-size" not in cmd
+
+
+def test_multiband_family_is_smaller_than_the_plain_encoder():
+    """Track A's activation memory scales with batch x bands, not batch."""
+    from training.cluster.env_probe import BASE_RECIPES
+
+    plain = BASE_RECIPES["encoder"]
+    multiband = BASE_RECIPES["encoder_multiband"]
+    assert multiband["micro_batch"] < plain["micro_batch"]
+    # ...but the effective batch is unchanged, so the two stay comparable.
+    assert (multiband["micro_batch"] * multiband["grad_accum"]
+            == plain["micro_batch"] * plain["grad_accum"])
+
+
+def test_every_campaign_family_has_a_recipe():
+    """A family with no recipe silently falls back to the trainer's default."""
+    import yaml
+
+    from training.cluster.env_probe import BASE_RECIPES
+
+    config = yaml.safe_load((REPO / "configs/campaign.yaml").read_text(encoding="utf-8"))
+    for run in config["runs"]:
+        assert run["family"] in BASE_RECIPES, \
+            f"{run['id']}: family '{run['family']}' has no batch recipe"
+
+
+def test_batch_size_is_not_injected_into_a_script_that_lacks_the_flag(tmp_path):
+    """Injecting an undeclared flag turns a working run into an argparse error.
+
+    Caught by the echo tests, whose synthetic script takes no arguments: every
+    one of them started failing the moment auto-sizing was added.
+    """
+    script = tmp_path / "plain.py"
+    script.write_text("import sys\nprint('hi')\n", encoding="utf-8")
+    config = minimal_config()
+    config["runs"][0]["script"] = str(script)
+    campaign = Campaign(config, tmp_path / "state")
+    cmd = campaign.runs["a"].command("python", resume=False, batch_size=8)
+    assert "--batch-size" not in cmd
+
+
+def test_all_campaign_scripts_accept_the_flag_they_will_be_given(tmp_path):
+    campaign = load_campaign("configs/campaign.yaml", tmp_path)
+    for run in campaign.runs.values():
+        assert run.accepts_batch_size(), \
+            f"{run.id}: {run.script} does not declare --batch-size"

@@ -39,7 +39,7 @@ runs:
   # smaller than the published comparison suggests.
   - id: track_a
     tool: landcover_v1
-    family: encoder
+    family: encoder_multiband
     script: training/track_a_full.py
     needs_data: [ben_full]
     depends_on: []
@@ -58,8 +58,6 @@ runs:
       - v2
       - --epochs
       - "12"
-      - --batch-size
-      - "64"
       - --lr
       - "0.0005"
       - --dim
@@ -75,7 +73,7 @@ runs:
   # does not re-run it inherits an unestablished claim.
   - id: track_a_nodropout
     tool: landcover_v1
-    family: encoder
+    family: encoder_multiband
     script: training/track_a_full.py
     needs_data: [ben_full]
     depends_on: [track_a]
@@ -91,8 +89,6 @@ runs:
       - v2
       - --epochs
       - "12"
-      - --batch-size
-      - "64"
       - --lr
       - "0.0005"
       - --dim
@@ -224,8 +220,6 @@ runs:
       - v2
       - --epochs
       - "40"
-      - --batch-size
-      - "48"
       - --lr
       - "0.0003"
       - --dim
