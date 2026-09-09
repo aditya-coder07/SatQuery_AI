@@ -61,6 +61,13 @@ class GpuProfile:
     name: str = "cpu"
     capability: tuple[int, int] | None = None
     vram_gb: float = 0.0
+    # What is actually available right now, which on a shared card is a very
+    # different number from `vram_gb`. Measured on the AI Lab L40S: 46.1 GB
+    # total, 11.4 GB free, because two other students' jobs held the rest.
+    # Sizing a batch from the total there does not use the card well, it OOMs
+    # on the first step.
+    free_vram_gb: float = 0.0
+    other_processes: int = 0
     torch_version: str | None = None
     cuda_version: str | None = None
     bf16: bool = False
@@ -68,6 +75,18 @@ class GpuProfile:
     host: str = field(default_factory=platform.node)
     free_disk_gb: float = 0.0
     notes: list[str] = field(default_factory=list)
+
+    @property
+    def usable_vram_gb(self) -> float:
+        """The number every batch decision is made from.
+
+        Free memory, not total. A shared GPU is the normal case in a college
+        lab and the free figure moves between sessions, so it is measured at
+        run time and recorded in the run metadata rather than assumed once.
+        """
+        if not self.available:
+            return 0.0
+        return self.free_vram_gb if self.free_vram_gb > 0 else self.vram_gb
 
     @property
     def dtype_name(self) -> str:
@@ -138,6 +157,22 @@ def probe(data_root: str | Path = ".") -> GpuProfile:
     profile.capability = (props.major, props.minor)
     profile.vram_gb = props.total_memory / 1e9
 
+    # Free VRAM, and who else is on the card. `mem_get_info` reports what the
+    # driver will actually hand out, so it already accounts for other users'
+    # allocations - which `total_memory` does not.
+    try:
+        free_bytes, _total = torch.cuda.mem_get_info(0)
+        profile.free_vram_gb = free_bytes / 1e9
+    except Exception as exc:  # pragma: no cover - driver dependent
+        profile.notes.append(f"could not read free VRAM ({exc}); using total")
+
+    if profile.free_vram_gb and profile.free_vram_gb < profile.vram_gb * 0.9:
+        used = profile.vram_gb - profile.free_vram_gb
+        profile.notes.append(
+            f"SHARED CARD: {used:.1f} of {profile.vram_gb:.1f} GB already in use "
+            f"by other processes; sizing batches from the {profile.free_vram_gb:.1f} GB free"
+        )
+
     profile.bf16 = profile.capability >= AMPERE
     if not profile.bf16:
         profile.notes.append(
@@ -201,7 +236,11 @@ def recipe_for(job_family: str, profile: GpuProfile) -> dict:
     # Claim only 80% of the headroom: VRAM is not the only limit (activation
     # memory grows with sequence length too), and a run that OOMs at hour
     # three has cost more than a run that used 70% of the card.
-    ratio = profile.vram_gb / REFERENCE_VRAM_GB * 0.8
+    #
+    # `usable_vram_gb` is FREE memory, not total. On a shared lab GPU those
+    # differ by a factor of four, and the free figure is the only one that
+    # predicts whether the first step survives.
+    ratio = profile.usable_vram_gb / REFERENCE_VRAM_GB * 0.8
 
     if ratio >= 1.0:
         scale = float(min(MAX_SCALE, int(ratio)))
@@ -254,7 +293,8 @@ def main() -> int:
         print(f"host          {profile.host}")
         print(f"gpu           {profile.name} x{profile.device_count}")
         print(f"capability    {cap}")
-        print(f"vram          {profile.vram_gb:.1f} GB")
+        print(f"vram          {profile.vram_gb:.1f} GB total, "
+              f"{profile.free_vram_gb:.1f} GB free")
         print(f"free disk     {profile.free_disk_gb:.1f} GB")
         print(f"torch / cuda  {profile.torch_version} / {profile.cuda_version}")
         print(f"dtype         {profile.dtype_name}")

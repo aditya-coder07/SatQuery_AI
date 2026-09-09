@@ -289,6 +289,32 @@ def test_small_card_shrinks_the_micro_batch():
         BASE_RECIPES["encoder"]["micro_batch"]
 
 
+def test_batches_are_sized_from_free_vram_not_total():
+    """The AI Lab L40S: 46.1 GB total, 11.4 GB free, two other students' jobs.
+
+    Sizing from the total would ask for roughly four times the memory the
+    driver will actually hand out, and the run dies on its first step - after
+    the data has loaded, which is the expensive way to find out.
+    """
+    shared = GpuProfile(available=True, device_count=1, name="NVIDIA L40S",
+                        capability=(8, 9), vram_gb=46.1, free_vram_gb=11.4,
+                        bf16=True)
+    idle = GpuProfile(available=True, device_count=1, name="NVIDIA L40S",
+                      capability=(8, 9), vram_gb=46.1, free_vram_gb=46.1,
+                      bf16=True)
+    assert (recipe_for("encoder", shared)["micro_batch"]
+            < recipe_for("encoder", idle)["micro_batch"])
+
+
+def test_free_vram_falls_back_to_total_when_unreadable():
+    """`mem_get_info` can fail on an odd driver; that must not mean zero batch."""
+    profile = GpuProfile(available=True, device_count=1, name="card",
+                         capability=(8, 0), vram_gb=24.0, free_vram_gb=0.0,
+                         bf16=True)
+    assert profile.usable_vram_gb == 24.0
+    assert recipe_for("encoder", profile)["micro_batch"] >= 1
+
+
 def test_pre_ampere_gets_fp16_and_no_flash_attention():
     turing = GpuProfile(available=True, device_count=1, name="Tesla T4",
                         capability=(7, 5), vram_gb=16.0, bf16=False)
