@@ -390,9 +390,26 @@ def test_partial_staging_reports_which_runs_are_unblocked(tmp_path):
     make_dataset(tmp_path, "levircd")
     manifest = stage_data.build_manifest(tmp_path, progress=False)
     verdicts = stage_data.verify(tmp_path, manifest)
-    ready, blocked = stage_data.runs_unblocked(verdicts)
+    ready, blocked, unchecked = stage_data.runs_unblocked(verdicts)
     assert "change_mask" in ready
     assert "track_a" in blocked
+
+
+def test_datasets_not_checked_are_not_reported_as_blocked(tmp_path):
+    """`--only` checks a subset; the rest are unknown, not failed.
+
+    Running `verify --only second rsvqa_lr_2k` on the lab box reported all ten
+    runs blocked immediately after both datasets had *passed*. A gate that
+    reports a false failure gets ignored, which costs more than no gate.
+    """
+    make_dataset(tmp_path, "levircd")
+    manifest = stage_data.build_manifest(tmp_path, ["levircd"], progress=False)
+    verdicts = stage_data.verify(tmp_path, manifest, ["levircd"])
+
+    ready, blocked, unchecked = stage_data.runs_unblocked(verdicts)
+    assert "change_mask" in ready
+    assert blocked == [], "nothing failed, so nothing may be reported as blocked"
+    assert "track_a" in unchecked
 
 
 def test_every_campaign_run_maps_to_a_known_dataset():

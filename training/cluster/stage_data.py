@@ -310,19 +310,39 @@ def verify(root: Path, manifest: dict, keys: list[str] | None = None,
     return verdicts
 
 
-def runs_unblocked(verdicts: dict[str, Verdict]) -> tuple[list[str], list[str]]:
-    """Which campaign runs the present data allows, and which it does not.
+def runs_unblocked(
+    verdicts: dict[str, Verdict],
+) -> tuple[list[str], list[str], list[str]]:
+    """Which campaign runs the verified data allows: ready, blocked, unchecked.
 
     A partial transfer is the normal state during a staging window, and the
     useful question then is not "is the data complete" but "can I start
-    anything yet". Runs whose every dataset verified are returned first.
+    anything yet".
+
+    THREE OUTCOMES, NOT TWO. "Not checked" is not the same as "failed", and
+    conflating them made a `--only second rsvqa_lr_2k` run report all ten runs
+    as blocked when both datasets had in fact just passed. A gate that reports
+    a false failure gets ignored, which costs more than having no gate.
+
+    A run is `ready` only when every dataset it needs was checked AND passed -
+    never on the strength of an unchecked one.
     """
-    ready, blocked = set(), set()
+    ready, blocked, unchecked = set(), set(), set()
+    needs: dict[str, list[DataSet]] = {}
     for dataset in DATASETS:
-        verdict = verdicts.get(dataset.key)
         for run in dataset.required_by:
-            (ready if verdict and verdict.ok else blocked).add(run)
-    return sorted(ready - blocked), sorted(blocked)
+            needs.setdefault(run, []).append(dataset)
+
+    for run, datasets in needs.items():
+        results = [verdicts.get(d.key) for d in datasets]
+        if any(v is not None and not v.ok for v in results):
+            blocked.add(run)
+        elif any(v is None for v in results):
+            unchecked.add(run)
+        else:
+            ready.add(run)
+
+    return sorted(ready), sorted(blocked), sorted(unchecked)
 
 
 def _load_manifest(path: Path) -> dict:
@@ -389,11 +409,15 @@ def main() -> int:
         for item in verdict.corrupt:
             print(f"    corrupt  {item}")
 
-    ready, blocked = runs_unblocked(verdicts)
+    ready, blocked, unchecked = runs_unblocked(verdicts)
     print()
     print(f"runs unblocked: {', '.join(ready) or '(none)'}")
     if blocked:
         print(f"runs blocked:   {', '.join(blocked)}")
+    if unchecked:
+        # Normal with --only. Distinct from blocked: nothing is known to be
+        # wrong, these runs simply were not part of this check.
+        print(f"not checked:    {', '.join(unchecked)}")
 
     if args.command == "plan":
         return 0
