@@ -116,7 +116,12 @@ ok "active: $(python -V 2>&1), $(which python)"
 
 head2 "PACKAGES"
 missing=""
-for mod in torch numpy yaml PIL h5py; do
+# pyarrow is not in requirements.txt but three trainers import it: RSICD,
+# DIOR-RSVG and the instruction mix are stored as parquet. Measured on the AI
+# Lab box - `caption` and `grounding` both died at `import pyarrow.parquet`
+# seconds after starting, which is cheap to fix and annoying to discover
+# twice.
+for mod in torch numpy yaml PIL h5py pyarrow pandas; do
     if python -c "import $mod" >/dev/null 2>&1; then
         ok "$mod"
     else
@@ -130,7 +135,7 @@ if [ -n "$missing" ]; then
     say ""
     say "    source .venv/bin/activate"
     say "    pip install -r requirements.txt"
-    say "    pip install h5py                     # BigEarthNet shards"
+    say "    pip install h5py pyarrow pandas       # shards + parquet datasets"
     say "    # torch: match the server's CUDA. Check with 'nvidia-smi' (top right),"
     say "    # then pick the matching wheel index, e.g. for CUDA 12.1:"
     say "    pip install torch --index-url https://download.pytorch.org/whl/cu121"
