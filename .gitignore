@@ -53,3 +53,9 @@ data/
 # whose parent directory is still excluded.
 !frontend/app/models/
 !frontend/app/models/**
+
+# The data manifest: ~19 MB of digests over ~94,000 files. It travels WITH the
+# data it describes (rsync it alongside), not through git - it is regenerated
+# by `stage_data.py build` and would otherwise put a large binary-shaped blob
+# in every clone.
+configs/data_manifest.json

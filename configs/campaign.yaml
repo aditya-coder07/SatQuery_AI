@@ -113,6 +113,8 @@ runs:
       falsifiable - if `fused` does not beat `max(optical, sar)` the
       cross-attention is decoration and the report has to say so.
     args:
+      - --index
+      - data/whu_opt_sar/index.json
       - --ckpt-dir
       - checkpoints/v2/optsar_fusion
       - --arch
@@ -163,35 +165,34 @@ runs:
       - --save-every
       - "250"
 
-  - id: track_b_caption
+  # `caption_v1` is NOT served by a Qwen adapter, whatever `docs/03` section 3
+  # planned. `satquery/tools/caption.py` loads a `training/train_caption.py`
+  # checkpoint from SATQUERY_CAPTION, and nothing in the registry loads a
+  # caption LoRA at all. A second Qwen adapter would therefore cost ~10 GPU-h
+  # and produce weights no tool can read, so the run that exists here is the
+  # one that improves the tool that is actually deployed.
+  - id: caption
     tool: caption_v1
-    family: vlm_qlora
-    script: training/track_b_vlm_qlora.py
-    needs_data: [instruct_mix]
-    depends_on: [track_b_vqa]
-    est_hours: 10
-    ckpt_dir: checkpoints/v2/track_b_caption
+    family: head
+    script: training/train_caption.py
+    needs_data: [rsicd]
+    depends_on: []
+    est_hours: 4
+    ckpt_dir: checkpoints/v2/caption
     note: >
-      Second adapter on the same frozen base - the whole reason `docs/03`
-      budgets four trainings for nine tools. Depends on track_b_vqa only to
-      keep two 4-bit loads of the same base off one GPU at once.
+      RSICD scene captioning, transformer decoder with cross-attention over
+      the feature map. v1 BLEU-4 was 0.2446.
     args:
-      - --model
-      - models/qwen25_vl_3b
       - --data
-      - data/instruct_mix
+      - data/rsicd
       - --ckpt-dir
-      - checkpoints/v2/track_b_caption
-      - --val-file
-      - caption_val.jsonl
-      - --max-steps
-      - "3000"
-      - --lr
-      - "0.0001"
-      - --warmup-steps
-      - "90"
-      - --save-every
-      - "250"
+      - checkpoints/v2/caption
+      - --arch
+      - v2
+      - --epochs
+      - "60"
+      - --dim
+      - "192"
 
   # --- Grounding -----------------------------------------------------------
   #
@@ -244,6 +245,8 @@ runs:
       positive weighting v1 established stays; what changes is that small
       buildings survive the decoder.
     args:
+      - --index
+      - data/levircd/index.json
       - --ckpt-dir
       - checkpoints/v2/change_mask
       - --arch
@@ -263,6 +266,8 @@ runs:
     ckpt_dir: checkpoints/v2/change_caption
     note: "Transformer decoder with cross-attention over the difference map."
     args:
+      - --index
+      - data/levir_mci/index.json
       - --ckpt-dir
       - checkpoints/v2/change_caption
       - --arch

@@ -79,6 +79,30 @@ def test_campaign_config_args_are_real_flags():
         assert used <= known, f"{run['id']}: unknown flags {sorted(used - known)}"
 
 
+def test_campaign_config_supplies_every_required_flag():
+    """A run missing a `required=True` argument dies instantly at argparse.
+
+    The regression this caught: three runs - `change_mask`, `change_caption`
+    and `optsar_fusion` - were configured without `--index`, which every one
+    of them requires. On a cluster that is a queue slot spent producing an
+    argparse usage message. Checking that the flags used are *valid* does not
+    catch it; only checking that the required ones are *present* does.
+    """
+    import re
+
+    import yaml
+
+    config = yaml.safe_load((REPO / "configs/campaign.yaml").read_text(encoding="utf-8"))
+    for run in config["runs"]:
+        source = (REPO / run["script"]).read_text(encoding="utf-8")
+        required = set(re.findall(
+            r'add_argument\(\s*"(--[a-z0-9-]+)"[^)]*required=True', source
+        ))
+        used = {a for a in run["args"] if a.startswith("--")}
+        assert required <= used, \
+            f"{run['id']}: missing required {sorted(required - used)}"
+
+
 def test_unknown_dependency_is_rejected(tmp_path):
     config = minimal_config()
     config["runs"][1]["depends_on"] = ["nonexistent"]
@@ -353,3 +377,31 @@ def test_every_campaign_run_maps_to_a_known_dataset():
     for run in config["runs"]:
         for key in run.get("needs_data", []):
             assert key in stage_data.BY_KEY, f"{run['id']} needs unknown data '{key}'"
+
+
+def test_every_required_by_names_a_real_run():
+    """The other direction, which was wrong and reported runs that do not exist.
+
+    `runs_unblocked` is read by a human deciding whether a partial transfer is
+    enough to start something. Naming `stage_a2` and `caption` when neither was
+    a run in the campaign made that output actively misleading.
+    """
+    import yaml
+
+    config = yaml.safe_load((REPO / "configs/campaign.yaml").read_text(encoding="utf-8"))
+    run_ids = {run["id"] for run in config["runs"]}
+    for dataset in stage_data.DATASETS:
+        for run_id in dataset.required_by:
+            assert run_id in run_ids, \
+                f"dataset '{dataset.key}' claims run '{run_id}', which does not exist"
+
+
+def test_data_requirements_agree_in_both_directions():
+    """A run that needs data X must be listed in X's `required_by`, and vice versa."""
+    import yaml
+
+    config = yaml.safe_load((REPO / "configs/campaign.yaml").read_text(encoding="utf-8"))
+    for run in config["runs"]:
+        for key in run.get("needs_data", []):
+            assert run["id"] in stage_data.BY_KEY[key].required_by, \
+                f"run '{run['id']}' needs '{key}' but is not in its required_by"

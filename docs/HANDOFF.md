@@ -1,5 +1,19 @@
 # Session handoff — 2026-08-30 (post-freeze audit, and a data loss)
 
+> **Newest — 2026-09-09: Phase 5 exists.** `docs/phase5-full-training.md` is a
+> harness and a plan for retraining all nine tools on college cluster GPU,
+> because the constraint every model here was sized for — "free-tier Colab and
+> Kaggle only, T4 16 GB" (`docs/03` §1) — no longer holds.
+>
+> **Nothing in this file or in any other document has changed as a result, and
+> no training run has been executed.** The freeze is honoured structurally: v2
+> architectures live in `training/v2/`, `--arch` defaults to `v1` everywhere, a
+> checkpoint with no `arch` field rebuilds as v1, and every new `ckpt_dir` is
+> under `checkpoints/v2/`. Every number below is still the number it was.
+>
+> Tests are **1331 passed, 0 failed** (was 1274); no-torch simulation **1171
+> passed, 71 skipped, 0 failed**.
+
 > **Newer than this file — 2026-09-07.** This handoff is dated 2026-08-30 and
 > its numbers are the numbers of that day. Kept as written; superseded here.
 >

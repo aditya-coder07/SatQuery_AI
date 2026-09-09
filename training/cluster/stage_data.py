@@ -86,7 +86,7 @@ DATASETS: tuple[DataSet, ...] = (
     DataSet(
         key="ben_full",
         subdir="ben_full",
-        required_by=("track_a", "optsar_fusion"),
+        required_by=("track_a", "track_a_nodropout"),
         patterns=("*.h5", "*.hdf5", "*.json"),
         note="BigEarthNet v2 HDF5 shards: images (N,12,120,120) + labels19",
     ),
@@ -99,13 +99,13 @@ DATASETS: tuple[DataSet, ...] = (
     DataSet(
         key="whu_opt_sar",
         subdir="whu_opt_sar",
-        required_by=("stage_a2",),
+        required_by=("optsar_fusion",),
         note="~5 m optical+SAR, the middle rung of the resolution ladder",
     ),
     DataSet(
         key="instruct_mix",
         subdir="instruct_mix",
-        required_by=("track_b_vqa", "track_b_caption"),
+        required_by=("track_b_vqa",),
         patterns=("*.jsonl", "*.json"),
         note="instruction mix; images are referenced by path into the other dirs",
     ),
@@ -130,7 +130,7 @@ DATASETS: tuple[DataSet, ...] = (
     DataSet(
         key="cdvqa",
         subdir="cdvqa",
-        required_by=("change_vqa",),
+        required_by=("change_vqa", "change_vqa_scratch_v2"),
         note="change VQA",
     ),
     DataSet(
@@ -158,9 +158,9 @@ def sha256_file(path: Path, chunk: int = CHUNK) -> str:
 def iter_files(root: Path, dataset: DataSet):
     """Every file of `dataset` under `root`, sorted, relative to `root`.
 
-    Sorted because the manifest is committed and a diff of it should reflect
-    a change in the data, not a change in the order the filesystem happened
-    to enumerate it.
+    Sorted so that two machines hashing the same data produce byte-identical
+    manifests, and a diff between them reflects a change in the data rather
+    than the order the filesystem happened to enumerate it.
     """
     base = root / dataset.subdir
     if not base.is_dir():

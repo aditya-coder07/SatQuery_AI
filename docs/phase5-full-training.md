@@ -135,16 +135,33 @@ arms. `index_engine_v1` has no run.
 | `track_a_nodropout` | — | BigEarthNet full | 14 | **ablation**: the band-dropout claim was single-seed |
 | `optsar_fusion` | `optsar_fusion_v1` | WHU-OPT-SAR | 6 | PS-mandatory |
 | `track_b_vqa` | `rs_vqa_v1` | instruction mix | 20 | **recovery** — the v1 adapter is destroyed |
-| `track_b_caption` | `caption_v1` | instruction mix | 10 | second adapter, same frozen base |
+| `caption` | `caption_v1` | RSICD | 4 | the model the tool actually loads — see below |
 | `grounding` | `grounding_v1` | DIOR-RSVG | 8 | largest expected gain |
 | `change_mask` | `change_mask_v1` | LEVIR-CD | 7 | cheapest real run; good first test |
 | `change_caption` | `change_caption_v1` | LEVIR-MCI | 8 | |
 | `change_vqa` | `change_vqa_v1` | CDVQA/SECOND | 5 | `--pretrained`, deliberately |
 | `change_vqa_scratch_v2` | — | CDVQA/SECOND | 5 | **ablation**: does v2 capacity beat a pretrained stem on 1,600 pairs? |
 
-**~97 GPU-hours estimated** for one complete pass. `docs/03` §1.2 budgeted
+**~91 GPU-hours estimated** for one complete pass. `docs/03` §1.2 budgeted
 55–95 for the v1 pass and 150–220 with realistic iteration; the same multiplier
 applies here.
+
+### `caption_v1` is not a Qwen adapter, whatever the plan said
+
+`docs/03` §3 lists `caption_v1` as a second LoRA adapter on the shared
+Qwen2.5-VL base — "two LoRA adapters, one base" — and the first version of
+this campaign scheduled exactly that, for 10 GPU-hours.
+
+The implementation diverged from the plan and the plan is the thing that is
+out of date. `satquery/tools/caption.py` loads a `training/train_caption.py`
+checkpoint from `SATQUERY_CAPTION`, and **nothing in the registry loads a
+caption LoRA at all**. Training one would have produced 10 GPU-hours of
+weights no tool can read. The run in the table is the one that improves the
+tool that is actually deployed.
+
+`rs_vqa_v1` is the opposite case and was checked the same way: it genuinely
+does load a Qwen adapter (`SATQUERY_VQA_ADAPTER`), which is why `track_b_vqa`
+stays.
 
 `track_b_vqa` is the only run that is *recovery* rather than improvement.
 `docs/model-cards.md` records its adapter as 99.99% NUL bytes — 148,701,184 of
