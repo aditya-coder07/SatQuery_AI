@@ -7,13 +7,14 @@ architecture actively discards what the task needs:
 
 | tool | v1 measured | published range | the actual cause |
 |---|---|---|---|
-| `landcover_v1` | mAP 0.2854 | ~0.65-0.85 | a 4-layer CNN at dim 64, 30k of 590k patches |
+| `landcover_v1` | mAP 0.2854 | ~0.65-0.85 | a 4-layer CNN at dim 64, 30k patches |
 | `grounding_v1` | Acc@0.5 0.0762 | ~0.70-0.80 | **global-average-pools before regressing the box** |
 
 `docs/model-cards.md` names the grounding cause outright: pooling the feature
 map to a vector throws away every pixel coordinate, so the model can only
 learn an average box. No amount of GPU time fixes that; the pooling has to go.
-The land-cover case is plainer - it is a small model on 5% of a large dataset.
+The land-cover case is plainer - a 0.42M-parameter model on half the prepared
+patches, which is a capacity problem before it is a data problem.
 
 So each model here changes exactly what the measurement said was wrong, and
 nothing else. The forward signature, the loss, the data loader and the metric
@@ -33,7 +34,10 @@ Sentinel-2 SSL weights would plausibly beat a from-scratch encoder. They are
 not used because the campaign has to run on a cluster where the notebook may
 have no outbound network, and a run that dies at `from_pretrained` after the
 data is staged is the worst possible failure. The encoder is trained from
-scratch on 590k patches, which is enough data for it.
+scratch on the 60,000 prepared BigEarthNet patches. That is a real caveat
+rather than a comfortable one: 60k is enough for a 5M-parameter encoder but
+it is not the ~549k of full BigEarthNet v2, so the published 0.65-0.85 range
+is not a like-for-like target.
 
 That trade is worth stating rather than presenting as free: on the two small
 corpora it is probably the wrong one. SECOND has ~1,600 training pairs and v1

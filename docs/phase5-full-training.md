@@ -43,7 +43,7 @@ project's own measurements say why.
 
 | tool | v1 measured | published range | cause |
 |---|---|---|---|
-| `landcover_v1` | mAP **0.2854** | ~0.65–0.85 | dim-64 4-layer CNN on 30k of ~590k patches |
+| `landcover_v1` | mAP **0.2854** | ~0.65–0.85 | dim-64 4-layer CNN on 30k patches |
 | `grounding_v1` | Acc@0.5 **0.0762** | ~0.70–0.80 | **global-average-pools before regressing the box** |
 | `change_vqa_v1` (scratch) | mIoU 0.1691 | — | 1,600 training pairs, no pretraining |
 

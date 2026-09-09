@@ -32,7 +32,11 @@ runs:
   #
   # First because `optsar_fusion` and the resolution ladder both want its
   # weights, and because it is the run with the most headroom: mAP 0.2854 on
-  # 30k patches against a published 0.65-0.85 on the full 590k.
+  # 30k patches against a published 0.65-0.85. NOTE: `data/ben_full` holds
+  # 60,000 train patches (4 x 15,000 shards), NOT the ~549k of full
+  # BigEarthNet v2 - only that subset was ever prepared. v2 therefore sees
+  # 2x the v1 run's data, not 20x, and the headroom is correspondingly
+  # smaller than the published comparison suggests.
   - id: track_a
     tool: landcover_v1
     family: encoder
@@ -42,7 +46,7 @@ runs:
     est_hours: 14
     ckpt_dir: checkpoints/v2/track_a
     note: >
-      Full BigEarthNet, all 12 bands, band dropout 0.3, GSD conditioning,
+      All 60,000 prepared patches, all 12 bands, band dropout 0.3, GSD,
       multi-resolution. The v1 ablation measured dropout as worth 84.4% ->
       90.2% four-band retention, so it stays on.
     args:
