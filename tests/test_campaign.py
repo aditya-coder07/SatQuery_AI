@@ -620,3 +620,95 @@ def test_launch_refuses_a_run_whose_data_is_absent(tmp_path, monkeypatch):
     assert campaign.launch("a", dry_run=True) == 1
     # And crucially it stays pending rather than being recorded as failed.
     assert campaign.state["a"].status == PENDING
+
+
+# --- Concurrent edits to the state file -------------------------------------
+
+
+def test_a_reset_from_another_shell_survives_a_running_driver(tmp_path):
+    """The lost update measured on the lab box.
+
+    `run_all` loads state once and keeps it for hours. While it ran,
+    `campaign.py reset caption` was used from another shell to re-queue two
+    runs that had failed on a missing dependency. The reset reached disk; the
+    long-running driver then wrote its stale in-memory copy over it, and both
+    runs stayed `failed` and were never retried - while the operator had every
+    reason to think they had been re-queued.
+    """
+    driver = Campaign(minimal_config(), tmp_path)
+    driver.state["a"].status = RUNNING          # the long-running driver
+    driver.state["c"].status = FAILED
+    driver.save()
+
+    # Another shell re-queues 'c' after fixing what broke it.
+    other = Campaign(minimal_config(), tmp_path)
+    other.state["c"].status = PENDING
+    other.state["c"].attempts = 0
+    other.save()
+
+    # The driver finishes its own run and reports on it.
+    driver.state["a"].status = DONE
+    driver.save(only="a")
+
+    reloaded = Campaign(minimal_config(), tmp_path)
+    assert reloaded.state["a"].status == DONE, "the driver's own result must land"
+    assert reloaded.state["c"].status == PENDING, \
+        "the external reset must survive the driver's save"
+
+
+def test_step_picks_up_an_external_reset(tmp_path):
+    """A driver mid-loop must see a reset performed while it was working."""
+    driver = Campaign(minimal_config(), tmp_path)
+    driver.state["a"].status = FAILED
+    driver.state["b"].status = DONE
+    driver.state["c"].status = DONE
+    driver.save()
+    assert driver.next_run() is None
+
+    other = Campaign(minimal_config(), tmp_path)
+    other.state["a"].status = PENDING
+    other.save()
+
+    # `step` reloads before scheduling, so the reset is visible.
+    assert driver.step(dry_run=True) == "a"
+
+
+def test_a_corrupt_state_file_does_not_stop_a_save(tmp_path):
+    """A half-written file must not take the campaign down with it."""
+    campaign = Campaign(minimal_config(), tmp_path)
+    campaign.save()
+    campaign.state_path.write_text("{ this is not json", encoding="utf-8")
+
+    campaign.state["a"].status = DONE
+    campaign.save(only="a")            # must not raise
+    assert Campaign(minimal_config(), tmp_path).state["a"].status == DONE
+
+
+def test_a_dead_owner_on_this_host_is_reclaimed_immediately(tmp_path):
+    """No ten-minute wait when the pid is provably gone.
+
+    After the driver was restarted to pick up a fix, the run it had been
+    executing sat `running` with a fresh heartbeat and a dead pid. Waiting out
+    the heartbeat window would have idled the GPU for ten minutes to confirm
+    something already known.
+    """
+    campaign = Campaign(minimal_config(), tmp_path)
+    state = campaign.state["a"]
+    state.status = RUNNING
+    state.owner_host = None          # i.e. this host
+    state.owner_pid = 999999         # not a live pid
+    state.heartbeat = time.time()    # fresh
+    assert state.is_stale()
+    assert campaign.reclaim_stale(verbose=False) == ["a"]
+
+
+def test_a_live_owner_is_never_reclaimed_however_old_the_heartbeat(tmp_path):
+    import os
+
+    campaign = Campaign(minimal_config(), tmp_path)
+    state = campaign.state["a"]
+    state.status = RUNNING
+    state.owner_host = None
+    state.owner_pid = os.getpid()
+    state.heartbeat = time.time() - 100_000
+    assert not state.is_stale()

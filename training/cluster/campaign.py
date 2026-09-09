@@ -114,14 +114,33 @@ class RunState:
     error: str | None = None
 
     def is_stale(self, now: float | None = None) -> bool:
-        """Marked running, but nothing is running it."""
+        """Marked running, but nothing is running it.
+
+        Two ways to be sure, and the cheap one is checked first:
+
+        **The owner was ours and its pid is gone.** Then the run is dead now,
+        not in ten minutes, and waiting out the heartbeat window would idle a
+        GPU for no reason - which is what happened after the driver was
+        restarted to pick up a fix. `owner_alive` already refuses to make this
+        call about another host, so this only fires for a process we could
+        actually check.
+
+        **Or the heartbeat has gone quiet and the owner is not alive.** This is
+        the case for a node that vanished, where the pid check tells us
+        nothing.
+        """
         if self.status != RUNNING:
             return False
+        if self.owner_alive():
+            return False
+
+        ours = self.owner_host in (None, _hostname())
+        if ours and self.owner_pid is not None:
+            return True
+
         now = now if now is not None else time.time()
         beat = self.heartbeat or self.started_at or 0.0
-        if now - beat < STALE_AFTER_S:
-            return False
-        return not self.owner_alive()
+        return now - beat >= STALE_AFTER_S
 
     def owner_alive(self) -> bool:
         """Is the recorded owner process still running, on this host?
@@ -247,9 +266,43 @@ class Campaign:
         for run_id in self.runs:
             self.state.setdefault(run_id, RunState(id=run_id))
 
-    def save(self) -> None:
-        """Atomic write. A driver killed mid-save must not eat the state file."""
+    def save(self, only: str | None = None) -> None:
+        """Atomic write, merging whatever else changed on disk meanwhile.
+
+        THE BUG THIS FIXES, MEASURED ON THE LAB BOX
+
+        `run_all` loads state once and keeps it in memory for hours. While it
+        was running, `campaign.py reset caption` was used from another shell
+        to re-queue two runs that had failed on a missing dependency. The
+        reset landed on disk; the long-running driver then saved its own
+        stale in-memory copy over it, and both runs stayed `failed` and were
+        never retried. The operator had every reason to believe they had been
+        re-queued.
+
+        So a save is now a merge: re-read the file, overwrite only the runs
+        this process actually owns, and keep everyone else's edits. `only`
+        names the single run a launch is reporting on; without it, the runs
+        this process has touched are the ones it claims.
+        """
         self.state_dir.mkdir(parents=True, exist_ok=True)
+
+        merged = dict(self.state)
+        if self.state_path.is_file():
+            try:
+                on_disk = json.loads(self.state_path.read_text(encoding="utf-8"))
+                for run_id, raw in on_disk.get("runs", {}).items():
+                    if run_id not in self.runs:
+                        continue
+                    # Keep the other process's version of every run except the
+                    # one(s) this process is authoritative for.
+                    if only is not None and run_id != only:
+                        merged[run_id] = RunState(**raw)
+            except (OSError, json.JSONDecodeError, TypeError):
+                # A corrupt or half-written state file must not stop a run;
+                # this process's in-memory copy is the better of the two.
+                pass
+
+        self.state = merged
         payload = {
             "campaign": self.name,
             "version": self.version,
@@ -429,7 +482,7 @@ class Campaign:
         state.owner_pid = os.getpid()
         state.log = str(log_path)
         state.error = None
-        self.save()
+        self.save(only=run_id)
 
         beat = _heartbeat_path(self.state_dir, run_id)
         beat.parent.mkdir(parents=True, exist_ok=True)
@@ -489,7 +542,7 @@ class Campaign:
             state.error = "interrupted by the operator"
             state.seconds += time.time() - started
             state.owner_pid = None
-            self.save()
+            self.save(only=run_id)
             print(f"\n'{run_id}' interrupted; rerun to resume")
             raise
         finally:
@@ -501,7 +554,9 @@ class Campaign:
         state.status = DONE if code == 0 else FAILED
         if code != 0:
             state.error = f"exit code {code}; see {log_path}"
-        self.save()
+        # `only=` matters most here: a run can take hours, and anything
+        # the operator changed meanwhile must survive this write.
+        self.save(only=run_id)
 
         elapsed = (state.finished_at - started) / 60
         print(f"=== {run_id} {state.status} in {elapsed:.1f} min (exit {code}) ===")
@@ -511,6 +566,10 @@ class Campaign:
              python: str = sys.executable, dry_run: bool = False,
              strict: bool = False, echo: str = "throttled") -> str | None:
         """Reclaim, pick one run, execute it. The notebook's entire API."""
+        # Re-read first: a long-running driver would otherwise never see a
+        # `campaign.py reset` performed from another shell, which is the
+        # normal way to re-queue a run after fixing what broke it.
+        self.load()
         self.reclaim_stale()
         run_id = self.next_run(budget_minutes, strict=strict)
         if run_id is not None and budget_minutes is not None:
