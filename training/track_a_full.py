@@ -115,7 +115,15 @@ def compute_stats(dataset, sample: int = 2000, seed: int = 0):
     return mean.astype("float32"), std.astype("float32")
 
 
-def build_model(n_bands: int = 12, dim: int = 96, gsd_conditioning: bool = True):
+def build_model(n_bands: int = 12, dim: int = 96, gsd_conditioning: bool = True,
+                arch: str = "v1"):
+    if arch == "v2":
+        from training.v2.architectures import build_track_a
+
+        return build_track_a(n_bands=n_bands, dim=dim,
+                             gsd_conditioning=gsd_conditioning,
+                             n_classes=N_CLASSES)
+
     import torch
     import torch.nn as nn
 
@@ -246,6 +254,10 @@ def main() -> int:
              "has a varying signal to learn from",
     )
     p.add_argument("--limit-eval", type=int)
+    p.add_argument(
+        "--arch", choices=["v1", "v2"], default="v1",
+        help="v1 = the published architecture; v2 = training/v2/architectures.py",
+    )
     p.add_argument("--seed", type=int, default=42)
     p.add_argument("--save-every", type=int, default=200)
     p.add_argument("--resume", action="store_true")
@@ -277,7 +289,8 @@ def main() -> int:
     test_ds = ShardedBigEarthNet(test_paths, stats) if test_paths else None
     print(f"train {len(train_ds)} patches" + (f" | test {len(test_ds)}" if test_ds else ""))
 
-    model = build_model(dim=args.dim, gsd_conditioning=not args.no_gsd).to(device)
+    model = build_model(dim=args.dim, gsd_conditioning=not args.no_gsd,
+                        arch=args.arch).to(device)
     print(f"parameters: {sum(q.numel() for q in model.parameters())/1e6:.2f}M")
 
     budget = args.batch_size * len(BAND_NAMES_12) * args.dim
@@ -350,14 +363,20 @@ def main() -> int:
             step += 1
             if step % args.save_every == 0:
                 state.step, state.epoch = step, epoch
-                save_checkpoint_unless_eval(args, step, model, optimizer, state=state)
+                save_checkpoint_unless_eval(
+                    args, step, model, optimizer, state=state,
+                    extra={"arch": args.arch, "dim": args.dim},
+                )
                 print(f"  step {step}  loss {running/max(seen,1):.4f}", flush=True)
 
         print(f"epoch {epoch+1}/{args.epochs}  loss {running/max(seen,1):.4f}  "
               f"({time.time()-started:.0f}s)", flush=True)
 
     state.step, state.epoch = step, args.epochs
-    save_checkpoint_unless_eval(args, step, model, optimizer, state=state)
+    save_checkpoint_unless_eval(
+        args, step, model, optimizer, state=state,
+        extra={"arch": args.arch, "dim": args.dim},
+    )
 
     results = {}
     if test_ds:

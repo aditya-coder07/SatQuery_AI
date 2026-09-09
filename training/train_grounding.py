@@ -101,7 +101,13 @@ def to_corners(pred, width: float, height: float) -> dict:
     }
 
 
-def build_model(vocab_size: int, dim: int = 128):
+def build_model(vocab_size: int, dim: int = 128, arch: str = "v1"):
+    if arch == "v2":
+        from training.v2.architectures import build_grounding
+
+        return build_grounding(vocab_size=vocab_size, dim=dim,
+                               max_tokens=MAX_TOKENS)
+
     import torch
     import torch.nn as nn
 
@@ -263,6 +269,10 @@ def main() -> int:
     p.add_argument("--dim", type=int, default=128)
     p.add_argument("--limit-train", type=int, default=20000)
     p.add_argument("--limit-eval", type=int, default=4000)
+    p.add_argument(
+        "--arch", choices=["v1", "v2"], default="v1",
+        help="v1 = the published architecture; v2 = training/v2/architectures.py",
+    )
     p.add_argument("--seed", type=int, default=42)
     p.add_argument("--save-every", type=int, default=100)
     p.add_argument("--resume", action="store_true")
@@ -313,7 +323,7 @@ def main() -> int:
     print(f"train {len(train_rows)} | test {len(test_rows)} | vocab {len(vocab)}")
 
     train_ds, test_ds = DiorRSVG(train_rows, vocab), DiorRSVG(test_rows, vocab)
-    model = build_model(len(vocab), args.dim).to(device)
+    model = build_model(len(vocab), args.dim, arch=args.arch).to(device)
     print(f"parameters: {sum(q.numel() for q in model.parameters())/1e6:.2f}M")
 
     optimizer = torch.optim.AdamW(model.parameters(), lr=args.lr)
@@ -348,12 +358,18 @@ def main() -> int:
             step += 1
             if step % args.save_every == 0:
                 state.step, state.epoch = step, epoch
-                save_checkpoint_unless_eval(args, step, model, optimizer, state=state)
+                save_checkpoint_unless_eval(
+                    args, step, model, optimizer, state=state,
+                    extra={"arch": args.arch, "dim": args.dim},
+                )
         print(f"epoch {epoch+1}/{args.epochs}  loss {running/max(seen,1):.4f}  "
               f"({time.time()-started:.0f}s)", flush=True)
 
     state.step, state.epoch = step, args.epochs
-    save_checkpoint_unless_eval(args, step, model, optimizer, state=state)
+    save_checkpoint_unless_eval(
+        args, step, model, optimizer, state=state,
+        extra={"arch": args.arch, "dim": args.dim},
+    )
 
     model.eval()
     ious = []

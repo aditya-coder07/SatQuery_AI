@@ -201,8 +201,15 @@ class _Handle:
         # the FiLM layers randomly initialised - a silent partial load, which
         # is how people end up reporting a random encoder as fine-tuned.
         has_gsd = any(k.startswith("gsd_mlp.") for k in state)
-        dim = (payload.get("extra") or {}).get("dim", 64)
-        model = build_model(dim=dim, gsd_conditioning=has_gsd)
+        extra = payload.get("extra") or {}
+        dim = extra.get("dim", 64)
+        # Which architecture wrote these weights. A checkpoint from before
+        # Phase 5 has no `arch` field, so the default is v1 and every
+        # existing checkpoint rebuilds exactly as it always did. Guessing
+        # instead would load v1 weights into a v2 graph and fail on a key
+        # mismatch that says nothing about the cause.
+        arch = extra.get("arch", "v1")
+        model = build_model(dim=dim, gsd_conditioning=has_gsd, arch=arch)
         load_checkpoint(latest, model, map_location="cpu")
 
         self.device = "cuda" if torch.cuda.is_available() else "cpu"

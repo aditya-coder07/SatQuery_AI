@@ -142,7 +142,12 @@ def build_pretrained_model(dim: int = 64):
     return PretrainedSemanticChangeNet()
 
 
-def build_model(dim: int = 32):
+def build_model(dim: int = 32, arch: str = "v1"):
+    if arch == "v2":
+        from training.v2.architectures import build_change_vqa
+
+        return build_change_vqa(dim=dim, n_classes=N_CLASSES)
+
     import torch
     import torch.nn as nn
 
@@ -333,6 +338,10 @@ def main() -> int:
     )
     p.add_argument("--crop", type=int, default=CROP)
     p.add_argument("--limit-train", type=int)
+    p.add_argument(
+        "--arch", choices=["v1", "v2"], default="v1",
+        help="v1 = the published architecture; v2 = training/v2/architectures.py",
+    )
     p.add_argument("--seed", type=int, default=42)
     p.add_argument("--save-every", type=int, default=100)
     p.add_argument("--resume", action="store_true")
@@ -375,8 +384,17 @@ def main() -> int:
     val_ds = SecondPairs(args.second, val_ids, crop=None)
     print(f"train {len(train_ds)} pairs | val {len(val_ds)} pairs")
 
+    # `--pretrained` and `--arch v2` are two different answers to the same
+    # question and cannot both apply: one loads an ImageNet ResNet-18 stem,
+    # the other builds a from-scratch trunk. Silently preferring one would
+    # make a run's architecture depend on argument order.
+    if args.pretrained and args.arch != "v1":
+        p.error("--pretrained and --arch v2 are mutually exclusive; "
+                "--pretrained already replaces the encoder")
+
     model = (
-        build_pretrained_model(args.dim) if args.pretrained else build_model(args.dim)
+        build_pretrained_model(args.dim) if args.pretrained
+        else build_model(args.dim, arch=args.arch)
     ).to(device)
     n_params = sum(q.numel() for q in model.parameters())
     print(f"parameters: {n_params/1e6:.3f}M")
@@ -427,7 +445,11 @@ def main() -> int:
             step += 1
             if step % args.save_every == 0:
                 state.step, state.epoch = step, epoch
-                save_checkpoint(args.ckpt_dir, step, model, optimizer, state=state)
+                save_checkpoint(
+                    args.ckpt_dir, step, model, optimizer, state=state,
+                    extra={"arch": args.arch, "dim": args.dim,
+                           "pretrained": args.pretrained},
+                )
 
         message = (f"epoch {epoch+1}/{args.epochs}  loss {running/max(seen,1):.4f}  "
                    f"({time.time()-started:.0f}s)")
@@ -455,7 +477,10 @@ def main() -> int:
         print(message, flush=True)
 
     state.step, state.epoch = step, args.epochs
-    save_checkpoint(args.ckpt_dir, step, model, optimizer, state=state)
+    save_checkpoint(
+        args.ckpt_dir, step, model, optimizer, state=state,
+        extra={"arch": args.arch, "dim": args.dim, "pretrained": args.pretrained},
+    )
     print(f"\nbest val change-class mIoU: {best:.4f}")
     return 0
 

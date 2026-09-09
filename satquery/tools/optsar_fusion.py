@@ -91,7 +91,16 @@ class _Handle:
         from training.train_optsar_fusion import build_model
 
         latest = find_latest_checkpoint(checkpoint) or checkpoint
-        model = build_model()
+        from training.common.checkpointing import safe_torch_load
+
+        extra = (safe_torch_load(latest).get("extra") or {})
+        # Which architecture wrote these weights. A checkpoint from before
+        # Phase 5 has no `arch` field, so the default is v1 and every
+        # existing checkpoint rebuilds exactly as it always did. Guessing
+        # instead would load v1 weights into a v2 graph and fail on a key
+        # mismatch that says nothing about the cause.
+        model = build_model(extra.get("dim", 32),
+                            arch=extra.get("arch", "v1"))
         load_checkpoint(latest, model, map_location="cpu")
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
         self.model = model.to(self.device).eval()
