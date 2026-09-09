@@ -65,6 +65,12 @@ runs:
       - --band-dropout
       - "0.3"
       - --multires
+      # WITHOUT THIS the run reports only `map_all_bands`, and the two numbers
+      # the Cartosat case actually rests on - 4-band mAP and retention - are
+      # never computed. The v1 published run passed it; a v2 run that does not
+      # is not comparable on the claim that matters most, and for the
+      # `nodropout` arm it removes the entire point of the run.
+      - --ablation
       - --save-every
       - "500"
 
@@ -96,6 +102,12 @@ runs:
       - --band-dropout
       - "0.0"
       - --multires
+      # WITHOUT THIS the run reports only `map_all_bands`, and the two numbers
+      # the Cartosat case actually rests on - 4-band mAP and retention - are
+      # never computed. The v1 published run passed it; a v2 run that does not
+      # is not comparable on the claim that matters most, and for the
+      # `nodropout` arm it removes the entire point of the run.
+      - --ablation
       - --save-every
       - "500"
 

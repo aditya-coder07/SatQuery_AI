@@ -856,3 +856,42 @@ def test_pid_reuse_does_not_make_a_stranger_look_like_our_trainer(tmp_path):
 def test_no_child_pid_recorded_means_not_alive(tmp_path):
     campaign = Campaign(minimal_config(), tmp_path)
     assert not campaign.state["a"].trainer_alive()
+
+
+def test_runs_compute_every_metric_the_comparison_expects():
+    """A run must produce the numbers it will later be judged on.
+
+    `track_a` finished having written only `map_all_bands`, because the config
+    never passed `--ablation` - the flag that computes 4-band mAP and
+    retention. The v1 published run passed it, so the v2 result was not
+    comparable on the Cartosat claim, which is the one that matters most; and
+    `track_a_nodropout`, whose entire purpose is measuring retention, was
+    running under the same omission.
+
+    Nothing in the config or the trainer objected. This does.
+    """
+    import re
+
+    import yaml
+
+    from evaluation.compare_v2 import COMPARISONS
+
+    config = yaml.safe_load((REPO / "configs/campaign.yaml").read_text(encoding="utf-8"))
+    by_id = {run["id"]: run for run in config["runs"]}
+
+    # Metrics only produced under a flag, and the flag that produces them.
+    GATED = {"map_cartosat_4band": "--ablation", "retention": "--ablation"}
+
+    for entry in COMPARISONS:
+        flag = GATED.get(entry.metric)
+        if flag is None:
+            continue
+        run = by_id.get(entry.run_id)
+        assert run is not None, f"comparison names unknown run {entry.run_id}"
+        assert flag in run["args"], (
+            f"{entry.run_id} is compared on '{entry.metric}', which is only "
+            f"computed when {flag} is passed - and it is not"
+        )
+        source = (REPO / run["script"]).read_text(encoding="utf-8")
+        assert re.search(r'add_argument\(\s*"' + re.escape(flag) + '"', source), \
+            f"{run['script']} does not define {flag}"
