@@ -89,6 +89,14 @@ PENDING, RUNNING, DONE, FAILED, INTERRUPTED = (
 # hours reproducing the same traceback. `--retry-failed` opts back in.
 RESUMABLE = {PENDING, INTERRUPTED}
 
+# Substrings that make a line exempt from output throttling. Deliberately
+# broad: a false positive costs one extra printed line, a false negative
+# costs the one traceback that explained why a 14-hour run died.
+_URGENT = (
+    "error", "traceback", "exception", "failed", "nan", "out of memory",
+    "oom", "cuda", "warning: ", "abort", "killed",
+)
+
 
 @dataclass
 class RunState:
@@ -336,8 +344,23 @@ class Campaign:
     # --- execution ----------------------------------------------------------
 
     def launch(self, run_id: str, python: str = sys.executable,
-               extra: list[str] | None = None, dry_run: bool = False) -> int:
-        """Run one job to completion in a subprocess, streaming its log."""
+               extra: list[str] | None = None, dry_run: bool = False,
+               echo: str = "throttled", echo_every_s: float = 30.0) -> int:
+        """Run one job to completion in a subprocess, streaming its log.
+
+        `echo` controls what reaches the caller's stdout. The log file always
+        gets every line regardless; this is only about what is *displayed*.
+
+        * `"throttled"` (default) - at most one progress line per
+          `echo_every_s`, plus every line that looks like a failure. This is
+          the default because of what the alternative does in a notebook: a
+          14-hour run emits tens of thousands of lines, every one of which
+          Jupyter stores in the `.ipynb` as cell output. The file grows to
+          hundreds of megabytes, the browser tab becomes unusable, and the
+          run you were watching is now the run you cannot see.
+        * `"full"` - every line. Correct in a terminal, wrong in a notebook.
+        * `"none"` - nothing but the start and end banners.
+        """
         run, state = self.runs[run_id], self.state[run_id]
 
         if state.status == RUNNING and state.owner_alive():
@@ -387,10 +410,26 @@ class Campaign:
                     stderr=subprocess.STDOUT, text=True, bufsize=1,
                     errors="replace",
                 )
+                last_echo = 0.0
+                suppressed = 0
                 for line in proc.stdout:
                     log.write(line)
-                    print(line, end="")
                     now = time.time()
+
+                    if echo == "full":
+                        print(line, end="")
+                    elif echo == "throttled":
+                        # A line naming a failure is never throttled away.
+                        # Losing the one traceback in 40,000 lines of progress
+                        # is the whole cost of getting this wrong.
+                        urgent = any(word in line.lower() for word in _URGENT)
+                        if urgent or now - last_echo >= echo_every_s:
+                            prefix = f"    [+{suppressed}] " if suppressed else "    "
+                            print(prefix + line.rstrip())
+                            last_echo, suppressed = now, 0
+                        else:
+                            suppressed += 1
+
                     if now - last_beat > 60:
                         # Touched from the driver rather than from inside the
                         # trainer: the trainer is third-party-shaped code that
@@ -428,7 +467,7 @@ class Campaign:
 
     def step(self, budget_minutes: float | None = None,
              python: str = sys.executable, dry_run: bool = False,
-             strict: bool = False) -> str | None:
+             strict: bool = False, echo: str = "throttled") -> str | None:
         """Reclaim, pick one run, execute it. The notebook's entire API."""
         self.reclaim_stale()
         run_id = self.next_run(budget_minutes, strict=strict)
@@ -440,12 +479,12 @@ class Campaign:
                       "checkpoints and the next session resumes it.")
         if run_id is None:
             return None
-        self.launch(run_id, python=python, dry_run=dry_run)
+        self.launch(run_id, python=python, dry_run=dry_run, echo=echo)
         return run_id
 
     def run_all(self, budget_minutes: float | None = None,
                 python: str = sys.executable, dry_run: bool = False,
-                strict: bool = False) -> int:
+                strict: bool = False, echo: str = "throttled") -> int:
         """Keep stepping until nothing is ready. Returns the number of failures."""
         started = time.time()
         while True:
@@ -456,9 +495,49 @@ class Campaign:
                     print("session budget spent; stopping before the next run")
                     break
             if self.step(remaining, python=python, dry_run=dry_run,
-                         strict=strict) is None:
+                         strict=strict, echo=echo) is None:
                 break
         return sum(1 for s in self.state.values() if s.status == FAILED)
+
+    # --- monitoring a run this process is not running -----------------------
+
+    def log_path(self, run_id: str) -> Path:
+        return self.state_dir / "logs" / f"{run_id}.log"
+
+    def tail(self, run_id: str, lines: int = 40) -> str:
+        """The last `lines` of a run's log.
+
+        This is what makes the detached mode usable. When the campaign is
+        launched with `nohup` from a terminal, the notebook is not its parent
+        and never sees its stdout - but the log file is on a shared
+        filesystem, so a monitoring cell can read it. Re-running that cell is
+        the notebook equivalent of `tail -f`, without holding a cell open for
+        fourteen hours.
+        """
+        path = self.log_path(run_id)
+        if not path.is_file():
+            return f"(no log yet at {path})"
+        # Read the tail rather than the file: a long run's log reaches
+        # hundreds of MB, and reading all of it to show 40 lines is how a
+        # monitoring cell becomes the thing that kills the kernel.
+        with path.open("rb") as fh:
+            fh.seek(0, os.SEEK_END)
+            size = fh.tell()
+            block = min(size, max(4096, lines * 400))
+            fh.seek(size - block)
+            text = fh.read().decode("utf-8", errors="replace")
+        return "\n".join(text.splitlines()[-lines:])
+
+    def watch(self, lines: int = 20) -> str:
+        """One screen showing every active run and the tail of its log."""
+        self.reclaim_stale(verbose=False)
+        out = [self.report()]
+        for run_id, state in self.state.items():
+            if state.status == RUNNING:
+                age = time.time() - (state.heartbeat or state.started_at or 0)
+                out += ["", f"--- {run_id} (heartbeat {age:.0f}s ago) ---",
+                        self.tail(run_id, lines)]
+        return "\n".join(out)
 
     # --- reporting ----------------------------------------------------------
 
@@ -510,12 +589,22 @@ def main() -> int:
                    help="do not start a run expected to outlast this")
     p.add_argument("--python", default=sys.executable)
     p.add_argument("--dry-run", action="store_true")
+    p.add_argument("--echo", choices=["full", "throttled", "none"],
+                   default="full",
+                   help="how much of a run's output to display. Defaults to "
+                        "full on the command line, where scrollback is cheap; "
+                        "the notebook passes throttled, where it is not")
     p.add_argument("--strict-budget", action="store_true",
                    help="refuse to start a run longer than the budget, rather "
                         "than starting it and letting the next session resume it")
     sub = p.add_subparsers(dest="command", required=True)
 
     sub.add_parser("status", help="what is done, running and pending")
+    w = sub.add_parser("watch", help="status plus the tail of each running log")
+    w.add_argument("--lines", type=int, default=20)
+    tl = sub.add_parser("tail", help="the tail of one run's log")
+    tl.add_argument("run_id")
+    tl.add_argument("--lines", type=int, default=40)
     sub.add_parser("step", help="run the next ready job")
     sub.add_parser("all", help="run every ready job until none remain")
     one = sub.add_parser("run", help="run one job by id")
@@ -533,6 +622,14 @@ def main() -> int:
         print(campaign.report())
         return 0
 
+    if args.command == "watch":
+        print(campaign.watch(args.lines))
+        return 0
+
+    if args.command == "tail":
+        print(campaign.tail(args.run_id, args.lines))
+        return 0
+
     if args.command == "reset":
         state = campaign.state[args.run_id]
         state.status = PENDING
@@ -548,18 +645,21 @@ def main() -> int:
 
     if args.command == "run":
         campaign.reclaim_stale()
-        return campaign.launch(args.run_id, python=args.python, dry_run=args.dry_run)
+        return campaign.launch(args.run_id, python=args.python,
+                               dry_run=args.dry_run, echo=args.echo)
 
     if args.command == "step":
         run_id = campaign.step(args.budget_minutes, python=args.python,
-                               dry_run=args.dry_run, strict=args.strict_budget)
+                               dry_run=args.dry_run, strict=args.strict_budget,
+                               echo=args.echo)
         if run_id is None:
             print("nothing ready to run")
             print(campaign.report())
         return 0
 
     failures = campaign.run_all(args.budget_minutes, python=args.python,
-                                dry_run=args.dry_run, strict=args.strict_budget)
+                                dry_run=args.dry_run, strict=args.strict_budget,
+                                echo=args.echo)
     print()
     print(campaign.report())
     return 1 if failures else 0

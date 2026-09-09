@@ -405,3 +405,115 @@ def test_data_requirements_agree_in_both_directions():
         for key in run.get("needs_data", []):
             assert run["id"] in stage_data.BY_KEY[key].required_by, \
                 f"run '{run['id']}' needs '{key}' but is not in its required_by"
+
+
+# --- Notebook survival: output volume and detached monitoring ---------------
+
+
+def _noisy_script(tmp_path: Path, lines: int = 200) -> Path:
+    """A stand-in trainer that prints a lot and one alarming thing."""
+    script = tmp_path / "noisy.py"
+    script.write_text(
+        "import argparse, time\n"
+        "p = argparse.ArgumentParser()\n"
+        "p.add_argument('--n', type=int, default=10)\n"
+        "p.add_argument('--resume', action='store_true')\n"
+        "a = p.parse_args()\n"
+        "for i in range(a.n):\n"
+        "    print(f'step {i} loss 0.1', flush=True)\n"
+        "    if i == a.n // 2:\n"
+        "        print('RuntimeError: CUDA out of memory', flush=True)\n",
+        encoding="utf-8",
+    )
+    return script
+
+
+def _campaign_with(script: Path, state_dir: Path, lines: int) -> Campaign:
+    config = {
+        "version": "t", "name": "t", "checkpoint_root": "checkpoints/v2",
+        "runs": [{"id": "noisy", "tool": "t", "family": "head",
+                  "script": "training/cluster/campaign.py", "est_hours": 0.1}],
+    }
+    campaign = Campaign(config, state_dir)
+    # Point at the stand-in after validation, which requires a repo-relative path.
+    campaign.runs["noisy"].script = str(script)
+    campaign.runs["noisy"].args = ["--n", str(lines)]
+    return campaign
+
+
+def test_throttled_echo_collapses_output_but_keeps_the_error(tmp_path, capsys):
+    """The failure this prevents is a notebook that cannot be opened.
+
+    A 14-hour run at full verbosity writes tens of thousands of lines into the
+    .ipynb as saved cell output; the file reaches hundreds of MB and the tab
+    becomes unusable. Throttling has to cut the volume *without* dropping the
+    one line that explains a death.
+    """
+    script = _noisy_script(tmp_path)
+    campaign = _campaign_with(script, tmp_path / "state", 200)
+
+    campaign.launch("noisy", echo="throttled", echo_every_s=3600)
+    printed = capsys.readouterr().out.splitlines()
+
+    assert len(printed) < 30, f"throttling let {len(printed)} lines through"
+    assert any("out of memory" in line.lower() for line in printed), \
+        "throttling swallowed the error line"
+
+
+def test_full_echo_prints_everything(tmp_path, capsys):
+    script = _noisy_script(tmp_path)
+    campaign = _campaign_with(script, tmp_path / "state", 50)
+    campaign.launch("noisy", echo="full")
+    assert len([x for x in capsys.readouterr().out.splitlines()
+                if x.startswith("step ")]) == 50
+
+
+def test_the_log_file_keeps_every_line_whatever_echo_does(tmp_path, capsys):
+    """Throttling is about display only. The log is the record."""
+    script = _noisy_script(tmp_path)
+    state_dir = tmp_path / "state"
+    campaign = _campaign_with(script, state_dir, 200)
+    campaign.launch("noisy", echo="none", echo_every_s=3600)
+    capsys.readouterr()
+
+    log = (state_dir / "logs" / "noisy.log").read_text(encoding="utf-8")
+    assert log.count("step ") == 200
+
+
+def test_tail_reads_the_end_without_reading_the_whole_file(tmp_path, capsys):
+    """A monitoring cell must not load a 500 MB log to show 40 lines."""
+    script = _noisy_script(tmp_path)
+    state_dir = tmp_path / "state"
+    campaign = _campaign_with(script, state_dir, 500)
+    campaign.launch("noisy", echo="none", echo_every_s=3600)
+    capsys.readouterr()
+
+    tail = campaign.tail("noisy", lines=10)
+    assert tail.count("\n") == 9
+    assert "step 499" in tail
+    assert "step 0 " not in tail
+
+
+def test_tail_of_a_run_that_has_not_started_is_not_an_error(tmp_path):
+    """The monitor cell is re-run constantly, including before anything runs."""
+    campaign = Campaign(minimal_config(), tmp_path)
+    assert "no log yet" in campaign.tail("a")
+
+
+def test_watch_reports_from_disk_not_from_being_the_parent(tmp_path, capsys):
+    """The detached mode depends on this.
+
+    When the campaign is started with nohup from a terminal, the notebook is
+    not its parent and never sees its stdout. Monitoring has to work purely
+    from the state file and the logs.
+    """
+    script = _noisy_script(tmp_path)
+    state_dir = tmp_path / "state"
+    runner = _campaign_with(script, state_dir, 30)
+    runner.launch("noisy", echo="none")
+    capsys.readouterr()
+
+    # A completely separate Campaign object, as a monitoring cell would build.
+    observer = _campaign_with(script, state_dir, 30)
+    assert observer.state["noisy"].status == DONE
+    assert "step 29" in observer.tail("noisy", lines=5)
