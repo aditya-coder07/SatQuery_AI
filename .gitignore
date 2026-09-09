@@ -59,3 +59,6 @@ data/
 # by `stage_data.py build` and would otherwise put a large binary-shaped blob
 # in every clone.
 configs/data_manifest.json
+
+# Bootstrap creates a per-checkout venv on the training server.
+.venv/
