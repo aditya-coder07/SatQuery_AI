@@ -139,7 +139,10 @@ runs:
     tool: rs_vqa_v1
     family: vlm_qlora
     script: training/track_b_vlm_qlora.py
-    needs_data: [instruct_mix]
+    # instruct.jsonl is pointers only. 3,297 of its rows resolve into
+    # whu_opt_sar and 2,043 into rsvqa_lr_2k; staging the mix alone gives
+    # a run that opens the JSONL fine and then fails on the first image.
+    needs_data: [instruct_mix, whu_opt_sar, rsvqa_lr_2k]
     depends_on: []
     est_hours: 20
     ckpt_dir: checkpoints/v2/track_b_vqa
@@ -297,7 +300,8 @@ runs:
     tool: change_vqa_v1
     family: change
     script: training/train_change_vqa.py
-    needs_data: [cdvqa]
+    # CDVQA is the questions; SECOND is the imagery they are asked about.
+    needs_data: [cdvqa, second]
     depends_on: [change_mask]
     est_hours: 5
     ckpt_dir: checkpoints/v2/change_vqa
@@ -314,7 +318,8 @@ runs:
     tool: change_vqa_v1
     family: change
     script: training/train_change_vqa.py
-    needs_data: [cdvqa]
+    # CDVQA is the questions; SECOND is the imagery they are asked about.
+    needs_data: [cdvqa, second]
     depends_on: [change_vqa]
     est_hours: 5
     ckpt_dir: checkpoints/v2/change_vqa_scratch

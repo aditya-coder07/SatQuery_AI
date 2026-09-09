@@ -99,7 +99,7 @@ DATASETS: tuple[DataSet, ...] = (
     DataSet(
         key="whu_opt_sar",
         subdir="whu_opt_sar",
-        required_by=("optsar_fusion",),
+        required_by=("optsar_fusion", "track_b_vqa"),
         note="~5 m optical+SAR, the middle rung of the resolution ladder",
     ),
     DataSet(
@@ -107,7 +107,21 @@ DATASETS: tuple[DataSet, ...] = (
         subdir="instruct_mix",
         required_by=("track_b_vqa",),
         patterns=("*.jsonl", "*.json"),
-        note="instruction mix; images are referenced by path into the other dirs",
+        note="instruction mix: POINTERS ONLY (~5 MB). The pixels are in "
+             "whu_opt_sar and rsvqa_lr_2k - staging this alone trains nothing",
+    ),
+    DataSet(
+        key="rsvqa_lr_2k",
+        subdir="rsvqa_lr_2k",
+        required_by=("track_b_vqa",),
+        note="RSVQA-LR imagery; 2,043 of the instruction mix's rows point here",
+    ),
+    DataSet(
+        key="second",
+        subdir="second",
+        required_by=("change_vqa", "change_vqa_scratch_v2"),
+        note="SECOND semantic-change pairs - the imagery behind CDVQA. "
+             "Weights trained on it are unpublishable: it states no licence",
     ),
     DataSet(
         key="dior_rsvg",
