@@ -792,3 +792,67 @@ def test_all_campaign_scripts_accept_the_flag_they_will_be_given(tmp_path):
     for run in campaign.runs.values():
         assert run.accepts_batch_size(), \
             f"{run.id}: {run.script} does not declare --batch-size"
+
+
+# --- An orphaned trainer must never be double-started -----------------------
+
+
+def test_a_live_trainer_keeps_the_run_from_being_reclaimed(tmp_path):
+    """The near-miss on the lab box.
+
+    The driver was killed while `track_a` kept training as an orphan. The
+    queue tracked only the DRIVER's pid, so it reported the run stale and
+    ready to restart - which would have put two trainers in one checkpoint
+    directory, the exact corruption this file exists to prevent.
+    """
+    import os
+
+    campaign = Campaign(minimal_config(), tmp_path)
+    state = campaign.state["a"]
+    state.status = RUNNING
+    state.owner_host = None
+    state.owner_pid = 999999          # driver: dead
+    state.child_pid = os.getpid()     # trainer: alive
+    state.child_cmdline = None
+    state.heartbeat = time.time() - 10_000
+
+    assert state.trainer_alive()
+    assert not state.is_stale()
+    assert campaign.reclaim_stale(verbose=False) == []
+    assert "a" not in campaign.ready()
+
+
+def test_a_dead_trainer_with_a_dead_driver_is_reclaimed(tmp_path):
+    campaign = Campaign(minimal_config(), tmp_path)
+    state = campaign.state["a"]
+    state.status = RUNNING
+    state.owner_host = None
+    state.owner_pid = 999999
+    state.child_pid = 999998
+    state.heartbeat = time.time() - 10_000
+    assert not state.trainer_alive()
+    assert state.is_stale()
+
+
+def test_pid_reuse_does_not_make_a_stranger_look_like_our_trainer(tmp_path):
+    """A recycled pid running something else must not hang the queue forever."""
+    import os
+    import sys
+
+    campaign = Campaign(minimal_config(), tmp_path)
+    state = campaign.state["a"]
+    state.status = RUNNING
+    state.child_pid = os.getpid()
+    state.child_cmdline = "definitely_not_this_process_xyzzy.py"
+
+    if sys.platform.startswith("linux"):
+        assert not state.trainer_alive()
+    else:
+        # No /proc: the pid check stands alone and errs towards "alive",
+        # which is the safe direction - it refuses to start a duplicate.
+        assert state.trainer_alive()
+
+
+def test_no_child_pid_recorded_means_not_alive(tmp_path):
+    campaign = Campaign(minimal_config(), tmp_path)
+    assert not campaign.state["a"].trainer_alive()

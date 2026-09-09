@@ -81,6 +81,10 @@ REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 # short enough that a session killed at 02:00 is reclaimable by 02:10.
 STALE_AFTER_S = 600.0
 
+# argv separator in /proc/<pid>/cmdline. Built rather than written literally so
+# this file never contains a NUL byte of its own.
+NUL = bytes([0])
+
 PENDING, RUNNING, DONE, FAILED, INTERRUPTED = (
     "pending", "running", "done", "failed", "interrupted",
 )
@@ -109,6 +113,14 @@ class RunState:
     heartbeat: float | None = None
     owner_host: str | None = None
     owner_pid: int | None = None
+    # The TRAINER's pid, which is not the driver's. A driver can die and leave
+    # its trainer running as an orphan; restarting the run then puts two
+    # processes in one checkpoint directory, which is the corruption this
+    # whole file exists to avoid. Measured on the lab box: the driver was
+    # killed and `track_a` kept training, while the queue reported it stale
+    # and ready to restart.
+    child_pid: int | None = None
+    child_cmdline: str | None = None
     seconds: float = 0.0
     log: str | None = None
     error: str | None = None
@@ -131,6 +143,10 @@ class RunState:
         """
         if self.status != RUNNING:
             return False
+        if self.trainer_alive():
+            # The driver may be gone, but the work is not. Reclaiming here
+            # would start a second trainer on the same checkpoint directory.
+            return False
         if self.owner_alive():
             return False
 
@@ -141,6 +157,34 @@ class RunState:
         now = now if now is not None else time.time()
         beat = self.heartbeat or self.started_at or 0.0
         return now - beat >= STALE_AFTER_S
+
+    def trainer_alive(self) -> bool:
+        """Is the training subprocess still running?
+
+        The pid alone is not enough - pids are reused, and mistaking someone
+        else's process for our trainer would hang the queue forever. On Linux
+        the command line is readable from /proc, so the recorded script name
+        is checked against it. Where /proc is unavailable the pid check stands
+        alone, which errs towards "alive" and so towards not double-starting.
+        """
+        if self.child_pid is None:
+            return False
+        try:
+            os.kill(self.child_pid, 0)
+        except (OSError, ProcessLookupError):
+            return False
+        except PermissionError:
+            return True
+
+        if not self.child_cmdline:
+            return True
+        try:
+            with open(f"/proc/{self.child_pid}/cmdline", "rb") as fh:
+                # /proc separates argv entries with NUL, not spaces.
+                actual = fh.read().replace(NUL, b" ").decode(errors="replace")
+        except OSError:
+            return True          # no /proc; the pid check is what we have
+        return self.child_cmdline in actual
 
     def owner_alive(self) -> bool:
         """Is the recorded owner process still running, on this host?
@@ -563,6 +607,12 @@ class Campaign:
                     stderr=subprocess.STDOUT, text=True, bufsize=1,
                     errors="replace",
                 )
+                # Record the TRAINER's pid, not just the driver's, so that a
+                # driver that dies leaving an orphan cannot be followed by a
+                # second trainer in the same checkpoint directory.
+                state.child_pid = proc.pid
+                state.child_cmdline = str(REPO_ROOT / run.script)
+                self.save(only=run_id)
                 last_echo = 0.0
                 suppressed = 0
                 for line in proc.stdout:
@@ -607,6 +657,10 @@ class Campaign:
             state.seconds += time.time() - started
             state.finished_at = time.time()
             state.owner_pid = None
+            # The trainer has exited by the time we get here; leaving a stale
+            # pid would make the next `reclaim_stale` believe it is still up.
+            state.child_pid = None
+            state.child_cmdline = None
 
         state.exit_code = code
         state.status = DONE if code == 0 else FAILED
