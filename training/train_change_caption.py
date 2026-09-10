@@ -86,7 +86,8 @@ def build_model(vocab_size: int, dim: int = 128, arch: str = "v1"):
     if arch == "v2":
         from training.v2.architectures import build_change_caption
 
-        return build_change_caption(vocab_size=vocab_size, dim=dim)
+        return build_change_caption(vocab_size=vocab_size, dim=dim,
+                                    bos_id=BOS, max_len=MAX_LEN)
 
     import torch
     import torch.nn as nn

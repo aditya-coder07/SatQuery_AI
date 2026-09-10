@@ -335,3 +335,60 @@ def test_checkpoint_without_an_arch_field_loads_as_v1(tmp_path):
     save_checkpoint(tmp_path, 10, model, optimizer, extra={"dim": 16})
 
     assert type(_Handle(tmp_path).model).__name__ == type(model).__name__
+
+
+# --- Generation: the method forward-shape tests do not reach ----------------
+
+
+def test_caption_v2_can_generate():
+    """The gap that cost two completed runs their evaluation.
+
+    Both caption models trained their full schedule and then died in the
+    evaluator with `'CaptionV2' object has no attribute 'generate'`. The
+    forward contract was checked; the method the evaluator actually calls at
+    the end was not. Shape and dtype here match what v1 returned.
+    """
+    model = v2.build_caption(vocab_size=200, dim=96, bos_id=1, max_len=24)
+    ids = model.generate(torch.randn(B, 3, 224, 224))
+    assert ids.shape == (B, 24)
+    assert ids.dtype == torch.long
+    assert (ids >= 0).all() and (ids < 200).all()
+
+
+def test_change_caption_v2_can_generate():
+    model = v2.build_change_caption(vocab_size=200, dim=64, bos_id=1, max_len=24)
+    ids = model.generate(torch.randn(B, 3, 256, 256), torch.randn(B, 3, 256, 256),
+                         torch.rand(B, 1, 256, 256))
+    assert ids.shape == (B, 24)
+    assert ids.dtype == torch.long
+
+
+def test_generate_respects_max_len():
+    model = v2.build_caption(vocab_size=200, dim=96, bos_id=1, max_len=24)
+    assert model.generate(torch.randn(1, 3, 224, 224), max_len=7).shape == (1, 7)
+
+
+def test_generate_does_not_return_the_seed_token():
+    """v1 returned only produced tokens; `decode` assumes no leading BOS."""
+    bos = 5
+    model = v2.build_caption(vocab_size=200, dim=96, bos_id=bos, max_len=6).eval()
+    ids = model.generate(torch.randn(4, 3, 224, 224))
+    assert ids.shape == (4, 6)
+    # A model that returned its seed would start every row with `bos`.
+    assert not (ids[:, 0] == bos).all()
+
+
+@pytest.mark.parametrize("task,builder", [
+    ("caption", "build_caption"),
+    ("change_caption", "build_change_caption"),
+])
+def test_v2_captioners_expose_every_method_v1_had(task, builder):
+    """Guards the whole class of bug, not just this instance.
+
+    A v2 model is a drop-in only if the trainer can call everything on it that
+    it called on v1. `forward` was verified for all seven; `generate` was not,
+    and only the two captioners have it.
+    """
+    model = getattr(v2, builder)(vocab_size=50, dim=64)
+    for name in ("forward", "generate"):
+        assert callable(getattr(model, name, None)), f"{task} lacks {name}()"

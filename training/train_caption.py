@@ -53,7 +53,10 @@ def build_model(vocab_size: int, dim: int = 192, arch: str = "v1"):
     if arch == "v2":
         from training.v2.architectures import build_caption
 
-        return build_caption(vocab_size=vocab_size, dim=dim)
+        # BOS and MAX_LEN are passed rather than duplicated: the v2 decoder
+        # has to seed generation with the same token the vocabulary uses.
+        return build_caption(vocab_size=vocab_size, dim=dim,
+                             bos_id=BOS, max_len=MAX_LEN)
 
     import torch
     import torch.nn as nn

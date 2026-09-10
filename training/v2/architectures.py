@@ -442,7 +442,8 @@ def build_change_mask(dim: int = 32, depths=(2, 2, 2, 2)):
     return ChangeMaskV2()
 
 
-def build_change_caption(vocab_size: int, dim: int = 128, max_tokens: int = 64):
+def build_change_caption(vocab_size: int, dim: int = 128, max_tokens: int = 64,
+                         bos_id: int = 1, max_len: int = 24):
     """v2 change captioner. `model(a, b, mask, tokens) -> (B, T, V)` logits.
 
     The decoder is a masked transformer rather than v1's GRU, for one specific
@@ -513,6 +514,52 @@ def build_change_caption(vocab_size: int, dim: int = 128, max_tokens: int = 64):
             hidden = self.decoder(x, memory, tgt_mask=causal,
                                   tgt_key_padding_mask=tokens == 0)
             return self.out(hidden)
+
+        def _memory(self, a, b, mask):
+            fa, fb = self.encoder(a)[-1], self.encoder(b)[-1]
+            diff = torch.abs(fa - fb)
+            if mask.dim() == 3:
+                mask = mask.unsqueeze(1)
+            m = self.mask_stem(mask.to(diff.dtype))
+            if m.shape[-2:] != diff.shape[-2:]:
+                m = F.interpolate(m, size=diff.shape[-2:], mode="bilinear",
+                                  align_corners=False)
+            memory, h, w = _flatten_spatial(self.fuse(torch.cat([diff, m], dim=1)))
+            return self.memory_norm(memory) + self.pos[:, : h * w]
+
+        @torch.no_grad()
+        def generate(self, a, b, mask, max_len: int = max_len):
+            """Greedy decode, matching the v1 signature and output shape.
+
+            WHY THIS EXISTS AS A SEPARATE METHOD
+
+            `forward` is teacher-forced: it is handed the whole target
+            sequence at once. Generation has no target, so each step must feed
+            back what the model just produced. Omitting this is how both
+            caption runs trained for their full schedule and then died in the
+            evaluator - the weights were fine, there was simply no way to read
+            them out.
+
+            Returns `max_len` tokens without the BOS that seeded them, which
+            is exactly what v1 returned; the caller's `decode` truncates at
+            EOS.
+            """
+            memory = self._memory(a, b, mask)
+            seq = torch.full((a.shape[0], 1), bos_id, dtype=torch.long,
+                             device=a.device)
+            produced = []
+            for _ in range(max_len):
+                t = seq.shape[1]
+                x = self.embed(seq) + self.tok_pos[:, :t]
+                causal = torch.triu(
+                    torch.ones(t, t, dtype=torch.bool, device=seq.device),
+                    diagonal=1,
+                )
+                hidden = self.decoder(x, memory, tgt_mask=causal)
+                nxt = self.out(hidden[:, -1]).argmax(-1, keepdim=True)
+                produced.append(nxt)
+                seq = torch.cat([seq, nxt], dim=1)
+            return torch.cat(produced, dim=1)
 
     return ChangeCaptionV2()
 
@@ -674,7 +721,8 @@ def build_optsar_fusion(dim: int = 32, n_classes: int = 7, n_optical: int = 4,
 # --- Scene captioning --------------------------------------------------------
 
 
-def build_caption(vocab_size: int, dim: int = 192, max_tokens: int = 64):
+def build_caption(vocab_size: int, dim: int = 192, max_tokens: int = 64,
+                  bos_id: int = 1, max_len: int = 24):
     """v2 scene captioner. `model(image, tokens) -> (B, T, V)` logits."""
     torch, nn, F, ResidualBlock, Backbone, _ = _blocks()
 
@@ -709,6 +757,27 @@ def build_caption(vocab_size: int, dim: int = 192, max_tokens: int = 64):
             hidden = self.decoder(x, memory, tgt_mask=causal,
                                   tgt_key_padding_mask=tokens == 0)
             return self.out(hidden)
+
+        @torch.no_grad()
+        def generate(self, image, max_len: int = max_len):
+            """Greedy decode. See `ChangeCaptionV2.generate` for why."""
+            memory, h, w = _flatten_spatial(self.encoder(image)[-1])
+            memory = self.memory_norm(memory) + self.pos[:, : h * w]
+            seq = torch.full((image.shape[0], 1), bos_id, dtype=torch.long,
+                             device=image.device)
+            produced = []
+            for _ in range(max_len):
+                t = seq.shape[1]
+                x = self.embed(seq) + self.tok_pos[:, :t]
+                causal = torch.triu(
+                    torch.ones(t, t, dtype=torch.bool, device=seq.device),
+                    diagonal=1,
+                )
+                hidden = self.decoder(x, memory, tgt_mask=causal)
+                nxt = self.out(hidden[:, -1]).argmax(-1, keepdim=True)
+                produced.append(nxt)
+                seq = torch.cat([seq, nxt], dim=1)
+            return torch.cat(produced, dim=1)
 
     return CaptionV2()
 
