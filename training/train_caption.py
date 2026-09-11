@@ -49,14 +49,16 @@ from training.train_change_caption import (  # noqa: E402
 IMAGE_SIZE = 224
 
 
-def build_model(vocab_size: int, dim: int = 192, arch: str = "v1"):
+def build_model(vocab_size: int, dim: int = 192, arch: str = "v1",
+                pretrained: bool = False):
     if arch == "v2":
         from training.v2.architectures import build_caption
 
         # BOS and MAX_LEN are passed rather than duplicated: the v2 decoder
         # has to seed generation with the same token the vocabulary uses.
         return build_caption(vocab_size=vocab_size, dim=dim,
-                             bos_id=BOS, max_len=MAX_LEN)
+                             bos_id=BOS, max_len=MAX_LEN,
+                             pretrained=pretrained)
 
     import torch
     import torch.nn as nn
@@ -157,6 +159,11 @@ def main() -> int:
         "--arch", choices=["v1", "v2"], default="v1",
         help="v1 = the published architecture; v2 = training/v2/architectures.py",
     )
+    p.add_argument(
+        "--pretrained", action="store_true",
+        help="ImageNet ResNet-50 visual backbone instead of from-scratch. "
+             "Only meaningful with --arch v2.",
+    )
     p.add_argument("--seed", type=int, default=42)
     p.add_argument("--save-every", type=int, default=100)
     p.add_argument("--resume", action="store_true")
@@ -190,7 +197,8 @@ def main() -> int:
     print(f"train {len(train_rows)} | test {len(test_rows)} | vocab {len(vocab)}")
 
     train_ds, test_ds = RSICD(train_rows, vocab), RSICD(test_rows, vocab)
-    model = build_model(len(vocab), args.dim, arch=args.arch).to(device)
+    model = build_model(len(vocab), args.dim, arch=args.arch,
+                        pretrained=args.pretrained).to(device)
     print(f"parameters: {sum(q.numel() for q in model.parameters())/1e6:.2f}M")
 
     optimizer = torch.optim.AdamW(model.parameters(), lr=args.lr)

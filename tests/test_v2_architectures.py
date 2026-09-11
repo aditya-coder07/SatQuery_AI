@@ -392,3 +392,58 @@ def test_v2_captioners_expose_every_method_v1_had(task, builder):
     model = getattr(v2, builder)(vocab_size=50, dim=64)
     for name in ("forward", "generate"):
         assert callable(getattr(model, name, None)), f"{task} lacks {name}()"
+
+
+# --- Pretrained backbones ---------------------------------------------------
+
+
+def test_pretrained_backbone_is_a_drop_in_for_the_scratch_one():
+    """Same interface, so either can be swapped in without touching consumers."""
+    pytest.importorskip("torchvision")
+    backbone = v2.build_pretrained_backbone(cin=3)
+    feats = backbone(torch.randn(1, 3, 224, 224))
+    assert len(feats) == 4
+    assert [f.shape[1] for f in feats] == backbone.widths
+    assert backbone.out_dim == backbone.widths[-1]
+
+
+def test_pretrained_backbone_adapts_to_a_different_band_count():
+    """12-band input must reuse the RGB filters, not discard them.
+
+    Re-initialising conv1 randomly would throw away exactly the thing a
+    pretrained backbone is for.
+    """
+    pytest.importorskip("torchvision")
+    backbone = v2.build_pretrained_backbone(cin=12)
+    out = backbone(torch.randn(1, 12, 120, 120))
+    assert out[-1].shape[1] == 2048
+    assert torch.isfinite(out[-1]).all()
+
+
+@pytest.mark.parametrize("builder,kwargs,shape", [
+    ("build_grounding", {"vocab_size": 85, "dim": 128}, (2, 4)),
+    ("build_caption", {"vocab_size": 200, "dim": 192}, (2, 24, 200)),
+])
+def test_pretrained_variants_keep_the_v1_forward_contract(builder, kwargs, shape):
+    pytest.importorskip("torchvision")
+    model = getattr(v2, builder)(**kwargs, pretrained=True)
+    image = torch.randn(2, 3, 224, 224)
+    if builder == "build_grounding":
+        out = model(image, torch.randint(0, 85, (2, 16)))
+    else:
+        out = model(image, torch.randint(1, 200, (2, 24)))
+    assert out.shape == shape
+
+
+def test_the_projection_keeps_the_model_from_ballooning():
+    """ResNet-50 is 2048 wide; sizing the decoder off that is the trap.
+
+    Without a projection the pretrained caption model was 234M parameters on
+    8,734 RSICD captions - a decoder eight times larger than the one that
+    already overfits. The pretrained FEATURES are the point, not the width.
+    """
+    pytest.importorskip("torchvision")
+    scratch = v2.build_caption(vocab_size=1781, dim=192, pretrained=False)
+    pretrained = v2.build_caption(vocab_size=1781, dim=192, pretrained=True)
+    ratio = params_m(pretrained) / params_m(scratch)
+    assert ratio < 2.5, f"pretrained model is {ratio:.1f}x the scratch one"

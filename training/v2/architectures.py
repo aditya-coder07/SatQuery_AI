@@ -164,6 +164,74 @@ def _blocks():
     return torch, nn, F, ResidualBlock, Backbone, TextEncoder
 
 
+def build_pretrained_backbone(cin: int = 3, weights: str = "IMAGENET1K_V2"):
+    """A torchvision ResNet-50 that returns its four stages, ImageNet-pretrained.
+
+    WHY THIS NOW EXISTS, HAVING BEEN RULED OUT
+
+    The module docstring above says pretrained weights were rejected because
+    "a cluster notebook may have no outbound network, and a run that dies at
+    `from_pretrained` after 63 GB is staged is the worst available failure".
+
+    That premise turned out to be false for the machine this actually runs on.
+    `compute01` reaches pypi.org, github.com and huggingface.co, and the whole
+    environment was pip-installed over that network. The reason held when it
+    was written and does not hold here.
+
+    The evidence for the size of the effect is internal and direct. On SECOND,
+    same data and same schedule:
+
+        pretrained ResNet-18 stem   mIoU 0.2933
+        from-scratch v2             mIoU 0.1730
+
+    +0.12 mIoU from pretraining alone. Every v2 model still far below its
+    published range - track_a 0.315 against 0.65-0.85, grounding 0.126 against
+    0.70-0.80 - is from-scratch, and 40 extra epochs on track_a moved test mAP
+    by 0.002 while training loss fell tenfold. Capacity and schedule are not
+    what is missing.
+
+    Interface matches `Backbone` exactly - `widths`, `out_dim`, and a forward
+    returning one feature map per stage - so it is a drop-in for either.
+    """
+    import torch
+    import torch.nn as nn
+    import torchvision
+
+    net = torchvision.models.resnet50(weights=weights)
+
+    if cin != 3:
+        # Keep the pretrained filters and adapt the channel count by averaging
+        # across RGB, which is the standard way to carry ImageNet weights to a
+        # different band count. Random re-init would discard exactly the thing
+        # we came for. The 3/cin rescale keeps the summed activation magnitude
+        # roughly where the pretrained batch-norm statistics expect it.
+        old = net.conv1
+        conv = nn.Conv2d(cin, 64, 7, stride=2, padding=3, bias=False)
+        with torch.no_grad():
+            mean = old.weight.mean(dim=1, keepdim=True)
+            conv.weight.copy_(mean.repeat(1, cin, 1, 1) * (3.0 / cin))
+        net.conv1 = conv
+
+    class PretrainedBackbone(nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.stem = nn.Sequential(net.conv1, net.bn1, net.relu, net.maxpool)
+            self.stages = nn.ModuleList([net.layer1, net.layer2,
+                                         net.layer3, net.layer4])
+            self.widths = [256, 512, 1024, 2048]
+            self.out_dim = 2048
+
+        def forward(self, x):
+            x = self.stem(x)
+            feats = []
+            for stage in self.stages:
+                x = stage(x)
+                feats.append(x)
+            return feats
+
+    return PretrainedBackbone()
+
+
 def _flatten_spatial(feat):
     """(B,C,H,W) -> (B,HW,C), the layout every attention module here wants."""
     b, c, h, w = feat.shape
@@ -281,7 +349,8 @@ def build_track_a(n_bands: int = 12, dim: int = 96, gsd_conditioning: bool = Tru
 # --- Grounding: the box regressor that keeps its coordinates ----------------
 
 
-def build_grounding(vocab_size: int, dim: int = 128, max_tokens: int = 16):
+def build_grounding(vocab_size: int, dim: int = 128, max_tokens: int = 16,
+                    pretrained: bool = False):
     """v2 referring grounder. `model(image, tokens) -> (B,4)` in cx,cy,w,h.
 
     THE DEFECT THIS EXISTS TO FIX
@@ -315,8 +384,17 @@ def build_grounding(vocab_size: int, dim: int = 128, max_tokens: int = 16):
     class GroundingV2(nn.Module):
         def __init__(self):
             super().__init__()
-            self.backbone = Backbone(cin=3, dim=dim // 2, depths=(2, 2, 2, 2))
-            width = self.backbone.out_dim
+            self.backbone = (build_pretrained_backbone(cin=3) if pretrained
+                             else Backbone(cin=3, dim=dim // 2, depths=(2, 2, 2, 2)))
+            # ResNet-50 ends 2048 wide. Sizing the attention and the text
+            # encoder off that gives a 147M-parameter model on ~38k
+            # referring expressions - the pretrained FEATURES are what we
+            # came for, not a decoder eight times larger than the one that
+            # already overfits. A 1x1 projection keeps the former and drops
+            # the latter.
+            width = min(self.backbone.out_dim, dim * 4)
+            self.proj = (nn.Conv2d(self.backbone.out_dim, width, 1)
+                         if self.backbone.out_dim != width else nn.Identity())
             self.text = TextEncoder(vocab_size, dim=width, layers=2, heads=4,
                                     max_tokens=max_tokens)
 
@@ -351,7 +429,7 @@ def build_grounding(vocab_size: int, dim: int = 128, max_tokens: int = 16):
             return grid.reshape(1, h * w, 4)
 
         def forward(self, image, tokens, return_heatmap: bool = False):
-            feats = self.backbone(image)[-1]
+            feats = self.proj(self.backbone(image)[-1])
             tokens_v, h, w = _flatten_spatial(feats)
             tokens_v = self.visual_norm(tokens_v)
             pos = self._positions(h, w, tokens_v.device, tokens_v.dtype)
@@ -722,15 +800,21 @@ def build_optsar_fusion(dim: int = 32, n_classes: int = 7, n_optical: int = 4,
 
 
 def build_caption(vocab_size: int, dim: int = 192, max_tokens: int = 64,
-                  bos_id: int = 1, max_len: int = 24):
+                  bos_id: int = 1, max_len: int = 24,
+                  pretrained: bool = False):
     """v2 scene captioner. `model(image, tokens) -> (B, T, V)` logits."""
     torch, nn, F, ResidualBlock, Backbone, _ = _blocks()
 
     class CaptionV2(nn.Module):
         def __init__(self):
             super().__init__()
-            self.encoder = Backbone(cin=3, dim=dim // 3, depths=(2, 2, 2, 2))
-            width = self.encoder.out_dim
+            self.encoder = (build_pretrained_backbone(cin=3) if pretrained
+                            else Backbone(cin=3, dim=dim // 3, depths=(2, 2, 2, 2)))
+            # See build_grounding: 2048 would size a 234M decoder on 8,734
+            # captions. Project, keep the features, keep the decoder sane.
+            width = min(self.encoder.out_dim, dim * 3)
+            self.proj = (nn.Conv2d(self.encoder.out_dim, width, 1)
+                         if self.encoder.out_dim != width else nn.Identity())
             self.memory_norm = nn.LayerNorm(width)
             self.pos = nn.Parameter(torch.zeros(1, 1024, width))
             nn.init.trunc_normal_(self.pos, std=0.02)
@@ -746,7 +830,7 @@ def build_caption(vocab_size: int, dim: int = 192, max_tokens: int = 64,
             self.out = nn.Linear(width, vocab_size)
 
         def forward(self, image, tokens):
-            memory, h, w = _flatten_spatial(self.encoder(image)[-1])
+            memory, h, w = _flatten_spatial(self.proj(self.encoder(image)[-1]))
             memory = self.memory_norm(memory) + self.pos[:, : h * w]
             t = tokens.shape[1]
             x = self.embed(tokens) + self.tok_pos[:, :t]
@@ -761,7 +845,7 @@ def build_caption(vocab_size: int, dim: int = 192, max_tokens: int = 64,
         @torch.no_grad()
         def generate(self, image, max_len: int = max_len):
             """Greedy decode. See `ChangeCaptionV2.generate` for why."""
-            memory, h, w = _flatten_spatial(self.encoder(image)[-1])
+            memory, h, w = _flatten_spatial(self.proj(self.encoder(image)[-1]))
             memory = self.memory_norm(memory) + self.pos[:, : h * w]
             seq = torch.full((image.shape[0], 1), bos_id, dtype=torch.long,
                              device=image.device)
