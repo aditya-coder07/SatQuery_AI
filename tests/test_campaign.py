@@ -895,3 +895,56 @@ def test_runs_compute_every_metric_the_comparison_expects():
         source = (REPO / run["script"]).read_text(encoding="utf-8")
         assert re.search(r'add_argument\(\s*"' + re.escape(flag) + '"', source), \
             f"{run['script']} does not define {flag}"
+
+
+# --- Pruning must not delete the best checkpoint ----------------------------
+
+
+def test_prune_keeps_the_protected_checkpoint(tmp_path):
+    """The bug that cost `track_b_vqa` its best adapter.
+
+    Validation loss bottomed at step 4000 (0.1649) and rose to 0.2529 by step
+    6000. With `keep_last=3` only 5500/5750/6000 survived, so the adapter the
+    pipeline loads was measurably worse than one that had been deleted - and
+    `val_history.json` still named `ckpt_step_4000.pt` as best, pointing at a
+    file that no longer existed.
+    """
+    pytest.importorskip("torch")
+    from training.common.checkpointing import _prune_old_checkpoints
+
+    for step in (4000, 5500, 5750, 6000):
+        (tmp_path / f"ckpt_step_{step}.pt").write_bytes(b"x")
+        (tmp_path / f"adapter_step_{step}").mkdir()
+
+    _prune_old_checkpoints(tmp_path, keep_last=3, protect=4000)
+
+    surviving = {p.name for p in tmp_path.glob("ckpt_step_*.pt")}
+    assert surviving == {"ckpt_step_4000.pt", "ckpt_step_5500.pt",
+                         "ckpt_step_5750.pt", "ckpt_step_6000.pt"}
+    # The adapter directory beside it must survive too - the .pt alone is
+    # useless for a PEFT run, which stores the weights next to it.
+    assert (tmp_path / "adapter_step_4000").is_dir()
+
+
+def test_prune_without_protection_is_unchanged(tmp_path):
+    """The default must still behave exactly as it always did."""
+    pytest.importorskip("torch")
+    from training.common.checkpointing import _prune_old_checkpoints
+
+    for step in (1000, 2000, 3000, 4000):
+        (tmp_path / f"ckpt_step_{step}.pt").write_bytes(b"x")
+
+    _prune_old_checkpoints(tmp_path, keep_last=3)
+    assert {p.name for p in tmp_path.glob("ckpt_step_*.pt")} == {
+        "ckpt_step_2000.pt", "ckpt_step_3000.pt", "ckpt_step_4000.pt"}
+
+
+def test_protecting_a_recent_checkpoint_deletes_nothing_extra(tmp_path):
+    pytest.importorskip("torch")
+    from training.common.checkpointing import _prune_old_checkpoints
+
+    for step in (1000, 2000, 3000, 4000):
+        (tmp_path / f"ckpt_step_{step}.pt").write_bytes(b"x")
+
+    _prune_old_checkpoints(tmp_path, keep_last=3, protect=4000)
+    assert len(list(tmp_path.glob("ckpt_step_*.pt"))) == 3

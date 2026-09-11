@@ -165,6 +165,7 @@ def save_checkpoint(
     extra: dict | None = None,
     keep_last: int = 3,
     is_peft: bool = False,
+    protect: int | None = None,
 ) -> Path:
     """Write a checkpoint atomically and prune old ones.
 
@@ -202,12 +203,25 @@ def save_checkpoint(
     torch.save(payload, tmp)
     os.replace(tmp, target)
 
-    _prune_old_checkpoints(ckpt_dir, keep_last)
+    _prune_old_checkpoints(ckpt_dir, keep_last, protect=protect)
     return target
 
 
-def _prune_old_checkpoints(ckpt_dir: Path, keep_last: int) -> None:
-    """Keep only the newest `keep_last` checkpoints; free tiers have small disks."""
+def _prune_old_checkpoints(ckpt_dir: Path, keep_last: int,
+                           protect: int | None = None) -> None:
+    """Keep the newest `keep_last` checkpoints, plus `protect`, and delete the rest.
+
+    `protect` exists because pruning by recency alone deleted the best model.
+    Measured on `track_b_vqa`: validation loss bottomed at 0.1649 (step 4000)
+    and rose to 0.2529 by step 6000, and with `keep_last=3` only 5500/5750/6000
+    survived. The trainer had *recorded* `best_checkpoint: ckpt_step_4000.pt`
+    in `val_history.json` and then deleted the file it named - so the adapter
+    the pipeline loads was measurably worse than one thrown away, and the
+    record pointed at something that no longer existed.
+
+    Free-tier disks were the reason for pruning and that reason still holds;
+    keeping one extra checkpoint is a cheap exception to it.
+    """
     if keep_last <= 0:
         return
     matches = sorted(
@@ -217,6 +231,8 @@ def _prune_old_checkpoints(ckpt_dir: Path, keep_last: int) -> None:
     for stale in matches[:-keep_last]:
         stale_path = Path(stale)
         step = int(_STEP_RE.search(stale.replace("\\", "/")).group(1))  # type: ignore[union-attr]
+        if protect is not None and step == protect:
+            continue
         stale_path.unlink(missing_ok=True)
         adapter = ckpt_dir / f"adapter_step_{step}"
         if adapter.is_dir():

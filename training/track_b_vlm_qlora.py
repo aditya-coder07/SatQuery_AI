@@ -331,6 +331,12 @@ def build_parser() -> argparse.ArgumentParser:
     # a 40 MB adapter save is cheap.
     p.add_argument("--save-every", type=int, default=25)
     p.add_argument("--keep-last", type=int, default=3)
+    p.add_argument(
+        "--patience", type=int, default=0,
+        help="stop after this many validations with no improvement "
+             "(0 = never stop early). The v2 run overfit for 2,000 steps "
+             "past its optimum; --patience 3 would have stopped it.",
+    )
     p.add_argument("--resume", action="store_true")
     p.add_argument("--lora-r", type=int, default=16)
     p.add_argument("--lora-alpha", type=int, default=32)
@@ -484,6 +490,7 @@ def main() -> int:
     )
 
     val_history: list[dict] = []
+    stop_early = False
 
     model.train()
     step = state.step
@@ -537,29 +544,89 @@ def main() -> int:
                 f"  lr {lr_now:.3e}{marker}",
                 flush=True,
             )
+            # Save the best adapter THE MOMENT it is best, rather than
+            # trusting it to survive pruning. It did not: val bottomed at
+            # step 4000 and `keep_last=3` deleted that checkpoint while
+            # `val_history.json` still named it, so the adapter the pipeline
+            # loaded was the overfit one from step 6000. An adapter is ~40 MB
+            # and this costs one copy per improvement.
+            if best["step"] == step:
+                best_dir = args.ckpt_dir / "adapter_best"
+                model.save_pretrained(str(best_dir))
+                print(f"  best adapter -> {best_dir}", flush=True)
+
+            # Validations since the best one. Counted on the history rather
+            # than a running tally so a resumed run inherits it correctly.
+            since_best = sum(1 for r in val_history if r["step"] > best["step"])
+            if args.patience and since_best >= args.patience:
+                print(
+                    f"\nEarly stop: {since_best} validations without "
+                    f"improvement on {best['val_loss']:.4f} @ step "
+                    f"{best['step']}. Training past this point is what made "
+                    "the previous adapter worse than one already saved.",
+                    flush=True,
+                )
+                stop_early = True
+
             # Written every time, so an interrupted run still says which
             # checkpoint was best rather than losing the record.
             args.ckpt_dir.mkdir(parents=True, exist_ok=True)
             (args.ckpt_dir / "val_history.json").write_text(
                 json.dumps(
                     {"history": val_history, "best": best,
-                     "best_checkpoint": f"ckpt_step_{best['step']}.pt"},
+                     "best_checkpoint": f"ckpt_step_{best['step']}.pt",
+                     "best_adapter": "adapter_best"},
                     indent=2,
                 ),
                 encoding="utf-8",
             )
 
-        if step % args.save_every == 0 or step == args.max_steps:
+        if step % args.save_every == 0 or step == args.max_steps or stop_early:
             state.step = step
             state.metrics_history.append({"step": step, "loss": total_loss})
+            best_step = (min(val_history, key=lambda r: r["val_loss"])["step"]
+                         if val_history else None)
             path = save_checkpoint(
                 args.ckpt_dir, step, model, optimizer, scheduler,
                 state=state, keep_last=args.keep_last, is_peft=True,
+                protect=best_step,
             )
             print(f"  checkpoint -> {path}", flush=True)
 
+        if stop_early:
+            break
+
     final = args.ckpt_dir / "adapter_final"
     model.save_pretrained(str(final))
+
+    # `rs_vqa_v1` finished its v2 run with no metrics.json at all, so the one
+    # tool whose v1 weights were destroyed had no number of any kind. Held-out
+    # loss is not a benchmark score, but it is a measurement, it is written
+    # where every other run writes one, and it names which adapter it belongs
+    # to - which is exactly what went wrong before.
+    if val_history:
+        best = min(val_history, key=lambda r: r["val_loss"])
+        (args.ckpt_dir / "metrics.json").write_text(
+            json.dumps({
+                "val_loss_best": best["val_loss"],
+                "val_loss_final": val_history[-1]["val_loss"],
+                "best_step": best["step"],
+                "steps_trained": val_history[-1]["step"],
+                "n_val": best["n_val"],
+                "stopped_early": stop_early,
+                "deploy_adapter": "adapter_best",
+                "note": ("val_loss is held-out cross-entropy on the instruction "
+                         "mix, NOT an RSVQA or VRSBench score. Deploy "
+                         "adapter_best, not adapter_final - the first v2 run's "
+                         "final adapter scored 0.2529 against its own best of "
+                         "0.1649."),
+            }, indent=2),
+            encoding="utf-8",
+        )
+        print(f"  metrics -> {args.ckpt_dir / 'metrics.json'}")
+        print(f"  BEST adapter: {args.ckpt_dir / 'adapter_best'} "
+              f"(val {best['val_loss']:.4f} @ step {best['step']})")
+
     print(f"\nTraining complete. Adapter saved to {final}")
     print("Load it in the pipeline with rs_vqa_v1's adapter_path parameter.")
     return 0

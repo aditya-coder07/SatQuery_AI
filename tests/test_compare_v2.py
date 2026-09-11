@@ -37,15 +37,23 @@ def test_baselines_match_the_v1_metrics_files_when_present():
     """
     checked = 0
     for entry in COMPARISONS:
-        source = REPO / entry.v1_source
+        # `path:key` says the v1 number lives under a DIFFERENT key from the
+        # one v2 writes. change_caption is the case: v1 recorded
+        # `bleu4_aggregate`, the current evaluator writes
+        # `bleu4_sentence_mean`, and the two are the same quantity over the
+        # same 1,929 pairs. Spelling that out keeps the baseline checkable
+        # instead of quietly unverified.
+        source_spec, _, key = entry.v1_source.partition(":")
+        source = REPO / source_spec
         if not source.is_file():
             continue
         recorded = json.loads(source.read_text(encoding="utf-8"))
-        assert entry.metric in recorded, \
-            f"{entry.v1_source} has no key '{entry.metric}'"
-        assert recorded[entry.metric] == pytest.approx(entry.v1_value, abs=1e-12), \
+        v1_key = key or entry.metric
+        assert v1_key in recorded, f"{source_spec} has no key '{v1_key}'"
+        # v1 cards quote some figures to 4 dp, so compare at that precision.
+        assert recorded[v1_key] == pytest.approx(entry.v1_value, abs=1e-4), \
             f"{entry.run_id}.{entry.metric}: table says {entry.v1_value}, " \
-            f"{entry.v1_source} says {recorded[entry.metric]}"
+            f"{source_spec}:{v1_key} says {recorded[v1_key]}"
         checked += 1
     if checked == 0:
         pytest.skip("no v1 checkpoints on this machine")

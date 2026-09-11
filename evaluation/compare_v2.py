@@ -110,11 +110,15 @@ COMPARISONS: tuple[Comparison, ...] = (
     ),
     Comparison(
         run_id="change_caption", tool="change_caption_v1",
-        metric="bleu4_changed", label="BLEU-4 (changed half)",
-        v1_value=0.3063,
-        v1_source="checkpoints/change_caption/metrics.json",
-        note="the aggregate is inflated by the trivially-unchanged half; "
-             "the changed half is the meaningful figure",
+        metric="bleu4_sentence_mean", label="BLEU-4 (aggregate)",
+        v1_value=0.5686,
+        v1_source="checkpoints/change_caption/metrics.json:bleu4_aggregate",
+        note="AGGREGATE, and v1's own card says the aggregate is inflated by "
+             "the trivially-unchanged half - roughly 965 of 1929 pairs where "
+             "'no change' is the correct caption. The meaningful figure is "
+             "the changed half (v1: 0.3063), and the current evaluator no "
+             "longer computes that split, so the two cannot be compared on "
+             "it. Read this row as 'not worse overall', not as a gain",
     ),
     Comparison(
         run_id="optsar_fusion", tool="optsar_fusion_v1",
@@ -149,14 +153,46 @@ COMPARISONS: tuple[Comparison, ...] = (
 )
 
 
+def ckpt_dirs_from_config() -> dict[str, str]:
+    """run id -> the directory that run actually writes to.
+
+    They are not the same thing: `change_vqa_scratch_v2` writes to
+    `checkpoints/v2/change_vqa_scratch`. Assuming `ckpt_root/<run_id>` made
+    that run's result invisible, and the table reported it as `pending` long
+    after it had finished - a silent omission, which is the failure mode this
+    file is supposed to prevent.
+    """
+    try:
+        import yaml
+
+        config = yaml.safe_load(
+            (REPO_ROOT / "configs/campaign.yaml").read_text(encoding="utf-8")
+        )
+    except (OSError, ImportError):
+        return {}
+    return {r["id"]: r["ckpt_dir"] for r in config.get("runs", []) if r.get("ckpt_dir")}
+
+
+_CKPT_DIRS = ckpt_dirs_from_config()
+
+
 def load_metrics(ckpt_root: Path, run_id: str) -> dict | None:
+    configured = _CKPT_DIRS.get(run_id)
+    if configured:
+        path = REPO_ROOT / configured / "metrics.json"
+        if path.is_file():
+            return _read(path)
     path = ckpt_root / run_id / "metrics.json"
     if not path.is_file():
         return None
+    return _read(path)
+
+
+def _read(path: Path) -> dict | None:
     try:
         return json.loads(path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as exc:
-        print(f"  ! {run_id}: metrics.json unreadable ({exc})", file=sys.stderr)
+        print(f"  ! {path}: unreadable ({exc})", file=sys.stderr)
         return None
 
 
