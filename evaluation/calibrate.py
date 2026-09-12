@@ -192,8 +192,11 @@ def change_mask_logits(
     if not rows:
         raise SystemExit(f"no test rows in {index_path}")
 
-    latest = find_latest_checkpoint(checkpoint)
-    if latest is None:
+    # A directory of step checkpoints, or one file (Phase 6 trainers keep a
+    # val-selected best.pt; that is the deployed artefact, so it is what
+    # gets calibrated).
+    latest = find_latest_checkpoint(checkpoint) if checkpoint.is_dir() else checkpoint
+    if latest is None or not Path(latest).is_file():
         raise SystemExit(f"no checkpoint in {checkpoint}")
     device = "cuda" if torch.cuda.is_available() else "cpu"
     # As in evaluation/splits/multires.py: the checkpoint says which
