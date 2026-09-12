@@ -110,15 +110,20 @@ COMPARISONS: tuple[Comparison, ...] = (
     ),
     Comparison(
         run_id="change_caption", tool="change_caption_v1",
-        metric="bleu4_sentence_mean", label="BLEU-4 (aggregate)",
+        metric="bleu4_changed", label="BLEU-4 (changed half)",
+        v1_value=0.3063,
+        v1_source="checkpoints/change_caption/metrics.json",
+        note="the meaningful figure - v1's card says quote this, never the "
+             "aggregate, which the trivially-unchanged half inflates to ~0.57. "
+             "The split had been dropped from the evaluator and was reinstated "
+             "on 2026-09-12; the v2 checkpoint was re-scored under it",
+    ),
+    Comparison(
+        run_id="change_caption", tool="change_caption_v1",
+        metric="bleu4_aggregate", label="BLEU-4 (aggregate)",
         v1_value=0.5686,
-        v1_source="checkpoints/change_caption/metrics.json:bleu4_aggregate",
-        note="AGGREGATE, and v1's own card says the aggregate is inflated by "
-             "the trivially-unchanged half - roughly 965 of 1929 pairs where "
-             "'no change' is the correct caption. The meaningful figure is "
-             "the changed half (v1: 0.3063), and the current evaluator no "
-             "longer computes that split, so the two cannot be compared on "
-             "it. Read this row as 'not worse overall', not as a gain",
+        v1_source="checkpoints/change_caption/metrics.json",
+        note="inflated; shown only so the two rows can be read together",
     ),
     Comparison(
         run_id="optsar_fusion", tool="optsar_fusion_v1",

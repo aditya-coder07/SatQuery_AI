@@ -5,8 +5,16 @@
 > and `docs/model-cards.md` §"Phase 5 cards". Headline: `rs_vqa_v1` scores
 > **0.8947** on the official RSVQA-LR test (published convention, in the
 > literature's 89–93% range); `change_mask` F1 0.56 → 0.86; `optsar_fusion`
-> still shows no SAR complementarity under a second architecture. Nothing
-> is deployed yet — the per-tool recommendation is on each card.
+> still shows no SAR complementarity under a second architecture.
+>
+> **DEPLOYED, later that day.** The default compose files point at the Phase 5
+> checkpoints and the refitted v2 registries; `docker-compose.v1.yml` reverts
+> with one flag. 8/8 tools load, demo bundle 9/9. One tool stays on v1:
+> `change_caption`, whose v2 regressed on the changed half (0.1641 vs 0.3063)
+> once the evaluator's split was reinstated - the aggregate had hidden it.
+> Deploying also surfaced and fixed four pre-existing defects, including that
+> the pipeline had never looked at cloud cover. `docs/phase5-full-training.md`
+> §7 "Deployed".
 >
 > **Earlier — 2026-09-09: Phase 5 exists.** `docs/phase5-full-training.md` is a
 > harness and a plan for retraining all nine tools on college cluster GPU,

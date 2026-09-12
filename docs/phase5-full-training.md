@@ -301,24 +301,44 @@ published 0.65–0.85 was never a like-for-like target.
 
 ### What §6 said that is still true
 
-* **The tools have not been re-pointed at v2 checkpoints.** The plumbing works
-  — `arch` in `extra`, dispatch tested end-to-end — but no `SATQUERY_*`
-  variable points at a v2 directory, and the v1 calibration and thresholds
-  were fitted to v1 scores. Per-tool deployment is the next decision, with the
-  recommendation stated on each Phase 5 card.
 * **Licensing is unchanged.** `change_vqa` weights remain unpublishable.
+
+### Deployed — 2026-09-12, later the same day
+
+The two preconditions were met and the default was switched. Doing so found
+four more defects, all pre-existing, all masked until the learned tools were
+actually run through the pipeline:
+
+* **A train/serve mismatch in calibration.** The fit used raw logits; the
+  runtime clamped probabilities and capped the recovered logit at 13.8. The
+  v2 land-cover head emits logits to +71, and after the affine every one of
+  its top 33,620 decisions served as p ≤ 0.365 - a tool that could assert
+  nothing, with a raw ranking 89% precise in its top 56.
+  `CalibrationEntry.apply_logit` closes it; identical for every v1 head.
+* **A silent head vetoed answers.** landcover asserting nothing reported 0.0,
+  the executor took the minimum, and four of nine demo beats abstained while
+  caption had answered. v1 passed only by asserting at 0.98 on imagery it had
+  never seen. `no_assertion` is now its own confidence method.
+* **Cloud had never been looked at.** `cloud_pct` was "Phase 2 work" since
+  Phase 1; the abstention beat's expectation could not fail; the 63% clouded
+  scene was captioned at 0.88. ingest now estimates it and ≥50% blocks.
+* **`change_caption`'s split was gone.** Reinstated; v2 scores 0.1641 on the
+  changed half against v1's 0.3063, so that one tool stays on v1.
+
+The default compose files now point at the Phase 5 checkpoints and the v2
+registries, with `docker-compose.v1.yml` as the one-flag revert. Verified:
+8/8 tools load through the production loaders, and the demo bundle is 9/9
+with the clouded scene abstaining for the actual reason for the first time.
+Golden traces changed in exactly one field (`ingest.checks`, the new check).
 
 ### What remains
 
-In order of what it would settle:
-
-1. **Deploy per tool**, refitting calibration where the v1 transform was fitted
-   to v1 scores (`landcover`, `change_mask`).
-2. **Reinstate `bleu4_changed`** in the change-caption evaluator, so that tool
-   has a meaningful comparison rather than an inflated aggregate.
-3. **Full BigEarthNet** for Track A — the one gap that is now demonstrably data
-   and not schedule. ~380 GB and hours of preparation; a decision, not a
-   default.
-4. **`optsar_fusion`**: state the negative result. Two designs on the one
-   paired corpus available have not shown SAR complementarity, and the report
-   is stronger for saying so than for a third attempt.
+1. **A pretrained arm for `change_caption`** - the only tool Phase 5 made
+   worse, and the only one whose architecture changed without one.
+2. **Full BigEarthNet** for Track A - now provably the only lever left there.
+   ~380 GB; a decision, not a default.
+3. **`optsar_fusion`**: state the negative result. Two designs on the one
+   paired corpus have not shown SAR complementarity.
+4. The executor's `warnings` list is collected and never written into the
+   trace - every append is write-only. Noted, not fixed: it predates Phase 5
+   and touches the trace contract.

@@ -48,14 +48,22 @@ services:
       # localhost only; a deployment sets this to its real origin. Never "*".
       - SATQUERY_CORS_ORIGINS=${SATQUERY_CORS_ORIGINS:-http://localhost:3000,http://127.0.0.1:3000}
       - SATQUERY_VQA_BASE=/app/models/qwen25_vl_3b
-      - SATQUERY_VQA_ADAPTER=/app/checkpoints/track_b_v2/adapter_final
-      - SATQUERY_CAPTION=/app/checkpoints/caption
-      - SATQUERY_LANDCOVER=/app/checkpoints/track_a_full_base
-      - SATQUERY_GROUNDING=/app/checkpoints/grounding
-      - SATQUERY_CHANGE_MASK=/app/checkpoints/change_mask
+      - SATQUERY_VQA_ADAPTER=/app/checkpoints/v2/track_b_vqa/adapter_final
+      - SATQUERY_CAPTION=/app/checkpoints/v2/caption_pre
+      - SATQUERY_LANDCOVER=/app/checkpoints/v2/track_a
+      - SATQUERY_GROUNDING=/app/checkpoints/v2/grounding_pre
+      - SATQUERY_CHANGE_MASK=/app/checkpoints/v2/change_mask
+            # STAYS ON v1. The v2 captioner scores 0.1641 BLEU-4 on the changed
+      # half against v1's 0.3063 - a regression the aggregate (0.5746 vs
+      # 0.5686) hid, because v2 got better at 'there is no difference' and
+      # worse at describing change. docs/model-cards.md, Phase 5 cards.
       - SATQUERY_CHANGE_CAPTION=/app/checkpoints/change_caption
-      - SATQUERY_CHANGE_VQA=/app/checkpoints/change_vqa/best.pt
-      - SATQUERY_FUSION=/app/checkpoints/optsar_fusion
+      - SATQUERY_CHANGE_VQA=/app/checkpoints/v2/change_vqa/best.pt
+      - SATQUERY_FUSION=/app/checkpoints/v2/optsar_fusion
+      # Registries fitted to the Phase 5 heads (2026-09-12). The v1 transforms
+      # were fitted to v1 score distributions and do not carry over.
+      - SATQUERY_CALIBRATION=/app/configs/calibration.v2.json
+      - SATQUERY_THRESHOLDS=/app/configs/thresholds.v2.yaml
     healthcheck:
       # /health is the liveness endpoint the API already exposes. Without a
       # healthcheck `depends_on` only waits for the container to start, not

@@ -41,7 +41,9 @@ DEPLOY = {
     "change_mask":    ("SATQUERY_CHANGE_MASK",    "checkpoints/v2/change_mask",     "_Handle"),
     "grounding":      ("SATQUERY_GROUNDING",      "checkpoints/v2/grounding_pre",   "_Handle"),
     "caption":        ("SATQUERY_CAPTION",        "checkpoints/v2/caption_pre",     "_Handle"),
-    "change_caption": ("SATQUERY_CHANGE_CAPTION", "checkpoints/v2/change_caption",  "_Handle"),
+    # v1, deliberately: the v2 change captioner regressed on the changed half
+    # (0.1641 vs 0.3063) once the split was reinstated. See its Phase 5 card.
+    "change_caption": ("SATQUERY_CHANGE_CAPTION", "checkpoints/change_caption",     "_Handle"),
     "optsar_fusion":  ("SATQUERY_FUSION",         "checkpoints/v2/optsar_fusion",   "_Handle"),
     "change_vqa":     ("SATQUERY_CHANGE_VQA",     "checkpoints/v2/change_vqa/best.pt", "_SemanticHandle"),
 }

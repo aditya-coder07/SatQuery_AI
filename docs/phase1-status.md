@@ -2182,12 +2182,12 @@ roughly 25 GPU-hours.
 | `landcover_v1` | mAP, 12 bands | 0.2854 | 0.3150 | +0.0296 | 40 epochs |
 | `landcover_v1` | 4-band retention | 0.9015 | **0.9262** | +0.0247 | |
 | `change_vqa_v1` | change-class mIoU | 0.2636 | 0.2933 | +0.0297 | pretrained stem |
-| `change_caption_v1` | BLEU-4, aggregate | 0.5686 | 0.5746 | +0.0060 | see caveat |
+| `change_caption_v1` | BLEU-4, changed half | 0.3063 | 0.1641 | −0.1422 | **regression** — not deployed |
 | `optsar_fusion_v1` | fused − best single | −0.0064 | **−0.0301** | −0.0238 | **regression** |
 | `optsar_fusion_v1` | fused mAP | 0.7714 | 0.7420 | −0.0294 | **regression** |
 
-One competitive result, one large gain, four modest gains, two regressions
-of which one matters. Each is taken in turn, the regressions first.
+One competitive result, one large gain, three modest gains, three
+regressions of which two matter. Each is taken in turn, the regressions first.
 
 ### `optsar_fusion_v1`: fusion still adds nothing, and it is PS-mandatory
 
@@ -2321,20 +2321,36 @@ This is the measurement that justified the pretrained arms for grounding and
 caption. The SECOND licence position is unchanged: these weights remain
 unpublishable.
 
-### `change_caption_v1`: a caveat, not a gain
+### `change_caption_v1`: the aggregate hid a regression — corrected 2026-09-12, later the same day
 
-0.5686 → 0.5746 is aggregate-to-aggregate, and the 2026-08 card says the
-aggregate is inflated by the ~965 trivially-unchanged pairs. v1's meaningful
-figure was `bleu4_changed` 0.3063; the current evaluator no longer computes
-that split. Read the row as "not worse overall". Reinstating the split is the
-next thing to do on this tool.
+The first version of this section, written hours earlier, read the
+aggregate 0.5686 → 0.5746 as "not worse" and said the meaningful split was
+unavailable. The split was reinstated in the evaluator that afternoon and the
+v2 checkpoint re-scored under it:
+
+| | changed half (n=964) | unchanged half (n=965) | aggregate |
+|---|---|---|---|
+| v1 | **0.3063** | 0.9706 | 0.5686 |
+| v2 | **0.1641** | 0.9846 | 0.5746 |
+
+**v2 is worse by 0.14 BLEU-4 on the half that matters**, and the aggregate
+rose anyway, because v2 got marginally better at emitting the fixed "there
+is no difference" sentence that half the test set expects. That is exactly
+the inflation the v1 card warned about, and it is why "read this as not
+worse" was the wrong reading and the aggregate should never have been the
+row. The same diversity-versus-accuracy pattern as `caption`: 638 distinct
+captions against v1's 85, and less often right.
+
+**`change_caption_v1` stays on the v1 checkpoint.** The deployed compose
+files say so in a comment beside the path.
 
 ### What Phase 5 established, in one paragraph
 
 Architecture was the binding constraint on `change_mask` and it is fixed.
 Pretraining is the binding constraint on `grounding`, `caption` and
 `change_vqa`, measured directly, and a network-free environment was the wrong
-premise for excluding it. Data is the binding constraint on `landcover`,
+premise for excluding it; `change_caption` got the architecture change
+without the pretraining and regressed, and stays on v1. Data is the binding constraint on `landcover`,
 proven by a schedule that did nothing. `rs_vqa_v1` is competitive on the
 official benchmark and was the one tool with no fallback. And `optsar_fusion`
 has now failed under two designs on the only paired corpus available, which

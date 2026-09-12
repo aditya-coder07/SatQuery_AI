@@ -572,20 +572,29 @@ does not change that.
 
 ---
 
-## `change_caption_v1` — v2
+## `change_caption_v1` — v2 (NOT deployed)
 
 | | |
 |---|---|
-| Checkpoint | `checkpoints/v2/change_caption/` |
+| Checkpoint | `checkpoints/v2/change_caption/` — **kept as the comparison; the tool loads v1** |
 | Architecture | siamese residual encoder → difference + mask → transformer decoder; 25.39M parameters |
 | Training | LEVIR-MCI, 50 epochs |
-| BLEU-4, aggregate | 0.5746 (v1 aggregate 0.5686) |
+| **BLEU-4, changed pairs** | **0.1641** (v1 0.3063) — **regression** |
+| BLEU-4, unchanged pairs | 0.9846 (v1 0.9706) |
+| BLEU-4, aggregate | 0.5746 (v1 0.5686) |
+| Unique captions | 638 (v1 85) |
 
-**Read this as "not worse", not as a gain.** The v1 card says the aggregate is
-inflated by the ~965 trivially-unchanged pairs and that `bleu4_changed`
-(v1: 0.3063) is the meaningful figure. The current evaluator does not compute
-that split, so the meaningful comparison is not available. Reinstating it is
-the next task on this tool, before any deployment decision.
+**Quote 0.1641, never 0.5746** — the same rule the v1 card states, and the
+reason this card exists in this form. The aggregate rose while the changed
+half fell by 0.14, because v2 is slightly better at the fixed "there is no
+difference" sentence that half the test set expects. The evaluator had
+dropped the split; the first Phase 5 write-up read the aggregate as "not
+worse" and was wrong. Reinstated and re-scored 2026-09-12.
+
+**Recommendation:** load `checkpoints/change_caption` (v1). This is the one
+tool where Phase 5 produced a worse model, and the one where the
+architecture changed without a pretrained backbone; a pretrained arm is the
+obvious next attempt and has not been run.
 
 ---
 
