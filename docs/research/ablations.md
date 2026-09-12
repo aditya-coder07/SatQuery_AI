@@ -1,0 +1,64 @@
+# Ablations — Phase 6
+
+What caused each gain, one factor at a time where the arms exist. All rows
+are measured by this project; sources are the report/metrics files named.
+"Same data" means the same split and manifest hash.
+
+## Change detection (LEVIR-CD official test, change-class F1 / IoU)
+
+| Arm | Encoder | Loss / schedule | Aug | Selection | F1 | IoU | Source |
+|---|---|---|---|---|---|---|---|
+| v1 (Phase 3) | 0.05M scratch | BCE pos_weight, 4 ep | none | last | 0.5597 | 0.3886 | `checkpoints/change_mask/metrics.json` |
+| v2 (Phase 5) | scratch residual, 60 ep | BCE pos_weight | none | last | 0.8550 | 0.7467 | `docs/assets/phase5/change_mask` |
+| **v3** | ImageNet ResNet-50 siamese + FPN, 40 ep | BCE pos_weight + Dice, cosine, bf16 | dihedral + date swap | best val F1 | **0.9038** | **0.8244** | `docs/assets/phase6/change_mask` |
+| v3, final-epoch weights | same | same | same | last | 0.9005 | 0.8190 | same file |
+
+Pretraining + decoder + loss + augmentation are confounded in one step (+4.9
+F1 over v2); the val-selection alone is worth +0.3 F1. A scratch-encoder
+v3 arm is the missing ablation and is cheap (~25 min); queued for day 2.
+
+## Optical-SAR fusion (WHU-OPT-SAR, 7-class mIoU; per-tile gain = fused − optical)
+
+| Arm | Labels | Split | Encoders | Task | optical | SAR | fused | gain | Source |
+|---|---|---|---|---|---|---|---|---|---|
+| v2 (Phase 5) | **misaligned** | tile-random (scene-leaky) | scratch | tile presence mAP | 0.772 | — | 0.742 | −0.030 | `docs/assets/phase5/optsar_fusion` |
+| v3 on old labels | **misaligned** | scene-disjoint | ImageNet R50 ×2 | per-pixel | 0.199 | 0.183 | 0.196 | −0.002 | `docs/assets/phase6/optsar_fusion_mislabelled` |
+| **v3** | aligned (re-cut) | scene-disjoint | ImageNet R50 ×2 | per-pixel | 0.447 | 0.388 | **0.468** | **+0.021** (per-tile +0.009, CI [+0.006, +0.012]) | `docs/assets/phase6/optsar_fusion` |
+| v3, fused head with SAR zeroed | aligned | scene-disjoint | same | per-pixel | — | — | 0.409 | −0.038 vs optical | same file |
+
+The label fix is the whole story: identical architecture and split, labels
+one tile off → no learnable signal; aligned → a positive gain with a CI
+that excludes zero. Modality dropout gives a fused head that degrades
+gracefully without SAR (0.409, still above SAR-only) but not to optical
+level: a "selective use" router should fall back to the optical head when
+SAR is absent, which the tool's payload now makes possible.
+
+## Grounding (DIOR-RSVG official test, Acc@0.5)
+
+| Arm | Data | Model | Acc@0.5 | Source |
+|---|---|---|---|---|
+| Phase 5 CNN (pretrained) | 6,359 expressions **of the test split**, 15% self-made holdout | ImageNet R50 + GRU, box regression | 0.160 (Category C) | `docs/assets/phase5/grounding_pre` |
+| Qwen2.5-VL-3B zero-shot | none | base | **0.3823** [0.371, 0.394] | `artifacts/benchmark_reports/dior_rsvg_official_zero_shot.json` |
+| + LoRA r16 (LLM only), official train, 1 epoch | 26,991 | adapter | *val 0.6375–0.6475 at steps 400–800; test pending* | night-1 queue |
+
+Planned arms, in order of expected gain ÷ cost: + train the visual merger
+(`--train-merger`); + second epoch from `adapter_last`; + hard negatives
+(same image, other object of the same category) targeted at `wrong_object`;
+7B base.
+
+## Captioning (corpus BLEU-4, 5 references)
+
+| Task | Arm | BLEU-4 | CIDEr-D | Source |
+|---|---|---|---|---|
+| RSICD | v2 caption_pre (specialist, ImageNet R50 + transformer decoder) | 0.1744 | 0.562 | `artifacts/benchmark_reports/rescoring/rsicd_caption_pre.json` |
+| RSICD | Qwen2.5-VL-3B + LoRA (RSICD 5 refs/image) | pending | pending | night-1 queue |
+| LEVIR-CC | v1 mask-conditioned GRU (**GT mask at test**) | 0.384 (changed half 0.222) | 1.29 | `artifacts/benchmark_reports/rescoring/levircc_change_caption_v1.json` |
+| LEVIR-CC | Qwen2.5-VL-3B + LoRA, two images, no mask | pending | pending | night-1 queue |
+
+## Land cover (BigEarthNet-19 test shard, 5,867 patches; macro mAP / 4-band retention)
+
+| Arm | Encoder | Data | mAP | retention | Source |
+|---|---|---|---|---|---|
+| v2 (Phase 5) | scratch band-agnostic + FiLM GSD | 65,867 patches, 40 ep | 0.315 | 0.926 | `docs/assets/phase5/track_a` |
+| v3 | SSL4EO-S12 MoCo ResNet-50 (12-band) | same patches, 30 ep, band dropout 0.3 | pending | pending | queued |
+| v3 `--no-pretrained` | same trunk from scratch | same | planned | | |
