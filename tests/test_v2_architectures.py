@@ -447,3 +447,45 @@ def test_the_projection_keeps_the_model_from_ballooning():
     pretrained = v2.build_caption(vocab_size=1781, dim=192, pretrained=True)
     ratio = params_m(pretrained) / params_m(scratch)
     assert ratio < 2.5, f"pretrained model is {ratio:.1f}x the scratch one"
+
+
+@pytest.mark.parametrize("record_flag", [True, False])
+def test_pretrained_caption_round_trips_through_the_tool(tmp_path, record_flag):
+    """The checkpoint must carry `pretrained`, or the tool must infer it.
+
+    Found by scripts/verify_v2_deploy.py on the lab box: grounding_pre and
+    caption_pre both failed to load with a state-dict size mismatch, because
+    the tool rebuilt the FROM-SCRATCH v2 (width 512) for weights written by
+    the pretrained one (width 576). `--pretrained` selects a different
+    backbone and so must travel with the weights, exactly like `arch`.
+
+    `record_flag=False` is the two checkpoints already on disk, written
+    before the flag was recorded: the tool infers it from the `proj.` keys
+    only the pretrained variant has.
+    """
+    pytest.importorskip("torchvision")
+    from satquery.tools.caption import _Handle
+    from training.common.checkpointing import save_checkpoint
+    from training.train_caption import build_model
+
+    vocab = {"<pad>": 0, "<bos>": 1, "<eos>": 2, "<unk>": 3, "a": 4, "b": 5}
+    (tmp_path / "vocab.json").write_text(json_dumps(vocab), encoding="utf-8")
+
+    model = build_model(len(vocab), 96, arch="v2", pretrained=True)
+    extra = {"arch": "v2", "dim": 96}
+    if record_flag:
+        extra["pretrained"] = True
+    save_checkpoint(tmp_path, 10, model, torch.optim.SGD(model.parameters(), lr=0.1),
+                    extra=extra)
+
+    loaded = _Handle(tmp_path).model
+    assert type(loaded).__name__ == "CaptionV2"
+    assert hasattr(loaded, "proj") and not isinstance(loaded.proj, torch.nn.Identity)
+    saved, got = model.state_dict(), loaded.state_dict()
+    assert set(saved) == set(got)
+
+
+def json_dumps(obj) -> str:
+    import json
+
+    return json.dumps(obj)

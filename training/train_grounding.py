@@ -367,7 +367,8 @@ def main() -> int:
                 state.step, state.epoch = step, epoch
                 save_checkpoint_unless_eval(
                     args, step, model, optimizer, state=state,
-                    extra={"arch": args.arch, "dim": args.dim},
+                    extra={"arch": args.arch, "dim": args.dim,
+                   "pretrained": args.pretrained},
                 )
         print(f"epoch {epoch+1}/{args.epochs}  loss {running/max(seen,1):.4f}  "
               f"({time.time()-started:.0f}s)", flush=True)
@@ -375,7 +376,8 @@ def main() -> int:
     state.step, state.epoch = step, args.epochs
     save_checkpoint_unless_eval(
         args, step, model, optimizer, state=state,
-        extra={"arch": args.arch, "dim": args.dim},
+        extra={"arch": args.arch, "dim": args.dim,
+                   "pretrained": args.pretrained},
     )
 
     model.eval()

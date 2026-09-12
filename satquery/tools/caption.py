@@ -123,8 +123,18 @@ class _Handle:
         # existing checkpoint rebuilds exactly as it always did. Guessing
         # instead would load v1 weights into a v2 graph and fail on a key
         # mismatch that says nothing about the cause.
+        # `pretrained` selects a different backbone, so it must be known
+        # before the graph is built - exactly like `arch`. Two checkpoints
+        # were written before it was recorded; for those it is inferred from
+        # the weights: only the pretrained variant has a `proj.` projection
+        # after its 2048-wide ResNet-50 (the from-scratch trunk is Identity
+        # there). The same pattern `landcover` uses to infer `has_gsd`.
+        state = payload.get("model_state_dict", {})
+        pretrained = extra.get("pretrained")
+        if pretrained is None:
+            pretrained = any(k.startswith("proj.") for k in state)
         model = build_model(vocab_size=len(self.vocab), dim=dim,
-                            arch=extra.get("arch", "v1"))
+                            arch=extra.get("arch", "v1"), pretrained=pretrained)
         load_checkpoint(latest, model, map_location="cpu")
 
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
