@@ -57,14 +57,14 @@ Planned arms, in order of expected gain ÷ cost: + train the visual merger
 
 ## Land cover (BigEarthNet-19 test shard, 5,867 patches; macro mAP / 4-band retention)
 
-| Arm | Encoder | Data | mAP | retention | Source |
+| Arm | Encoder | Data | macro mAP (micro) | retention | Source |
 |---|---|---|---|---|---|
 | v2 (Phase 5) | scratch band-agnostic + FiLM GSD | 65,867 patches, 40 ep | 0.315 | 0.926 | `docs/assets/phase5/track_a` |
 | v3 | SSL4EO-S12 MoCo ResNet-50 (12-band) | same 60,000 patches, 30 ep, band dropout 0.3 | 0.339 (micro 0.406) | 0.913 | `docs/assets/phase6/landcover` — Category B under geographic shift (L1 revised) |
 | v3 `--no-pretrained` | same trunk from scratch | same | planned (night 2) | | |
 | v3, in-subset holdout | SSL4EO-S12 | train p0–p2 (45,000) → test p3 (15,000; one acquisition shared) | 0.536 (micro 0.685) | 0.886 | `docs/assets/phase6/landcover_holdout` — Category B; p3 is 3 acquisitions p0–p2 barely cover |
 | v2 rescored on p3 | Phase 5 v2 | trained on p0–p3, so p3 is **in its training set** | 0.900 | 0.625 | `artifacts/benchmark_reports/rescoring/track_a_v2_on_holdout_p3.json` — **not a holdout for v2**; kept only as evidence that the shard's labels are learnable (contradicts the first L1 reading) |
-| v3, full official split | SSL4EO-S12 | 269,695 train / 20,000-item val subsample / 125,866 test | running (`sq-train-landcover-v3-full`) | | the only Category A row in this table |
+| v3, full official split | SSL4EO-S12 | 269,695 train / 20,000-item val subsample / 125,866 test | **0.792 macro / 0.885 micro** (best-val epoch 13; final epoch 0.792 / 0.878) | 0.94 | `docs/assets/phase6/landcover_full` — the only Category A row in this table; 2.05 GPU-h |
 
 The subset rows above disagree with each other by 0.2–0.6 mAP for one
 reason: which acquisitions the shards happen to contain. The full split

@@ -74,7 +74,7 @@ def main() -> int:
         ("change_mask", "phase5-change_mask", "f1", None, "checkpoints/v3/change_mask/best.pt"),
         ("optsar_fusion", "phase5-optsar_fusion", "complementarity_gain", None, "checkpoints/v3/optsar_fusion/best.pt"),
         ("grounding", "phase5-grounding_pre", "acc@0.5", None, "checkpoints/v3/grounding_vlm_r16/adapter_best"),
-        ("landcover", "phase5-track_a", "map_all_bands", None, "checkpoints/v3/landcover/final.pt"),
+        ("landcover", "phase5-track_a", "map_all_bands", None, "checkpoints/v3/landcover_full/best.pt"),
     ]
     for tool, base_id, key, _, ckpt in lineage:
         base = (by_id.get(base_id) or {}).get("validation_metrics") or {}

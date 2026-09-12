@@ -11,12 +11,12 @@ per-benchmark ledger is `docs/research/sota_matrix.md`, the run ledger is
 | Benchmark (official split) | Metric | CURRENT BASELINE (Phase 5, deployed 2026-09-12 a.m.) | BEST NEW RESULT | PUBLISHED BEST | ABS. IMPROVEMENT | REL. | COMPARABILITY | STATISTICAL CONFIDENCE |
 |---|---|---|---|---|---|---|---|---|
 | RSVQA-LR test | published-convention acc | 0.8947 [0.887, 0.902] | *pending* (SFT on official train) | 90.70 GeoChat / 92.63 UniRS | — | — | A | Wilson CI + McNemar vs constant |
-| DIOR-RSVG test | Acc@0.5 | 0.160 (**Category C**: trained on the test split) | 0.3823 zero-shot [0.371, 0.394]; LoRA *pending* | 83.4 LQVG / 77.7 GeoGround | +0.22 (zero-shot) | +139% | A (Phase 6) | bootstrap 95% CI; McNemar between arms |
+| DIOR-RSVG test | Acc@0.5 | 0.160 (**Category C**: trained on the test split) | **0.6877** [0.677, 0.699] (LoRA r16, official train; zero-shot 0.3823) | 83.4 LQVG / 77.7 GeoGround | +0.53 vs Phase 5 (+0.31 vs zero-shot) | +330% | A (Phase 6) | bootstrap 95% CI; McNemar 2,465 fixed / 174 broken, p ≪ 0.001 |
 | LEVIR-CD test | change F1 / IoU | 0.8550 / 0.7467 | **0.9038 / 0.8244** (independently verified; 0.9093 / 0.8336 at the val-selected threshold) | 92.06 / 85.28 ChangeGCC | +0.049 / +0.078 | +5.7% / +10.4% | B (256-px tiling) | 2,048 tiles; val-selected; per-tile bootstrap CI [0.899, 0.908]; robustness suite |
 | WHU-OPT-SAR (scene-disjoint) | fused − optical mIoU | −0.030 (tile-mAP, misaligned labels: **void**) | **+0.021** (0.447 → 0.468) | +1–3 mIoU reported by MCANet/ASANet | n/a (baseline void) | — | B | per-tile paired bootstrap CI [+0.006, +0.012] |
 | RSICD test | corpus BLEU-4 / CIDEr-D | 0.1744 / 0.562 (rescored; 0.266 was sentence-mean) | *pending* (VLM SFT) | ~0.30–0.45 / 1.5–2.5+ | — | — | A | bootstrap CI |
 | LEVIR-CC test | corpus BLEU-4 (5 refs) | 0.384 / changed 0.222 (v1, oracle mask; v2 0.388 / 0.231 — no regression) | *pending* (VLM, images only) | 65.5 SAGE-CC | — | — | B→A | bootstrap CI |
-| BigEarthNet-19 (S2 v1.0) official test | micro mAP / macro mAP / 4-band retention | 0.315 macro on a geographic subset shard (Category B under shift; L1 revised) | *pending* (SSL4EO-S12 trunk on the complete official split, `data/ben_v1_full`) | 88.5 SeaMo (micro) | — | — | A once the full split is scored | val-selected; 125,866 test patches |
+| BigEarthNet-19 (S2 v1.0) official test | micro mAP / macro mAP / 4-band retention | 0.315 macro on a geographic subset shard (Category B under shift; L1 revised) | **0.885 micro / 0.792 macro / retention 0.94** (SSL4EO-S12 trunk, complete official split, val-selected) | 88.5 SeaMo (micro), ~88.2 SpectralGPT | +0.48 macro vs Phase 5 (not comparable: different test) | — | **A** (official split, micro mAP) | 125,866 test patches; calibration ECE 0.0085 → 0.0030 on val; assertion threshold 0.69 at precision 0.90 / recall 0.61 |
 | Landsat-SCD test (CC BY 4.0) | change-type mIoU / SeK | none (SECOND unlicensed) | *pending* | GSTM-SCD-class methods report SeK ~20–30 on SCD sets | — | — | B | pair bootstrap |
 | CDVQA test1 | overall acc | 0.6061 | unchanged | — | — | — | A | — |
 
@@ -53,7 +53,7 @@ per-benchmark ledger is `docs/research/sota_matrix.md`, the run ledger is
 | fusion | WHU-OPT-SAR 29 scenes / 1,557 tiles | 7 scenes / 378 tiles | same (no separate test) | unstated |
 | caption | RSICD train 8,734 × 5 refs | RSICD val 300 | RSICD test 1,093 | unstated |
 | change caption | LEVIR-CC train 6,815 × 5 refs | val 300 | test 1,929 | academic-only |
-| landcover | BigEarthNet-S2 v1.0 official train 269,695 (subset 60,000 before 2026-09-12 20:00) | official val (20,000-item subsample) | official test 125,866 | CDLA-Permissive-1.0 |
+| landcover | BigEarthNet-S2 v1.0 official train 269,695 (subset 60,000 before 2026-09-12 20:00) | official val (20,000-item subsample; a second 20,000 subsample for calibration/threshold) | official test 125,866 | CDLA-Permissive-1.0 |
 | semantic change | Landsat-SCD 1,431 originals + 3,703 aug copies | 477 originals | 477 originals | CC BY 4.0 |
 
 ## 4. MODEL USED

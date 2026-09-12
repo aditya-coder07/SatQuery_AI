@@ -14,8 +14,8 @@ tools:
   grounding:
     env: {SATQUERY_GROUNDING_ADAPTER: checkpoints/v3/grounding_vlm_r16/adapter_best}
     fallback_env: {SATQUERY_GROUNDING: checkpoints/v2/grounding_pre}
-    status: pending
-    note: LoRA arm training; zero-shot base already 0.3823 vs 0.160 (Category A vs C)
+    status: selected
+    note: official DIOR-RSVG test Acc@0.5 0.6877 [0.677, 0.699] (zero-shot 0.3823; Phase 5 CNN 0.160 Category C); arms B/C queued and may replace it; 4-bit parity check pending
   change_mask:
     env: {SATQUERY_CHANGE_MASK: checkpoints/v3/change_mask/best.pt}
     status: selected
@@ -26,8 +26,8 @@ tools:
     note: aligned labels, scene-disjoint; fused 0.468 vs optical 0.447 mIoU; tool v3 path added
   landcover:
     env: {SATQUERY_LANDCOVER: checkpoints/v3/landcover_full/best.pt}
-    status: pending
-    note: SSL4EO-S12 trunk on the complete official BigEarthNet-S2 v1.0 split; running (val-selected best.pt)
+    status: selected
+    note: SSL4EO-S12 trunk on the complete official BigEarthNet-S2 v1.0 split; official test micro mAP 0.885 / macro 0.792 (v2 0.315 on a subset shard); 4-band retention 0.94; calibrated on val; verify_deploy OK 2026-09-13 00:04
   caption:
     env: {SATQUERY_CAPTION: checkpoints/v2/caption_pre}
     status: pending
@@ -42,4 +42,4 @@ tools:
     note: SECOND has no licence; Landsat-SCD (CC BY 4.0) benchmark run queued as the licensed replacement
 registries:
   SATQUERY_CALIBRATION: configs/calibration.v3.json   # change_mask fitted on official val (ECE 0.0053 -> 0.0011)
-  SATQUERY_THRESHOLDS: configs/thresholds.v2.yaml      # landcover threshold re-derived after the v3 run
+  SATQUERY_THRESHOLDS: configs/thresholds.v3.yaml      # landcover 0.69 (precision 0.90, recall 0.61 on official val)

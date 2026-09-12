@@ -6,7 +6,8 @@
 # Priority order from the charter: grounding first. Arm C continues the
 # arm-A adapter on the complete DIOR-RSVG train plus VRSBench grounding
 # (CC-BY-4.0, crops from DIOR-RSVG val/test images quarantined), capped at
-# 640x640 input so a step costs less than arm A's; then the official test
+# native resolution (arm A's test: small objects 0.51 vs large 0.89 Acc@0.5,
+# so input pixels are not where to save compute); then the official test
 # (paired McNemar against arm A) and the VRSBench val split. The
 # change_mask scratch ablation and grounding arm B (+merger) follow.
 #
@@ -73,8 +74,8 @@ run train_ground_vrs $PY training/train_vlm_sft.py --model $BASE \
   --val data/dior_rsvg_official/manifests/val.jsonl data/vrsbench/manifests/val_grounding.jsonl --val-limit 400 \
   --init-adapter checkpoints/v3/grounding_vlm_r16/adapter_best \
   --ckpt-dir checkpoints/v3/grounding_vlm_vrs --epochs 1 --batch-size 8 --grad-accum 2 --lr 5e-5 \
-  --max-pixels 409600 --val-every 400 --save-every 200 --workers 8 --quant none \
-  --notes "arm C: arm A adapter continued on DIOR-RSVG train (0.4x) + VRSBench grounding (CC-BY-4.0, quarantined), 640px cap"
+  --val-every 400 --save-every 200 --workers 8 --quant none \
+  --notes "arm C: arm A adapter continued on DIOR-RSVG train (0.4x) + VRSBench grounding (CC-BY-4.0, quarantined), native resolution"
 run eval_ground_armC $PY evaluation/grounding_official_eval.py --base $BASE --data data/dior_rsvg_official \
   --arms lora_r16=checkpoints/v3/grounding_vlm_r16/adapter_best lora_vrs=checkpoints/v3/grounding_vlm_vrs/adapter_best \
   --out artifacts/benchmark_reports/dior_rsvg_official_armC.json --batch 24

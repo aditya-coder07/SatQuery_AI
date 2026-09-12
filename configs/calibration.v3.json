@@ -1,7 +1,19 @@
 {
   "version": 1,
-  "generated_utc": "2026-09-12T13:19:15.081800+00:00",
+  "generated_utc": "2026-09-12T18:34:25.348648+00:00",
   "heads": {
+    "SINGLE_LANDCOVER": {
+      "method": "affine",
+      "T": 1.1702084943653197,
+      "a": 0.8545485738781662,
+      "b": -0.0464487869236909,
+      "ece_before": 0.00853984618654235,
+      "ece_after": 0.0029691480070691955,
+      "n_fit": 10000,
+      "n_eval": 10000,
+      "dataset": "BigEarthNet-19",
+      "split_note": "BigEarthNet-S2 v1.0 official val split, 20000 of 123723 patches (random subsample, seed 1), all 12 bands at native 10 m, checkpoint best.pt"
+    },
     "TEMPORAL_CHANGE_MAP": {
       "method": "affine",
       "T": 1.6641080739418268,

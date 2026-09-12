@@ -37,9 +37,9 @@ adapter switch per request, not a second model.
 |---|---|---|---|---|
 | change_mask | v3 best.pt | v2 | **select — frozen champion** | LEVIR-CD test F1 0.9038 / IoU 0.8244 independently reproduced through the deployed loader (CI [0.899, 0.908]); calibration v3 fitted on val (ECE 0.0011); val-selected threshold 0.8 → 0.9093 available as an operating point |
 | optsar_fusion | v3 best.pt | v2 | **select** | first positive complementarity, CI excludes zero; v2's number was on misaligned labels |
-| grounding | LoRA r16 adapter | v2 CNN (0.160, Category C) | pending official test | zero-shot alone is 0.3823 (A) |
+| grounding | LoRA r16 adapter (arm A) | v2 CNN (0.160, Category C) | **select** (arms B/C may replace) | official test 0.6877 [0.677, 0.699] vs zero-shot 0.3823, McNemar p ≪ 0.001; loads; 4-bit parity pending |
 | rs_vqa | official-train SFT | v2 adapter (0.8947) | pending official test | rule 2 applies |
 | caption | VLM caption adapter | v2 caption_pre (corpus BLEU-4 0.1744) | pending | |
 | change_caption | VLM two-image adapter | v1 (0.384, oracle-mask) | pending | VLM arm sees images only - the fair comparison |
-| landcover | v3 SSL4EO trunk, full official split | v2 (0.315 on a geographic subset) | pending (full run) | subset numbers are not comparable (L1 revised); retention on 4 bands must stay ≥ 0.9 |
+| landcover | v3 SSL4EO trunk, full official split (`landcover_full/best.pt`) | v2 (0.315 on a geographic subset) | **select** | official test micro 0.885 / macro 0.792; retention 0.94 (≥ 0.9 rule met); calibrated on val (ECE 0.0030); threshold 0.69 → precision 0.90 at recall 0.61 (v2: 0.0026); verify_deploy OK |
 | change_vqa | Landsat-SCD model | v2 (SECOND) | benchmark replacement only | CDVQA tool path unchanged; SECOND licence unresolved |

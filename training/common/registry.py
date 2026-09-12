@@ -111,15 +111,21 @@ def record(path: Path | None = None, **fields: Any) -> dict[str, Any]:
 
 
 def load(path: Path | None = None) -> dict[str, dict[str, Any]]:
-    """Latest record per experiment_id."""
+    """One record per experiment_id: the records for an id are merged in
+    file order, a later non-null field overriding an earlier one. A trainer
+    writes `running` (hyperparameters, dataset versions, manifest hash) and
+    later `done` (metrics, checkpoint sha256) - both halves must survive."""
     path = Path(path or os.environ.get("SATQUERY_REGISTRY", DEFAULT_PATH))
-    latest: dict[str, dict[str, Any]] = {}
+    merged: dict[str, dict[str, Any]] = {}
     if not path.exists():
-        return latest
+        return merged
     with path.open(encoding="utf-8") as fh:
         for line in fh:
             line = line.strip()
             if line:
                 rec = json.loads(line)
-                latest[rec["experiment_id"]] = rec
-    return latest
+                cur = merged.setdefault(rec["experiment_id"], {})
+                for k, v in rec.items():
+                    if v is not None or k not in cur:
+                        cur[k] = v
+    return merged

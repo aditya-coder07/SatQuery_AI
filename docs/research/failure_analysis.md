@@ -29,8 +29,41 @@ after the first LoRA arm measure `wrong_object` separately - it is the
 class that phrase-conditioning must fix and the one that would justify
 adding hard negatives (same image, other object of the same class).
 
-*Post-training analysis will be appended from
-`artifacts/benchmark_reports/dior_rsvg_official_phase6.json`.*
+### After arm A (LoRA r16, official train, 1 epoch) — 2026-09-13 00:34
+
+Source: `artifacts/benchmark_reports/dior_rsvg_official_phase6.json`
+(n = 7,500; **Acc@0.5 0.6877 [0.677, 0.699]**, Acc@0.25 0.769, Acc@0.7
+0.545, mIoU 0.603, parse 1.0; image-disjoint subset 0.805 [0.788, 0.820],
+n = 2,223). McNemar vs zero-shot: 2,465 items fixed, 174 broken, χ² 1987,
+p ≪ 0.001. Val (400) 0.695 at the selected step 1,600, so val and test
+agree within noise.
+
+| Failure class (misses, 2,342 = 31% of test) | Count | Share | Was (zero-shot) |
+|---|---|---|---|
+| wrong_box | 1,085 | 46% | 2,058 |
+| scale_error | 649 | 28% | 1,202 |
+| wrong_object | 390 | 17% | 472 |
+| localisation_drift | 218 | 9% | 901 |
+
+* **Size is the axis.** Large 0.888, medium 0.782, **small (<1% of the
+  image) 0.509** — small objects are 42% of the test set and contribute
+  most misses. The IoU histogram is still bimodal (1,475 below 0.1).
+* **Categories:** bridge 0.33, harbor 0.42, overpass 0.46, train station
+  0.57, vehicle 0.62 at the bottom; stadium 0.91, airport 0.87, golf field
+  0.86, airplane 0.85 at the top. The elongated/linear classes (bridge,
+  overpass, harbor) fail as `wrong_box` — the box format has no orientation
+  and the phrases rarely disambiguate which span of a river or road.
+* **wrong_object fell only 17%** (472 → 390): phrase-conditioning is the
+  least-improved class, which is the argument for hard negatives (same
+  image, another object of the same class, contrastive phrasing) and for
+  VRSBench's referring expressions, which are written to be discriminative.
+
+**What this directs (arms B/C, queued):** keep native resolution (a 640-px
+cap was removed from arm C for this reason), add VRSBench's 33k
+discriminative expressions (arm C), try the trainable visual merger (arm
+B) for the small-object end, and build the hard-negative set from the
+390 `wrong_object` + 1,085 `wrong_box` items' images for the retrain that
+follows.
 
 ## Change detection — LEVIR-CD, v3
 
