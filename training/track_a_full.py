@@ -168,6 +168,12 @@ def build_model(n_bands: int = 12, dim: int = 96, gsd_conditioning: bool = True,
         return build_track_a(n_bands=n_bands, dim=dim,
                              gsd_conditioning=gsd_conditioning,
                              n_classes=N_CLASSES)
+    if arch == "v3":
+        from training.v3.landcover import build_landcover_v3
+
+        # Weights come from the checkpoint; the SSL4EO download is a
+        # training-time concern only. Same (image, mask, gsd) call.
+        return build_landcover_v3(pretrained=False, n_classes=N_CLASSES)
 
     import torch
     import torch.nn as nn

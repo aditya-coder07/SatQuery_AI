@@ -1,0 +1,28 @@
+{
+  "experiment_id": "optsar_v3-20260912-170418-f87e9c",
+  "task": "optsar_fusion_v3_segmentation",
+  "split_method": "SCENE-DISJOINT: 29 scenes train / 7 scenes validation, seed 42; derived from index.json without re-tiling",
+  "n_train": 1557,
+  "n_val": 378,
+  "args": {
+    "index": "data/whu_opt_sar/index_v2_scene_split.json",
+    "ckpt_dir": "checkpoints/v3/optsar_fusion",
+    "epochs": "40",
+    "batch_size": "16",
+    "lr": "0.0002",
+    "dim": "96",
+    "modality_dropout": "0.15",
+    "workers": "6",
+    "seed": "42",
+    "eval_only": "None"
+  },
+  "hardware": {
+    "host": "compute01.node",
+    "python": "3.12.14",
+    "platform": "Linux-5.14.0-611.49.1.el9_7.x86_64-x86_64-with-glibc2.34",
+    "torch": "2.6.0+cu124",
+    "gpu": "NVIDIA L40S",
+    "gpu_total_gb": 44.4,
+    "gpu_free_at_start_gb": 7.4
+  }
+}

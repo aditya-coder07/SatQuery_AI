@@ -72,6 +72,8 @@ train = [
     "pandas>=2.2",
     "pyarrow>=18.0",   # parquet reader behind training/prepare/*
     "psutil>=6.1",     # RSS sampling in evaluation/soak.py
+    "timm>=1.0",       # ResNet-50 trunk of training/v3/landcover.py (also needed at load time)
+    "torchgeo>=0.7",   # SSL4EO-S12 weights (CC-BY-4.0) for landcover v3; training-time only
 ]
 
 [project.scripts]
