@@ -115,6 +115,31 @@ The mask-conditioned family is not where the gap closes; the VLM arm
 of it (a third, |T1−T2| difference image) is the ablation to run if the
 plain two-image adapter under-describes change.
 
+## Land cover — BigEarthNet-S2 v1.0 official test, v3 full-split (2026-09-13)
+
+Source: `docs/assets/phase6/landcover_full/metrics.json` (micro mAP 0.885 /
+macro 0.792, n = 125,866) and the corruption suite
+`artifacts/benchmark_reports/ben_robustness_landcover_v3.json`
+(20,000-patch test subsample, `evaluation/robustness_landcover.py`).
+
+* **Where the macro number is lost:** beaches/dunes AP 0.52, coastal
+  wetlands 0.59, industrial units 0.60, natural grassland 0.61 — the four
+  rarest classes; marine 0.998, arable 0.95, coniferous 0.95 at the top.
+  The micro/macro gap (0.885 vs 0.792) is a class-frequency gap, not a
+  modelling one; a class-balanced loss or logit adjustment is the arm
+  that would move macro without touching micro.
+* **Robustness (Δ micro mAP vs clean 0.8868):** dihedral transforms exact
+  (−0.0001); any single band dropped ≤ −0.002 (band-dropout training
+  worked — B11 is the most-relied-on band); Cartosat 4-band −0.026
+  (retention 0.97 on this subsample, 0.94 on the full test); brightness
+  ×0.8 / ×1.2 −0.039 / −0.027; a 40×40 bright cloud patch −0.078;
+  gaussian noise σ 0.1 −0.008 but σ 0.3 **−0.170** — sensor noise far
+  above Sentinel-2's is the one failure mode; a noise augmentation at
+  σ ≤ 0.2 is cheap insurance for the next run.
+* **Calibration:** ECE 0.0085 → 0.0030 (affine, official val); the
+  assertion threshold 0.69 yields precision 0.90 at recall 0.61, so the
+  deployed tool now asserts most present classes instead of 0.3% of them.
+
 ## Fusion — WHU-OPT-SAR, v3 (aligned labels)
 
 Source: `docs/assets/phase6/optsar_fusion/metrics.json`. Per-class IoU
