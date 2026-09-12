@@ -18,13 +18,19 @@ dataset's `manifests/stats.json` and copied into every report under
 | Landsat-SCD | test (477 originals) | 477 pairs | OA, mIoU over 10 change-type classes, binary change IoU/F1, SeK, Score = 0.3 mIoU + 0.7 SeK; pair bootstrap | figshare 19946135 (CC BY 4.0) | augmented copies never cross splits (grouped by original) | B (papers decode per-date maps) |
 | CDVQA | official test1 | 39,686 q / 968 pairs | overall accuracy | GitHub annotations + SECOND imagery | test ids never read in training (Phase 5 verified) | A (imagery unlicensed) |
 
-## Contamination checks not yet run
+## Contamination checks run (2026-09-12, `evaluation/near_duplicates.py`, 256-bit dHash ≤ 8 + sha256)
 
-* Perceptual-hash near-duplicate search between DIOR-RSVG train and test
-  images (the official split shares images by design; near-duplicates of
-  *different* images are the open question).
-* Cross-dataset overlap between RSICD and DIOR (both Google-Earth-derived;
-  a cheap phash pass is queued for day 2).
+| Pair | shared paths | byte-identical (different ids) | near-duplicates (different ids) | Report |
+|---|---|---|---|---|
+| DIOR-RSVG train vs test | 4,206 (official object-level protocol) | 2 | 20 | `artifacts/benchmark_reports/dup_dior_train_test.json` |
+| RSICD train vs test | 0 | 0 | 0 | `dup_rsicd_train_test.json` |
+| RSICD train vs DIOR-RSVG test (cross-dataset) | 0 | 0 | 0 | `dup_rsicd_train_dior_test.json` |
+
+The 22 DIOR near/exact duplicates under different ids are in the source
+DIOR release itself (e.g. 00254 = 04139); at 0.3% of test images they do
+not move Acc@0.5, and they are left in place for comparability. The
+image-disjoint subset reported alongside excludes shared paths but not
+these 22; a fully clean subset would be 1,874 images.
 
 ## Reporting rules applied
 
