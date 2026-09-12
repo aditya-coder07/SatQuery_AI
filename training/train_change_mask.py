@@ -47,6 +47,10 @@ def build_model(dim: int = 16, arch: str = "v1"):
         from training.v2.architectures import build_change_mask
 
         return build_change_mask(dim=dim)
+    if arch == "v3":
+        from training.v3.change_mask import build_change_mask_v3
+
+        return build_change_mask_v3(dim=dim)
 
     import torch
     import torch.nn as nn
@@ -90,8 +94,10 @@ def build_model(dim: int = 16, arch: str = "v1"):
 
 
 class LevirCD:
-    def __init__(self, rows: list[dict]):
+    def __init__(self, rows: list[dict], augment: bool = False, seed: int = 0):
         self.rows = rows
+        self.augment = augment
+        self.rng = np.random.default_rng(seed)
 
     def __len__(self) -> int:
         return len(self.rows)
@@ -104,7 +110,29 @@ class LevirCD:
         b = np.asarray(Image.open(index_path(row["b"])).convert("RGB"), dtype="float32") / 255.0
         m = np.asarray(Image.open(index_path(row["label"])).convert("L"), dtype="float32")
         m = (m > 127).astype("float32")
+        if self.augment:
+            # The same geometric transform on both dates and the mask: the
+            # dihedral group of the square, exact for a mask (no
+            # interpolation). Swapping the dates enforces the symmetry the
+            # absolute-difference fusion is meant to have.
+            k = int(self.rng.integers(4))
+            a, b, m = np.rot90(a, k), np.rot90(b, k), np.rot90(m, k)
+            if self.rng.random() < 0.5:
+                a, b, m = a[:, ::-1], b[:, ::-1], m[:, ::-1]
+            if self.rng.random() < 0.5:
+                a, b = b, a
+            a, b, m = np.ascontiguousarray(a), np.ascontiguousarray(b), np.ascontiguousarray(m)
         return a.transpose(2, 0, 1), b.transpose(2, 0, 1), m[None]
+
+
+def dice_loss(logits, target, eps: float = 1.0):
+    """Soft Dice on the change class, pooled over the batch so that tiles
+    with no change do not each contribute a degenerate term."""
+    import torch
+
+    p = torch.sigmoid(logits)
+    inter = (p * target).sum()
+    return 1 - (2 * inter + eps) / (p.sum() + target.sum() + eps)
 
 
 def batches(dataset, size, rng, shuffle=True):
@@ -159,9 +187,17 @@ def main() -> int:
     p.add_argument("--limit-train", type=int)
     p.add_argument("--limit-eval", type=int)
     p.add_argument(
-        "--arch", choices=["v1", "v2"], default="v1",
-        help="v1 = the published architecture; v2 = training/v2/architectures.py",
+        "--arch", choices=["v1", "v2", "v3"], default="v1",
+        help="v1 = the published architecture; v2 = training/v2/architectures.py; "
+             "v3 = training/v3/change_mask.py (ImageNet ResNet-50 siamese + FPN)",
     )
+    p.add_argument("--loss", choices=["bce", "bce_dice"], default="bce")
+    p.add_argument("--augment", action="store_true", help="dihedral + date-swap augmentation")
+    p.add_argument("--cosine", action="store_true", help="cosine LR with a one-epoch warmup")
+    p.add_argument("--amp", action="store_true", help="bf16 autocast")
+    p.add_argument("--workers", type=int, default=0, help=">0 loads with a torch DataLoader")
+    p.add_argument("--select-on-val", action="store_true",
+                   help="score the official val split every epoch; keep best.pt by val F1")
     p.add_argument("--seed", type=int, default=42)
     p.add_argument("--save-every", type=int, default=100)
     p.add_argument("--resume", action="store_true")
@@ -183,8 +219,10 @@ def main() -> int:
     if args.limit_eval:
         test_rows = test_rows[: args.limit_eval]
 
-    train_ds, test_ds = LevirCD(train_rows), LevirCD(test_rows)
-    print(f"train {len(train_ds)} | test {len(test_ds)}")
+    val_rows = index["splits"].get("val", []) if args.select_on_val else []
+    train_ds = LevirCD(train_rows, augment=args.augment, seed=args.seed)
+    test_ds, val_ds = LevirCD(test_rows), LevirCD(val_rows)
+    print(f"train {len(train_ds)} | val {len(val_ds)} | test {len(test_ds)}")
 
     model = build_model(args.dim, arch=args.arch).to(device)
     n_params = sum(p.numel() for p in model.parameters())
@@ -207,21 +245,48 @@ def main() -> int:
     write_run_metadata_unless_eval(args, {
         "task": "change_mask_tinycd", "n_train": len(train_ds),
         "epochs": args.epochs, "lr": args.lr, "dim": args.dim,
-        "n_params": n_params, "pos_weight": float(pos_weight),
+        "n_params": n_params, "pos_weight": float(pos_weight), "arch": args.arch,
+        "loss": args.loss, "augment": args.augment, "cosine": args.cosine,
+        "amp": args.amp, "select_on_val": args.select_on_val,
     })
 
     rng = np.random.default_rng(args.seed)
     step = state.step
     started = time.time()
+    n_epochs = epochs_for(args)
+    steps_per_epoch = max(1, len(train_ds) // args.batch_size)
+    best_val = {"f1": -1.0}
+    history: list[dict] = []
 
-    for epoch in range(state.epoch, epochs_for(args)):
+    def epoch_batches():
+        if args.workers > 0:
+            from torch.utils.data import DataLoader
+
+            loader = DataLoader(train_ds, batch_size=args.batch_size, shuffle=True,
+                                num_workers=args.workers, drop_last=True, pin_memory=True)
+            yield from loader
+        else:
+            for a, b, m in batches(train_ds, args.batch_size, rng):
+                yield torch.from_numpy(a), torch.from_numpy(b), torch.from_numpy(m)
+
+    for epoch in range(state.epoch, n_epochs):
         model.train()
         running, seen = 0.0, 0
-        for a, b, m in batches(train_ds, args.batch_size, rng):
-            ab = torch.from_numpy(a).to(device)
-            bb = torch.from_numpy(b).to(device)
-            mb = torch.from_numpy(m).to(device)
-            loss = criterion(model(ab, bb), mb)
+        for a, b, m in epoch_batches():
+            if args.cosine:
+                frac = step / max(1, steps_per_epoch * n_epochs)
+                warm = min(1.0, (step + 1) / max(1, steps_per_epoch))
+                for g in optimizer.param_groups:
+                    g["lr"] = args.lr * warm * 0.5 * (1 + np.cos(np.pi * frac))
+            ab, bb = a.to(device, non_blocking=True), b.to(device, non_blocking=True)
+            mb = m.to(device, non_blocking=True)
+            with torch.autocast("cuda", dtype=torch.bfloat16,
+                                enabled=bool(args.amp and device == "cuda")):
+                logits = model(ab, bb)
+            logits = logits.float()
+            loss = criterion(logits, mb)
+            if args.loss == "bce_dice":
+                loss = loss + dice_loss(logits, mb)
             optimizer.zero_grad(set_to_none=True)
             loss.backward()
             optimizer.step()
@@ -236,6 +301,17 @@ def main() -> int:
                 )
         print(f"epoch {epoch+1}/{args.epochs}  loss {running/max(seen,1):.4f}  "
               f"({time.time()-started:.0f}s)", flush=True)
+        if val_rows:
+            vm = evaluate(model, val_ds, torch, args.batch_size, device)
+            vm["epoch"] = epoch + 1
+            history.append(vm)
+            print(f"  val f1 {vm['f1']:.4f} iou {vm['iou']:.4f}", flush=True)
+            if vm["f1"] > best_val["f1"]:
+                best_val = vm
+                torch.save({"model_state_dict": model.state_dict(), "step": step,
+                            "extra": {"arch": args.arch, "dim": args.dim}, "val": vm},
+                           args.ckpt_dir / "best.pt")
+                print("  -> best.pt updated", flush=True)
 
     state.step, state.epoch = step, args.epochs
     save_checkpoint_unless_eval(
@@ -245,9 +321,18 @@ def main() -> int:
 
     if test_ds:
         metrics = evaluate(model, test_ds, torch, args.batch_size, device)
-        print("\nLEVIR-CD test (change class only):")
+        print("\nLEVIR-CD test (change class only), final weights:")
         for k, v in metrics.items():
             print(f"  {k:<10} {v:.4f}")
+        if val_rows and (args.ckpt_dir / "best.pt").exists():
+            best = torch.load(args.ckpt_dir / "best.pt", map_location=device, weights_only=False)
+            model.load_state_dict(best["model_state_dict"])
+            bm = evaluate(model, test_ds, torch, args.batch_size, device)
+            print(f"\nLEVIR-CD test, best-val weights (epoch {best_val.get('epoch')}):")
+            for k, v in bm.items():
+                print(f"  {k:<10} {v:.4f}")
+            metrics = {**metrics, "best_val": best_val, "test_at_best_val": bm,
+                       "val_history": history, "selected": "best.pt"}
         write_metrics(args, metrics)
     return 0
 

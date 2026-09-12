@@ -1,0 +1,15 @@
+{
+  "task": "change_mask_tinycd",
+  "n_train": 7120,
+  "epochs": 40,
+  "lr": 0.0002,
+  "dim": 64,
+  "n_params": 23962017,
+  "pos_weight": 10.11068058013916,
+  "arch": "v3",
+  "loss": "bce_dice",
+  "augment": true,
+  "cosine": true,
+  "amp": true,
+  "select_on_val": true
+}
