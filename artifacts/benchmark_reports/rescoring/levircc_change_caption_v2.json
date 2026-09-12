@@ -1,0 +1,46 @@
+{
+  "corpus_5ref": {
+    "all": {
+      "bleu1": 0.704305079696112,
+      "bleu2": 0.57717531188045,
+      "bleu3": 0.4777551307586064,
+      "bleu4": 0.3881451585091783,
+      "brevity_penalty": 1.0,
+      "rouge_l": 0.6841997928791405,
+      "cider_d": 1.2968537863652925,
+      "meteor_exact": 0.6626414042610124,
+      "n": 1929
+    },
+    "changed": {
+      "bleu1": 0.5910285755596117,
+      "bleu2": 0.4229429399350673,
+      "bleu3": 0.3076538040154252,
+      "bleu4": 0.23053081055037689,
+      "brevity_penalty": 0.9943038129142213,
+      "rouge_l": 0.3805469367402016,
+      "cider_d": 0.34700454393559726,
+      "meteor_exact": 0.34586292421671655,
+      "n": 964
+    },
+    "unchanged": {
+      "bleu1": 0.9657689403473446,
+      "bleu2": 0.9572484801987724,
+      "bleu3": 0.9480797452958601,
+      "bleu4": 0.9309146446385287,
+      "brevity_penalty": 1.0,
+      "rouge_l": 0.9875379828459144,
+      "cider_d": 0.0,
+      "meteor_exact": 0.9790916164503397,
+      "n": 965
+    }
+  },
+  "bleu4_changed": 0.1641,
+  "bleu4_unchanged": 0.9846,
+  "bleu4_aggregate": 0.5746,
+  "bleu4_sentence_mean": 0.5745830375184284,
+  "n_changed": 964,
+  "n_unchanged": 965,
+  "n": 1929,
+  "unique_captions": 638,
+  "note": "bleu4_changed is the meaningful figure; the aggregate is inflated by the trivially-unchanged half."
+}

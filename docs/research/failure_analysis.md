@@ -58,6 +58,30 @@ Weaknesses found by the re-score:
   the hard-negative set for any retraining; the boundary-quality metric is
   still to be added.
 
+## Change captioning — the "v2 regression" investigated (2026-09-12 21:20)
+
+Phase 5 kept the v1 GRU captioner because v2 scored 0.1641 on the changed
+half against v1's 0.3063. Re-scored with the corpus evaluator on the
+official LEVIR-CC test (5 references; `artifacts/benchmark_reports/rescoring/
+levircc_change_caption_{v1,v2}.json`):
+
+| Arm (both mask-conditioned, GT mask at test) | unique captions | 1-ref changed (old metric) | 5-ref corpus BLEU-4 all / changed | CIDEr-D all / changed | ROUGE-L changed |
+|---|---|---|---|---|---|
+| v1 GRU | 85 | 0.1702 | 0.384 / 0.222 | 1.291 / 0.354 | 0.406 |
+| v2 masked transformer | 638 | 0.1641 | **0.388 / 0.231** | 1.297 / 0.347 | 0.381 |
+
+There is no regression. The 0.3063 figure was never reproducible from
+code (Phase 2 finding D2); against the reproducible v1 number (0.170) the
+two arms are within noise on every corpus metric, and v2 produces 7.5×
+more distinct captions (v1 collapsed onto 85 templates, which the 1-ref
+sentence-mean BLEU rewarded). What both arms share is the real
+limitation: they read the ground-truth change mask at test time and are
+still at 0.22–0.23 changed-half BLEU-4 against 0.65 for image-only SOTA.
+The mask-conditioned family is not where the gap closes; the VLM arm
+(two images, no mask; night-1 queue) is, and an explicit-change variant
+of it (a third, |T1−T2| difference image) is the ablation to run if the
+plain two-image adapter under-describes change.
+
 ## Fusion — WHU-OPT-SAR, v3 (aligned labels)
 
 Source: `docs/assets/phase6/optsar_fusion/metrics.json`. Per-class IoU

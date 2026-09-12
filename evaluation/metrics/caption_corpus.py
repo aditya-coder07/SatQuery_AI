@@ -135,9 +135,55 @@ def cider_d(hyps: list[str], refs: list[list[str]], max_n: int = 4, sigma: float
     return sum(scores) / len(scores) if scores else 0.0
 
 
+def meteor_exact(hyps: list[str], refs: list[list[str]], alpha: float = 0.9, beta: float = 3.0,
+                 gamma: float = 0.5) -> float:
+    """METEOR with the exact-match module only, averaged over sentences.
+
+    Banerjee & Lavie 2005 / Denkowski & Lavie 2014 parameters (alpha 0.9,
+    beta 3, gamma 0.5) but no stemming, synonym or paraphrase matching, so
+    this is a LOWER BOUND on the METEOR 1.5 number papers quote (which
+    needs Java and the paraphrase tables). Multi-reference: the best
+    reference per sentence, as METEOR does. Reported as `meteor_exact`,
+    never as "METEOR".
+    """
+    def align(h: list[str], r: list[str]) -> tuple[int, int]:
+        # Greedy left-to-right exact alignment (each ref token used once);
+        # chunks = maximal runs of adjacent, monotone matches.
+        used = [False] * len(r)
+        pairs = []
+        for i, tok in enumerate(h):
+            for j, rt in enumerate(r):
+                if not used[j] and rt == tok:
+                    used[j] = True
+                    pairs.append((i, j))
+                    break
+        chunks = 0
+        for k, (i, j) in enumerate(pairs):
+            if k == 0 or pairs[k - 1][0] != i - 1 or pairs[k - 1][1] != j - 1:
+                chunks += 1
+        return len(pairs), chunks
+
+    total = 0.0
+    for hyp, rs in zip(hyps, refs):
+        h = tokenize(hyp)
+        best = 0.0
+        for ref in rs:
+            r = tokenize(ref)
+            m, chunks = align(h, r)
+            if m == 0 or not h or not r:
+                continue
+            prec, rec = m / len(h), m / len(r)
+            fmean = prec * rec / (alpha * prec + (1 - alpha) * rec)
+            penalty = gamma * (chunks / m) ** beta
+            best = max(best, fmean * (1 - penalty))
+        total += best
+    return total / max(1, len(hyps))
+
+
 def score_corpus(hyps: list[str], refs: list[list[str]]) -> dict[str, float]:
     out = corpus_bleu(hyps, refs)
     out["rouge_l"] = rouge_l(hyps, refs)
     out["cider_d"] = cider_d(hyps, refs)
+    out["meteor_exact"] = meteor_exact(hyps, refs)
     out["n"] = len(hyps)
     return out

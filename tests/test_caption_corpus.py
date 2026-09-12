@@ -1,5 +1,7 @@
 """Corpus captioning metrics: sanity properties, not reference-implementation parity."""
 
+import pytest
+
 from evaluation.metrics.caption_corpus import cider_d, corpus_bleu, rouge_l, score_corpus
 
 REFS = [["a large airport with many planes", "many planes parked at a large airport"],
@@ -36,3 +38,14 @@ def test_cider_rewards_rare_ngrams_more_than_common():
     common = ["a", "a", "a"]
     rare = ["farmland", "farmland", "farmland"]
     assert cider_d(rare, REFS) > cider_d(common, REFS)
+
+
+def test_meteor_exact_bounds_and_order():
+    from evaluation.metrics.caption_corpus import meteor_exact
+
+    # an identical sentence is one chunk, so METEOR is 1 - 0.5 * (1/m)^3, not exactly 1
+    assert meteor_exact(["a road next to a river"], [["a road next to a river"]]) > 0.99
+    assert meteor_exact(["nothing"], [["a road next to a river"]]) == 0.0
+    ordered = meteor_exact(["a road next to a river"], [["a road next to a river and trees"]])
+    scrambled = meteor_exact(["river a to next road a"], [["a road next to a river and trees"]])
+    assert 0 < scrambled < ordered < 1

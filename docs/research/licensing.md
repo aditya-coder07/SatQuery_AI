@@ -15,7 +15,7 @@ Rule applied throughout (from `docs/verification.md` §"SECOND"): a public
 |---|---|---|---|---|---|---|---|
 | RSVQA-LR (official test) | Zenodo 10.5281/zenodo.6344334 | **CC-BY-4.0** | any, with attribution | yes / yes | Lobry et al. 2020 | Track B eval | OK |
 | RSVQA-LR-2k (val subset) | HF `dmarsili/RSVQA-LR-2k` | inherits CC-BY-4.0 | any | yes / yes | same | Track B train | OK |
-| BigEarthNet v2 / reBEN imagery | bigearth.net | **CDLA-Permissive-1.0** | any | yes / yes | Clasen et al. 2024 | Track A train/eval | OK |
+| BigEarthNet-S2 **v1.0** (the mirror we hold is v1, not reBEN) | HF `lc-col/bigearthnet` (HDF5 export of torchgeo's dataset; converter Apache-2.0) | **CDLA-Permissive-1.0** | any | yes / yes | Sumbul et al. 2019/2021 | landcover train/eval (complete split from 2026-09-12) | OK |
 | BigEarthNet.txt | HF `BIFOLD-BigEarthNetTextual` | CDLA-Permissive-1.0 | any | yes / yes | 2603.29630 | planned | OK |
 | **DIOR-RSVG** (official, added 2026-09-12) | authors' Google Drive (ZhanYang-nwpu/RSVG-pytorch) | **CC-BY-NC-4.0** | research, non-commercial | yes with attribution / **no** | Zhan et al. 2023 | grounding train/val/test | **OK for SIH (non-commercial). Weights trained on it are NC.** |
 | DIOR (underlying imagery) | via DIOR-RSVG zip | authors: research use; HF `torchgeo/dior` card says CC-BY-SA-4.0 | research | share-alike if the HF card is authoritative | Li et al. 2020 | same | note SA |
@@ -26,7 +26,7 @@ Rule applied throughout (from `docs/verification.md` §"SECOND"): a public
 | CDVQA annotations | GitHub `YZHJessica/CDVQA` | **Apache-2.0** | any | yes / yes | Yuan et al. 2022 | change_vqa eval | OK |
 | SECOND (CDVQA imagery) | captain-whu / HF `ljx620/CDVQA` | **NO licence stated at all** | undefined | undefined | Yang et al. 2021 | change_vqa train | **BLOCKED for weight release; benchmark use documented as risk** |
 | WHU-OPT-SAR | GitHub `AmberHen/WHU-OPT-SAR-dataset` | **none stated** in repo; paper says open | research, by convention | unclear | Li et al. 2022 | optsar_fusion, Track B mix | benchmark OK; weights unresolved |
-| VRSBench | HF `xiang709/VRSBench` | to verify before use | — | — | Li et al. 2024 | planned VQA eval | **verify before fetch** |
+| **VRSBench** (fetched 2026-09-12 21:20) | HF `xiang709/VRSBench` | **CC-BY-4.0** (dataset card, verified via the Hub API) | any, with attribution | yes / yes | Li et al. 2024 (NeurIPS D&B) | caption + VQA + grounding train; official val for eval | OK — the most permissive VLM-training set in the programme; DIOR-derived half overlaps DIOR-RSVG (see `dataset_audit.md`, V1) |
 | RSVQA-HR | rsvqa.sylvainlobry.com | USGS imagery public domain; annotations CC-BY-4.0 | any | yes | Lobry 2020 | planned | verify on fetch |
 
 ## Pretrained weights
