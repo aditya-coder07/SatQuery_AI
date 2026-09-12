@@ -85,6 +85,29 @@ def main() -> int:
         registry.record(args.registry, **rec)
         n_new += 1
 
+    # Phase 6 runs made by the legacy trainers (no registry hook of their
+    # own): one record per docs/assets/phase6/<run> that has none yet.
+    phase6 = Path("docs/assets/phase6")
+    if phase6.exists():
+        for run_dir in sorted(d for d in phase6.iterdir() if d.is_dir()):
+            exp_id = f"phase6-{run_dir.name}"
+            if exp_id in existing or not (run_dir / "metrics.json").exists():
+                continue
+            metrics = json.loads((run_dir / "metrics.json").read_text())
+            meta = json.loads((run_dir / "run_metadata.json").read_text()) if (run_dir / "run_metadata.json").exists() else {}
+            if "experiment_id" in meta:  # trainer already registered itself
+                continue
+            head = {k: v for k, v in metrics.items() if isinstance(v, (int, float)) and not isinstance(v, bool)}
+            best = metrics.get("test_at_best_val") if isinstance(metrics.get("test_at_best_val"), dict) else None
+            registry.record(args.registry, experiment_id=exp_id, model=run_dir.name,
+                            architecture=meta.get("arch") or "see run_metadata", status="done",
+                            hyperparameters={k: v for k, v in meta.items() if k not in ("task",)},
+                            checkpoint=f"checkpoints/v3/{run_dir.name}/best.pt" if best else f"checkpoints/v3/{run_dir.name}",
+                            test_metrics=best or head, validation_metrics=metrics.get("best_val"),
+                            duration_s=metrics.get("gpu_hours", 0) * 3600 or None,
+                            notes="backfilled from docs/assets/phase6", hardware={"gpu": "NVIDIA L40S (shared)"})
+            n_new += 1
+
     official = PHASE5 / "rsvqa_lr_official_test.json"
     if official.exists() and "phase5-rsvqa_official_test" not in existing:
         d = json.loads(official.read_text())
