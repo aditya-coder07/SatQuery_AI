@@ -1,0 +1,45 @@
+# Phase 6 deployment map: which checkpoint each tool loads, and why.
+# Read by scripts/verify_deploy.py (load test through the real tool loaders)
+# and mirrored into docker-compose.gpu.yml once every row is verified.
+#
+# status: selected  -> measured better than the Phase 5 artefact on the
+#                      official split and load-verified
+#         pending   -> run queued or not yet compared
+#         held      -> Phase 5 artefact kept (with the reason)
+tools:
+  rs_vqa:
+    env: {SATQUERY_VQA_BASE: models/qwen25_vl_3b, SATQUERY_VQA_ADAPTER: checkpoints/v2/track_b_vqa/adapter_final}
+    status: pending
+    note: official-train SFT arm queued (night 1); replaces only if RSVQA-LR official test improves with CI
+  grounding:
+    env: {SATQUERY_GROUNDING_ADAPTER: checkpoints/v3/grounding_vlm_r16/adapter_best}
+    fallback_env: {SATQUERY_GROUNDING: checkpoints/v2/grounding_pre}
+    status: pending
+    note: LoRA arm training; zero-shot base already 0.3823 vs 0.160 (Category A vs C)
+  change_mask:
+    env: {SATQUERY_CHANGE_MASK: checkpoints/v3/change_mask/best.pt}
+    status: selected
+    note: LEVIR-CD test F1 0.9038 / IoU 0.8244 (Phase 5 0.855 / 0.747); calibration v3 queued
+  optsar_fusion:
+    env: {SATQUERY_FUSION: checkpoints/v3/optsar_fusion/best.pt}
+    status: selected
+    note: aligned labels, scene-disjoint; fused 0.468 vs optical 0.447 mIoU; tool v3 path added
+  landcover:
+    env: {SATQUERY_LANDCOVER: checkpoints/v3/landcover/final.pt}
+    status: pending
+    note: SSL4EO-S12 trunk; run queued behind the VLM jobs
+  caption:
+    env: {SATQUERY_CAPTION: checkpoints/v2/caption_pre}
+    status: pending
+    note: VLM caption arm queued; corpus BLEU-4 0.1744 is the bar
+  change_caption:
+    env: {SATQUERY_CHANGE_CAPTION: checkpoints/change_caption}
+    status: pending
+    note: v1 held (oracle-mask eval caveat); VLM two-image arm queued
+  change_vqa:
+    env: {SATQUERY_CHANGE_VQA: checkpoints/v2/change_vqa/best.pt}
+    status: held
+    note: SECOND has no licence; Landsat-SCD (CC BY 4.0) benchmark run queued as the licensed replacement
+registries:
+  SATQUERY_CALIBRATION: configs/calibration.v3.json   # pending: change_mask fit queued
+  SATQUERY_THRESHOLDS: configs/thresholds.v2.yaml      # landcover threshold re-derived after the v3 run
