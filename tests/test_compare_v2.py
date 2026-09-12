@@ -13,7 +13,7 @@ from pathlib import Path
 import pytest
 
 from evaluation.compare_v2 import (
-    COMPARISONS, build_rows, load_metrics, render, verdict,
+    COMPARISONS, POST_CAMPAIGN_RUNS, build_rows, load_metrics, render, verdict,
 )
 
 REPO = Path(__file__).resolve().parent.parent
@@ -23,8 +23,10 @@ def test_every_comparison_names_a_real_campaign_run():
     import yaml
 
     config = yaml.safe_load((REPO / "configs/campaign.yaml").read_text(encoding="utf-8"))
-    run_ids = {run["id"] for run in config["runs"]}
+    run_ids = {run["id"] for run in config["runs"]} | set(POST_CAMPAIGN_RUNS)
     for entry in COMPARISONS:
+        # Post-campaign arms are allowed, but only by being declared. An
+        # undeclared id is a typo, and a typo here hides a result.
         assert entry.run_id in run_ids, f"unknown run '{entry.run_id}'"
 
 
@@ -85,7 +87,7 @@ def test_missing_results_are_pending_not_zero(tmp_path):
 
     text = render(rows)
     assert "REGRESSIONS" not in text
-    assert "0/12 metrics measured" in text
+    assert f"0/{len(COMPARISONS)} metrics measured" in text
 
 
 def test_regressions_are_printed_in_their_own_section(tmp_path):

@@ -614,12 +614,17 @@ def main() -> int:
                 "steps_trained": val_history[-1]["step"],
                 "n_val": best["n_val"],
                 "stopped_early": stop_early,
-                "deploy_adapter": "adapter_best",
-                "note": ("val_loss is held-out cross-entropy on the instruction "
-                         "mix, NOT an RSVQA or VRSBench score. Deploy "
-                         "adapter_best, not adapter_final - the first v2 run's "
-                         "final adapter scored 0.2529 against its own best of "
-                         "0.1649."),
+                "note": (
+                    "val_loss is held-out cross-entropy on the instruction "
+                    "mix. It is NOT an RSVQA score and, measured on the "
+                    "official RSVQA-LR test split, it did not predict one: "
+                    "an adapter at val 0.1301 and one at val 0.2529 scored "
+                    "0.6958 all-types EITHER WAY, and the higher-loss adapter "
+                    "was marginally ahead on the published convention "
+                    "(0.8947 vs 0.8851, overlapping CIs). Use this number to "
+                    "spot divergence, not to choose which adapter to deploy - "
+                    "run evaluation/rsvqa_official_eval.py for that."
+                ),
             }, indent=2),
             encoding="utf-8",
         )

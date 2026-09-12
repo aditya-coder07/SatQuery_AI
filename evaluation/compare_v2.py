@@ -150,6 +150,35 @@ COMPARISONS: tuple[Comparison, ...] = (
         note="ABLATION: from-scratch on ~1,600 pairs, expected to lose to the "
              "pretrained arm",
     ),
+
+    # --- Pretrained-backbone arms (Phase 5b) -------------------------------
+    #
+    # Not in configs/campaign.yaml: these were run after the campaign closed,
+    # once the "no outbound network" premise that excluded pretrained weights
+    # turned out to be false on this machine. `ckpt_dir` is resolved by the
+    # fallback path, `checkpoints/v2/<run_id>`.
+    Comparison(
+        run_id="grounding_pre", tool="grounding_v1",
+        metric="acc@0.5", label="Acc@0.5 (pretrained)",
+        v1_value=0.07624890446976336,
+        v1_source="checkpoints/grounding/metrics.json",
+        published_range="~0.70-0.80",
+        note="ImageNet ResNet-50 backbone; compare also to v2 from-scratch 0.1262",
+    ),
+    Comparison(
+        run_id="grounding_pre", tool="grounding_v1",
+        metric="miou", label="mIoU (pretrained)",
+        v1_value=0.14048209367087824,
+        v1_source="checkpoints/grounding/metrics.json",
+    ),
+    Comparison(
+        run_id="caption_pre", tool="caption_v1",
+        metric="bleu4_sentence_mean", label="BLEU-4 (pretrained)",
+        v1_value=0.24460787515482577,
+        v1_source="checkpoints/caption/metrics.json",
+        note="the from-scratch v2 arm REGRESSED to 0.2255; pretraining "
+             "recovers it and passes v1",
+    ),
 )
 
 
@@ -172,6 +201,11 @@ def ckpt_dirs_from_config() -> dict[str, str]:
         return {}
     return {r["id"]: r["ckpt_dir"] for r in config.get("runs", []) if r.get("ckpt_dir")}
 
+
+# Runs that deliberately do not appear in `configs/campaign.yaml`, because
+# they were done after the campaign closed. Listed rather than silently
+# tolerated: an unknown run id is otherwise a typo that hides a result.
+POST_CAMPAIGN_RUNS = frozenset({"grounding_pre", "caption_pre"})
 
 _CKPT_DIRS = ckpt_dirs_from_config()
 
