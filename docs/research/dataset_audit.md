@@ -23,6 +23,8 @@ change a number or a plan are marked **FINDING**.
 
 | `vrsbench` (new, 21:20) | 12 G | official train / val (`VRSBench_EVAL_*`) | **yes** | **FINDING V1 (cross-dataset leakage, handled):** VRSBench's DIOR half is cut from the same DIOR images DIOR-RSVG uses. 1,320 DIOR-RSVG *test* and 724 *val* source images appear among VRSBench train crops (≈11.8k of 142k rows) — quarantined by `training/prepare/vrsbench.py`, never sampled. Conversely 3,240 of the 4,672 DIOR-derived VRSBench *val* images are DIOR-RSVG *train* images, so any model trained on DIOR-RSVG train is scored on VRSBench-val's DOTA-only / clean subset alongside the full split. Licence CC-BY-4.0. |
 
+| `landsat_scd` | 4.4 G | 3:1:1 by original, seed 42 | self-made (no official split) | **FINDING S1 (dead paths, fixed 2026-09-13 00:50):** 1,738 augmented copies are named `…ZheDang{1,2}` under `A/` and `B/` but `…Zhedang{1,2}` under `label/`; the first index took names from `label/`, so 1,058 train rows (the copies of train originals) pointed at files that do not exist and the trainer crashed on the first such row. `training/prepare/landsat_scd.py` now resolves every path case-insensitively against the directory listing and exits non-zero on a missing file; the split membership is unchanged (same seed, same originals). CC BY 4.0. |
+
 ## Integrity checks run
 
 * **Boxes / masks / captions:** DIOR-RSVG official — 38,320 objects parsed,

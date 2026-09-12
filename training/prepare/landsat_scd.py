@@ -62,7 +62,19 @@ def main() -> int:
     for i, n in enumerate(shuffled):
         split_of[n] = "test" if i < n_test else ("val" if i < n_test + n_val else "train")
 
-    rel = lambda sub, n: f"data/landsat_scd/Landsat-SCD_dataset/{sub}/{n}.png"  # noqa: E731
+    # The release names the occlusion copies "…ZheDang1" under A/ and B/ but
+    # "…Zhedang1" under label/ (1,738 files); resolve every path against the
+    # files that exist, case-insensitively, and refuse to index a row whose
+    # image is missing rather than write a path that will fail at train time.
+    on_disk = {sub: {q.name.lower(): q.name for q in (args.root / sub).glob("*.png")} for sub in ("A", "B", "label")}
+    unresolved = []
+
+    def rel(sub: str, n: str) -> str:
+        actual = on_disk[sub].get(f"{n}.png".lower())
+        if actual is None:
+            unresolved.append(f"{sub}/{n}.png")
+            actual = f"{n}.png"
+        return f"data/landsat_scd/Landsat-SCD_dataset/{sub}/{actual}"
     splits: dict[str, list[dict]] = {"train": [], "val": [], "test": []}
     for n in originals:
         s = split_of[n]
@@ -72,6 +84,8 @@ def main() -> int:
                 splits[s].append({"id": c, "a": rel("A", c), "b": rel("B", c), "label": rel("label", c),
                                   "augmented": True, "original": n})
     orphans = [c for base, cs in copies.items() if base not in split_of for c in cs]
+    if unresolved:
+        raise SystemExit(f"{len(unresolved)} paths do not exist on disk, e.g. {unresolved[:3]}")
     index = {
         "dataset": "Landsat-SCD", "license": "CC BY 4.0",
         "source": "https://doi.org/10.6084/m9.figshare.19946135.v1",
