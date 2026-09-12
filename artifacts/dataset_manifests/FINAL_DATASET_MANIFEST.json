@@ -1,0 +1,412 @@
+{
+ "generated": "2026-09-12T20:19:47",
+ "datasets": [
+  {
+   "key": "dior_rsvg_official",
+   "path": "data/dior_rsvg_official",
+   "dataset": "DIOR-RSVG",
+   "version": "authors' Google Drive release, official train/val/test.txt",
+   "license": "CC-BY-NC-4.0",
+   "usable_for": "train+eval (non-commercial)",
+   "task": "grounding",
+   "provenance": "Zhan et al. 2023; index files are indices into the sorted flat object list (RSVG-pytorch convention)",
+   "preprocessing_version": "training/prepare/dior_rsvg_official.py (unified manifest v1)",
+   "splits": {
+    "train": 26991,
+    "val": 3829,
+    "test": 7500
+   },
+   "valid": 38320,
+   "quarantined": [],
+   "leakage": "index files pairwise disjoint (enforced); 4,206 test images also in train BY THE OFFICIAL PROTOCOL (object-level split) - reported, not altered; 22 source-level near/exact duplicate images under different ids (0.3%), kept for comparability; image-disjoint subset reported alongside",
+   "findings": [
+    "G1 (old mirror was test-only)",
+    "G2 (protocol image overlap)"
+   ],
+   "checksums": {
+    "manifests/train.jsonl": "2cbc6e7e8a969f109a6c658d5402ea53c97cddc8f8feb9583a2ddb6b04663cd3",
+    "manifests/val.jsonl": "d53652fa12959fdfd66a2ce9a3ddabe89c30452659799839864e2a1fddead00e",
+    "manifests/test.jsonl": "ed017203714631dfedd6c9712ae130604eeda5db7b4c7265ca19dc37b441c80e",
+    "manifests/stats.json": "79ab75564d3a77d2537d3f606cec529fa30f2b346ef1e524eb7b06d17abdeaaa"
+   },
+   "manifest_hash": "d4283fc73daa74fd9fcab9a33947f426c0748bfb183c1b7f21bc0e4479676b32"
+  },
+  {
+   "key": "dior_rsvg",
+   "path": "data/dior_rsvg",
+   "dataset": "DIOR-RSVG (HF parquet mirror)",
+   "version": "test shards only",
+   "license": "CC-BY-NC-4.0",
+   "usable_for": "none (retired: holds only the official test split; finding G1)",
+   "task": "grounding",
+   "provenance": "HF mirror",
+   "preprocessing_version": "Phase 5",
+   "splits": {
+    "test": 7500
+   },
+   "valid": 0,
+   "quarantined": [
+    {
+     "n": 7500,
+     "reason": "official test rows - must never be trained on"
+    }
+   ],
+   "leakage": "was the Phase 5 training source (Category C numbers)",
+   "findings": [
+    "G1"
+   ],
+   "checksums": {},
+   "manifest_hash": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a"
+  },
+  {
+   "key": "rsvqa_lr_official",
+   "path": "data/rsvqa_lr_official",
+   "dataset": "RSVQA-LR",
+   "version": "Zenodo 6344334 official lists",
+   "license": "CC-BY-4.0",
+   "usable_for": "train+eval",
+   "task": "VQA",
+   "provenance": "Lobry et al. 2020; train = official train; val = derived 100-image split of official val (training/prepare/rsvqa_official_train.py); test = official test",
+   "preprocessing_version": "rsvqa_official_train.py (unified manifest v1)",
+   "splits": {
+    "train": 57223,
+    "val": 10005,
+    "test": 10004
+   },
+   "valid": 77232,
+   "quarantined": [],
+   "leakage": "train/val/test images disjoint (0/0/0); selection on val only",
+   "findings": [],
+   "checksums": {
+    "manifests/train.jsonl": "755cd50db76d72d01f0e5b1f7ae9d495a0eb6f80b375ae8390646938b3e7b605",
+    "manifests/val.jsonl": "fa1a51d24c8d169f6743a0f68de5f4df8d2e68e7a76f1c89aea7be87bd8ee609",
+    "manifests/stats.json": "87db74a0cb310023966fb5f09e794a4bf94eadb86a50843909843ad8cf0d5fc0",
+    "LR_split_test_questions.json": "70ce4be36c0b162c58453c7c7f3de2d2cf42dbd3915ac82f527a9a8361ec134f",
+    "LR_split_test_answers.json": "422f926999a99bbae4e590c055949b42192497a2aa93b0a0d4452972f827ddfd",
+    "LR_split_test_images.json": "bfc6362bbc727b51465091e84ee9299f62990b7c7986aa02d40b4c763fb0c562"
+   },
+   "manifest_hash": "0a58c0fd2e0a7f96ce12f62efc08f4f664d36b6641d9d8dcded80a8db1b6bc05"
+  },
+  {
+   "key": "rsvqa_lr_2k",
+   "path": "data/rsvqa_lr_2k",
+   "dataset": "RSVQA-LR (HF 2k redistribution of the VALIDATION split)",
+   "version": "dmarsili/RSVQA-LR-2k",
+   "license": "CC-BY-4.0",
+   "usable_for": "none (retired: official train replaces it; it is official-val material)",
+   "task": "VQA",
+   "provenance": "HF",
+   "preprocessing_version": "Phase 4",
+   "splits": {},
+   "valid": 0,
+   "quarantined": [
+    {
+     "reason": "validation-split material; no longer trained on"
+    }
+   ],
+   "leakage": "disjoint from official test",
+   "findings": [],
+   "checksums": {},
+   "manifest_hash": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a"
+  },
+  {
+   "key": "instruct_mix_v2",
+   "path": "data/instruct_mix_v2",
+   "dataset": "SatQuery instruction mix",
+   "version": "instruct_mix_v2",
+   "license": "derived: WHU-OPT-SAR (unstated) + RSVQA-LR (CC-BY-4.0)",
+   "usable_for": "train (train_no_rsvqa)",
+   "task": "VQA/instruction",
+   "provenance": "training/prepare/instruction_mix.py + instruct_mix_manifest.py",
+   "preprocessing_version": "instruct_mix_v2",
+   "splits": {
+    "train": 4807,
+    "train_no_rsvqa": 3010,
+    "val": 533
+   },
+   "valid": 8350,
+   "quarantined": [],
+   "leakage": "WHU rows scene-split; rsvqa rows are HF-val material (excluded from train_no_rsvqa)",
+   "findings": [
+    "F2"
+   ],
+   "checksums": {
+    "manifests/train.jsonl": "f5eb002a296846227e24ecb7108ee21fa339e6e50de03e91ddc20f588e9ba848",
+    "manifests/train_no_rsvqa.jsonl": "1982a7809f244802960f6ce83a8dfe2a3592747a03ac7f08448d5b9d4d8b94cf",
+    "manifests/val.jsonl": "a35461ffa2e86e331299a6dff99797948039fe00e5fa494201bccd6de42be4d8",
+    "manifests/stats.json": "8941747541a19aa6fd647cda95c513250a1d97f58216260b0fcfc8a5a9a8f871"
+   },
+   "manifest_hash": "09419a7c6ce5fc6b9396f47c3e941979aff4db6ef42a16cfb370a982fd0029fa"
+  },
+  {
+   "key": "instruct_mix",
+   "path": "data/instruct_mix",
+   "dataset": "SatQuery instruction mix",
+   "version": "instruct_mix",
+   "license": "derived: WHU-OPT-SAR (unstated) + RSVQA-LR (CC-BY-4.0)",
+   "usable_for": "none (superseded)",
+   "task": "VQA/instruction",
+   "provenance": "training/prepare/instruction_mix.py + instruct_mix_manifest.py",
+   "preprocessing_version": "instruct_mix",
+   "splits": {
+    "train": 4806,
+    "train_no_rsvqa": 3013,
+    "val": 534
+   },
+   "valid": 0,
+   "quarantined": [
+    {
+     "reason": "SUPERSEDED: built on misaligned WHU labels (F2)"
+    }
+   ],
+   "leakage": "WHU rows scene-split; rsvqa rows are HF-val material (excluded from train_no_rsvqa)",
+   "findings": [
+    "F2"
+   ],
+   "checksums": {
+    "manifests/train.jsonl": "e2ffe149a927169213cf425c5644fe9531e5ef43184c74125e3c8a7252a0cf91",
+    "manifests/train_no_rsvqa.jsonl": "48e5f59f98a9be649121f664468351c4b3e3185fa7af92f47c38b004a5e833d5",
+    "manifests/val.jsonl": "7e6e81d9270769bf0fa9d9387b39aaad0914300d7f6280229b633447d81be9ae",
+    "manifests/stats.json": "5ab6b6b82ebff4eff736ba31044bc992d00b1794176abde6099df80fac18b50c"
+   },
+   "manifest_hash": "7847d0508c7c60643b01e0665d56244b016692a47e17c504205df57dce0ef2c5"
+  },
+  {
+   "key": "rsicd",
+   "path": "data/rsicd",
+   "dataset": "RSICD",
+   "version": "HF parquet mirror, official split names",
+   "license": "unstated (research use)",
+   "usable_for": "train+eval",
+   "task": "caption",
+   "provenance": "Lu et al. 2017",
+   "preprocessing_version": "training/prepare/caption_manifests.py",
+   "splits": {
+    "train": 43670,
+    "val": 1094,
+    "test": 1093
+   },
+   "valid": 45857,
+   "quarantined": [],
+   "leakage": "train vs test: 0 exact, 0 near duplicates (dup_rsicd_train_test.json)",
+   "findings": [],
+   "checksums": {
+    "manifests/train.jsonl": "67c61c33f29a70c278e1c4766ace4da405f608232222291ac5e75252b73871ed",
+    "manifests/val.jsonl": "14dda0719a32621eb5fd967b97c6920d343c4eb02703581e3b8434dc642b6136",
+    "manifests/test.jsonl": "977e3c2f5254cee23b27fbf7d1c074c87b48713de1277a8b074b3c148a4522af",
+    "manifests/stats.json": "515df7943e654791bfb4bcdf537419971bdad760d2ef2aa18e1cb6ae2008ceae"
+   },
+   "manifest_hash": "a155fd86f3861d0741063bf97dae2399e94ccd5953e05184a7bec0cbeb74cea7"
+  },
+  {
+   "key": "levir_mci",
+   "path": "data/levir_mci",
+   "dataset": "LEVIR-CC / LEVIR-MCI",
+   "version": "LEVIR-MCI release",
+   "license": "academic-only",
+   "usable_for": "train+eval (non-commercial)",
+   "task": "change caption",
+   "provenance": "Liu et al. (LEVIR-MCI)",
+   "preprocessing_version": "caption_manifests.py",
+   "splits": {
+    "train": 34075,
+    "val": 1333,
+    "test": 1929
+   },
+   "valid": 37337,
+   "quarantined": [],
+   "leakage": "official split; GT masks never used by the VLM arm",
+   "findings": [],
+   "checksums": {
+    "manifests/train.jsonl": "2333113e2243d729fe63c7ae1b101cfc70ebc5c4e0a636626d0cc771f1781a76",
+    "manifests/val.jsonl": "b2c4c482b5c2fbe962032d7ee7991d1aebba91e4dc46a630f28dc89f8669d677",
+    "manifests/test.jsonl": "28d24bfc68be61e7013242aff71049136529f77d77d83a1d94e45f9287184580",
+    "manifests/stats.json": "bbb7ef509384072c62f86038c4a7956449457c9516a00086748ba2fbd27eebfe"
+   },
+   "manifest_hash": "3b722575cfe6e04b34f9b7cf89dfdbb1816963a1833b2cd8e731a3fcef1f340e"
+  },
+  {
+   "key": "levircd",
+   "path": "data/levircd",
+   "dataset": "LEVIR-CD",
+   "version": "official split, 256-px tiles",
+   "license": "academic-only",
+   "usable_for": "train+eval (non-commercial)",
+   "task": "change mask",
+   "provenance": "Chen & Shi 2020",
+   "preprocessing_version": "Phase 3 preparer (tiles/)",
+   "splits": {
+    "test": 2048,
+    "train": 7120,
+    "val": 1024
+   },
+   "valid": 10192,
+   "quarantined": [],
+   "leakage": "tiles never cross splits; val for selection+calibration only",
+   "findings": [],
+   "checksums": {
+    "index.json": "fe5d95cb06c3238231db90289cd78da647845e2fa942c0347781c1856fbe294e"
+   },
+   "manifest_hash": "4164846dbf39a91920ecf42ba10a20ed3c8badfd733bb2daec151078d3dc69c7"
+  },
+  {
+   "key": "whu_opt_sar",
+   "path": "data/whu_opt_sar",
+   "dataset": "WHU-OPT-SAR",
+   "version": "lbl_v2 (1-based re-cut) + scene-disjoint split",
+   "license": "unstated (research use)",
+   "usable_for": "train+eval",
+   "task": "optical/SAR fusion",
+   "provenance": "Li et al. 2022; labels re-cut from lbl_full.zip (training/prepare/whu_opt_sar_relabel.py)",
+   "preprocessing_version": "lbl_v2 / index_v2_scene_split.json",
+   "splits": {
+    "train": 1557,
+    "validation": 378
+   },
+   "valid": 1935,
+   "quarantined": [
+    {
+     "what": "prepared/lbl (v1) + index.json random tile split",
+     "reason": "F1 leakage + F2 misalignment"
+    }
+   ],
+   "leakage": "scene-disjoint (29/7 scenes); NDWI alignment +0.184 vs +0.001 (relabel_report.json)",
+   "findings": [
+    "F1",
+    "F2"
+   ],
+   "checksums": {
+    "index_v2_scene_split.json": "a97bab0d6d22cf43e4f624cb48d52a3c936f98657b9731ac5c9fe46ce58a98fc",
+    "index_v2.json": "1b478df30a8fa3ca90291a4a4c1027a47600e989e16b6b0f252cfc7fd2872082",
+    "relabel_report.json": "744d48b9eeb53598d0278a99c31bcdc60a3ba2ac67fe0894e1867ec5bdd9b1e6"
+   },
+   "manifest_hash": "63ded73f8af04fe6593d7287bc153d833ffd7755754bce93a693feb1cf768c78"
+  },
+  {
+   "key": "ben_v1_full",
+   "path": "data/ben_v1_full",
+   "dataset": "BigEarthNet-S2 v1.0",
+   "version": "in preparation",
+   "license": "CDLA-Permissive-1.0",
+   "usable_for": "pending",
+   "task": "land cover",
+   "provenance": "lc-col/bigearthnet",
+   "preprocessing_version": "pending",
+   "splits": {},
+   "valid": 0,
+   "quarantined": [],
+   "leakage": "pending",
+   "findings": [
+    "L1 (revised)"
+   ],
+   "checksums": {},
+   "manifest_hash": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a"
+  },
+  {
+   "key": "ben_full",
+   "path": "data/ben_full",
+   "dataset": "BigEarthNet-S2 v1.0 (partial mirror)",
+   "version": "train p0-p3 + test p8",
+   "license": "CDLA-Permissive-1.0",
+   "usable_for": "none (superseded by ben_v1_full; geographic prefix, L1 revised)",
+   "task": "land cover",
+   "provenance": "lc-col/bigearthnet",
+   "preprocessing_version": "Phase 1 download",
+   "splits": {
+    "train": 60000,
+    "test": 5866
+   },
+   "valid": 0,
+   "quarantined": [
+    {
+     "n": 1,
+     "reason": "phantom zero row in test_p8 (converter off-by-one)"
+    },
+    {
+     "n": 65866,
+     "reason": "not a representative sample of the official split"
+    }
+   ],
+   "leakage": "official split ids",
+   "findings": [
+    "L1 (revised)"
+   ],
+   "checksums": {},
+   "manifest_hash": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a"
+  },
+  {
+   "key": "landsat_scd",
+   "path": "data/landsat_scd",
+   "dataset": "Landsat-SCD",
+   "version": "figshare 19946135 v1",
+   "license": "CC BY 4.0",
+   "usable_for": "train+eval",
+   "task": "semantic change",
+   "provenance": "https://doi.org/10.6084/m9.figshare.19946135.v1",
+   "preprocessing_version": "training/prepare/landsat_scd.py (3:1:1 by original)",
+   "splits": {
+    "train": 5134,
+    "val": 477,
+    "test": 477
+   },
+   "valid": 6088,
+   "quarantined": [],
+   "leakage": "originals cut 3:1:1 by seed 42; augmented copies follow their original and are train-only; 0 copies without an original dropped",
+   "findings": [],
+   "checksums": {
+    "index.json": "a7dd275f772d195fc9ad0b5a3f1553a616f14f488015fbdf8868913902e88e87"
+   },
+   "manifest_hash": "ec29bbe309017f7a70594d19eb021a0a7cd915d49e69fffd10258d48b14052d7"
+  },
+  {
+   "key": "second",
+   "path": "data/second",
+   "dataset": "SECOND",
+   "version": "release",
+   "license": "NONE STATED - blocked",
+   "usable_for": "none (licence unresolved; replaced by Landsat-SCD)",
+   "task": "semantic change",
+   "provenance": "Yang et al. 2021",
+   "preprocessing_version": "-",
+   "splits": {},
+   "valid": 0,
+   "quarantined": [
+    {
+     "reason": "no licence; not trained on"
+    }
+   ],
+   "leakage": "n/a",
+   "findings": [
+    "licensing"
+   ],
+   "checksums": {},
+   "manifest_hash": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a"
+  },
+  {
+   "key": "cdvqa",
+   "path": "data/cdvqa",
+   "dataset": "CDVQA",
+   "version": "GitHub annotations (Apache-2.0) over SECOND imagery",
+   "license": "annotations Apache-2.0; imagery unlicensed",
+   "usable_for": "eval only (legacy Phase 5 number); no training",
+   "task": "change VQA",
+   "provenance": "Yuan et al. 2022",
+   "preprocessing_version": "Phase 5",
+   "splits": {},
+   "valid": 0,
+   "quarantined": [
+    {
+     "reason": "imagery licence unresolved"
+    }
+   ],
+   "leakage": "test ids never trained on (Phase 5 verified)",
+   "findings": [
+    "licensing"
+   ],
+   "checksums": {
+    "LICENSE": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4"
+   },
+   "manifest_hash": "6bdfcca0c3e97fcc9611d3531f29c20bb379c38f08f96335b37c007e5883936c"
+  }
+ ]
+}

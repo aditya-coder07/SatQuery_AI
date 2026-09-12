@@ -19,15 +19,15 @@ tools:
   change_mask:
     env: {SATQUERY_CHANGE_MASK: checkpoints/v3/change_mask/best.pt}
     status: selected
-    note: LEVIR-CD test F1 0.9038 / IoU 0.8244 (Phase 5 0.855 / 0.747); calibration v3 queued
+    note: LEVIR-CD test F1 0.9038 / IoU 0.8244 (Phase 5 0.855 / 0.747); independently verified 2026-09-12 (levircd_test_independent_v3.json); calibration v3 fitted on val
   optsar_fusion:
     env: {SATQUERY_FUSION: checkpoints/v3/optsar_fusion/best.pt}
     status: selected
     note: aligned labels, scene-disjoint; fused 0.468 vs optical 0.447 mIoU; tool v3 path added
   landcover:
-    env: {SATQUERY_LANDCOVER: checkpoints/v3/landcover/final.pt}
+    env: {SATQUERY_LANDCOVER: checkpoints/v3/landcover_full/best.pt}
     status: pending
-    note: SSL4EO-S12 trunk; run queued behind the VLM jobs
+    note: SSL4EO-S12 trunk on the complete official BigEarthNet-S2 v1.0 split; running (val-selected best.pt)
   caption:
     env: {SATQUERY_CAPTION: checkpoints/v2/caption_pre}
     status: pending
@@ -41,5 +41,5 @@ tools:
     status: held
     note: SECOND has no licence; Landsat-SCD (CC BY 4.0) benchmark run queued as the licensed replacement
 registries:
-  SATQUERY_CALIBRATION: configs/calibration.v3.json   # pending: change_mask fit queued
+  SATQUERY_CALIBRATION: configs/calibration.v3.json   # change_mask fitted on official val (ECE 0.0053 -> 0.0011)
   SATQUERY_THRESHOLDS: configs/thresholds.v2.yaml      # landcover threshold re-derived after the v3 run

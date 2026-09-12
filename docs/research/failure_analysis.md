@@ -34,11 +34,29 @@ adding hard negatives (same image, other object of the same class).
 
 ## Change detection — LEVIR-CD, v3
 
-Source: `docs/assets/phase6/change_mask/metrics.json`. Precision 0.876 /
-recall 0.934 at threshold 0.5 on the best-val weights: the remaining error
-is false positives (shadows, roof re-surfacing, seasonal ground) more than
-misses. Calibration (`docs/assets/calibration_v3/`) will move the operating
-point; a boundary-quality metric is still to be added.
+Source: `docs/assets/phase6/change_mask/metrics.json`, independently
+re-scored by `evaluation/change_mask_official_eval.py` (weights loaded
+through the deployed tool's `_Handle`, metrics recomputed from PIL-read
+tiles): **F1 0.9038 / IoU 0.8244 reproduced to the fourth decimal**;
+per-tile bootstrap 95% CI F1 [0.899, 0.908], IoU [0.817, 0.832]; 2,048
+tiles, 935 with change (`artifacts/benchmark_reports/levircd_test_independent_v3.json`).
+The result is frozen as the champion (2026-09-12 21:00); it is retrained
+only for a demonstrated weakness.
+
+Weaknesses found by the re-score:
+
+* **Over-prediction of change.** Precision 0.876 / recall 0.934 at 0.5,
+  and F1 keeps rising with the threshold on both val and test (val: 0.9055
+  at 0.5 → 0.9116 at 0.8; test 0.9038 → 0.9093 / IoU 0.8336 at the
+  val-selected 0.8, P 0.910 R 0.909). The Dice term pushes probabilities
+  up; the val-chosen operating point recovers +0.55 F1 with no retraining
+  and is a legitimate deployment setting (chosen on val, not test). The
+  0.5 number stays the headline for comparability.
+* **A hard tail.** On tiles with change, the 10th-percentile per-tile F1
+  is 0.42 (median 0.91): about a tenth of changed tiles are scored badly -
+  small or thin structures and seasonal/shadow confusers. Those tiles are
+  the hard-negative set for any retraining; the boundary-quality metric is
+  still to be added.
 
 ## Fusion — WHU-OPT-SAR, v3 (aligned labels)
 
