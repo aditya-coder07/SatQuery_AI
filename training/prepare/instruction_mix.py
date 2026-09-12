@@ -158,7 +158,8 @@ def rsvqa_examples(root: Path) -> list[Example]:
     ]
 
 
-def whu_sar_examples(root: Path, rng: random.Random) -> tuple[list[Example], list[Example]]:
+def whu_sar_examples(root: Path, rng: random.Random,
+                     index_name: str = "index.json") -> tuple[list[Example], list[Example]]:
     """Optical and SAR examples from WHU-OPT-SAR, with label-derived answers.
 
     Returns (answerable, not_in_image_refusals). The refusals come from the
@@ -166,11 +167,11 @@ def whu_sar_examples(root: Path, rng: random.Random) -> tuple[list[Example], lis
     has water and refused for one that does not - which is the property that
     stops the model learning a lexical rule.
     """
-    index_path = root / "index.json"
-    if not index_path.exists():
+    idx_file = root / index_name
+    if not idx_file.exists():
         return [], []
 
-    index = json.loads(index_path.read_text(encoding="utf-8"))
+    index = json.loads(idx_file.read_text(encoding="utf-8"))
     classes = index.get("classes", [])
     answerable: list[Example] = []
     refusals: list[Example] = []
@@ -186,10 +187,13 @@ def whu_sar_examples(root: Path, rng: random.Random) -> tuple[list[Example], lis
             continue
         for row in rows:
             label_path = row.get("label") or row.get("lbl")
-            if not label_path or not Path(label_path).exists():
+            # Index paths were written on Windows; index_path makes them
+            # usable on the training host. Without it every WHU row was
+            # silently skipped on Linux.
+            if not label_path or not index_path(label_path).exists():
                 continue
             try:
-                mask = np.asarray(Image.open(label_path))
+                mask = np.asarray(Image.open(index_path(label_path)))
             except Exception:  # noqa: BLE001
                 continue
 
@@ -203,8 +207,9 @@ def whu_sar_examples(root: Path, rng: random.Random) -> tuple[list[Example], lis
 
             for modality, key in (("optical", "optical"), ("sar", "sar")):
                 image_path = row.get(key)
-                if not image_path or not Path(image_path).exists():
+                if not image_path or not index_path(image_path).exists():
                     continue
+                image_path = index_path(image_path)
                 if present:
                     target = rng.choice(sorted(present))
                     fraction = float((mask == classes.index(target)).mean())
@@ -266,13 +271,14 @@ def synthetic_refusals(
 
 
 def build_mix(
-    data_root: Path, seed: int = 42, refusal_fraction: float = REFUSAL_FRACTION
+    data_root: Path, seed: int = 42, refusal_fraction: float = REFUSAL_FRACTION,
+    whu_index: str = "index.json",
 ) -> tuple[list[Example], dict]:
     rng = random.Random(seed)
 
     answerable = rsvqa_examples(data_root / "rsvqa_lr_2k")
     whu_answerable, whu_refusals = whu_sar_examples(
-        data_root / "whu_opt_sar", rng
+        data_root / "whu_opt_sar", rng, whu_index
     )
     answerable += whu_answerable
 
@@ -362,11 +368,16 @@ def main() -> int:
     p.add_argument("--seed", type=int, default=42)
     p.add_argument("--refusal-fraction", type=float, default=REFUSAL_FRACTION)
     p.add_argument("--val-fraction", type=float, default=0.1)
+    p.add_argument("--whu-index", default="index.json",
+                   help="which WHU-OPT-SAR index supplies the label masks. The answers "
+                        "are derived from those masks, so use index_v2.json (re-cut, "
+                        "aligned labels; see whu_opt_sar_relabel.py) for any new mix")
     args = p.parse_args()
 
     examples, stats = build_mix(
-        args.data_root, args.seed, args.refusal_fraction
+        args.data_root, args.seed, args.refusal_fraction, args.whu_index
     )
+    stats["whu_index"] = args.whu_index
 
     args.out.mkdir(parents=True, exist_ok=True)
 

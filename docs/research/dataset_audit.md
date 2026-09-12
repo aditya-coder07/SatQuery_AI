@@ -17,6 +17,7 @@ change a number or a plan are marked **FINDING**.
 | `cdvqa` | 122 M | official test1, 39,686 q / 968 pairs | yes | 968 test ids never read during training (verified in Phase 5) |
 | `second` | 2.3 G | CDVQA's own train ids, 1,600 / 400 | n/a | **no licence** — weights unpublishable; benchmark use flagged |
 | `whu_opt_sar` | 2.9 G | random **by tile**, 1,548 / 387 | no | **FINDING F1 (leakage):** all 36 source scenes appear on both sides. Tiles are 512 px crops of ~5,500×3,700 scenes; neighbours share texture and season. Validation is optimistic; the −0.030 fusion gain is measured on a leaky split and must be re-measured scene-disjoint. Tile names encode `SCENE_ROW_COL`, so a scene split is possible. |
+| `whu_opt_sar` labels | — | — | — | **FINDING F2 (label misalignment, critical):** `prepare/whu_opt_sar.py` cut each label tile at `row*512, col*512` treating the `_RR_CC` suffix as 0-based; the mirror's indices are **1-based** (1..6 × 1..9). Every label tile was one tile down and one right of its imagery. Detected by the NDWI test (water-labelled pixels vs the rest: old labels +0.001, re-cut labels **+0.184** over 322 tiles; six crop hypotheses in `prepare/whu_opt_sar_relabel.py`). Consequences: every `optsar_fusion` result (v1 −0.006, v2 −0.030, v3-on-old-labels −0.002) was trained and scored on labels unrelated to the pixels — the "fusion adds nothing" conclusion is **void**, not negative; the WHU rows of `instruct_mix` (2,786 VQA answers such as "forest covers about 78%" + 122 refusals) were wrong, so the deployed VQA adapter learned from mislabelled SAR/optical questions. Fixed: `prepared/lbl_v2/`, `index_v2*.json`, `instruct_mix_v2/`. Old artefacts kept for reproducibility. |
 | `ben_full` | 43 G | prepared HDF5 shards, 65,867 patches (11% of 590k) | partial | official BEN v2 split ids honoured within the subset; clean. Data-limited, not leaky. |
 | `instruct_mix` | 1.2 M | pointers into `whu_opt_sar` + `rsvqa_lr_2k` | n/a | inherits F1 for its `whu_opt_sar` rows (VQA-style questions over tiles) |
 
@@ -39,8 +40,13 @@ change a number or a plan are marked **FINDING**.
 1. Grounding is re-baselined on the official split from today. Zero-shot
    Qwen2.5-VL-3B: **0.3823 Acc@0.5** on the official test
    (`artifacts/benchmark_reports/dior_rsvg_official_zero_shot.json`).
-2. Fusion (`optsar_fusion`) is re-split by scene before any new fusion
-   experiment; the Phase 5 −0.030 figure is kept as "leaky-split" history.
+2. Fusion (`optsar_fusion`) is re-split by scene AND re-labelled (F2)
+   before any new fusion experiment; the Phase 5 −0.030 figure is kept as
+   "leaky split, misaligned labels" history. With aligned labels the v3
+   triad shows fused > optical from epoch 3 onward (first real
+   complementarity signal in the project; final numbers in
+   `docs/assets/phase6/optsar_fusion/`).
+2b. `instruct_mix_v2` replaces `instruct_mix` for every new VQA run.
 3. Caption BLEU stays sentence-mean for continuity but a corpus-BLEU /
    CIDEr / METEOR / ROUGE-L evaluator is added so papers can be compared
    (Category A needs corpus BLEU-4 on the standard test list).

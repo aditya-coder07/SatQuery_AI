@@ -63,7 +63,8 @@ def load_manifest(path: Path, limit: int | None = None, seed: int = 0, weight: f
     for line in path.read_text(encoding="utf-8").splitlines():
         if line.strip():
             r = json.loads(line)
-            r["_image"] = str(root / r["image"])
+            # One image (VQA, grounding, caption) or two (change caption).
+            r["_images"] = [str(root / q) for q in (r.get("images") or [r["image"]])]
             rows.append(r)
     rng = random.Random(seed)
     if limit is not None and limit < len(rows):
@@ -77,23 +78,27 @@ def load_manifest(path: Path, limit: int | None = None, seed: int = 0, weight: f
     return rows
 
 
-def chat_for(row: dict, image, processor, with_answer: bool) -> list[dict]:
+def chat_for(row: dict, images: list, processor, with_answer: bool) -> list[dict]:
     task = row["task"]
     if task == "<GROUNDING>":
+        image = images[0]
         answer = None
         if with_answer:
             rh, rw = vg.smart_resized_hw(processor, image.width, image.height)
             box = vg.scale_box(row["target"]["bbox_xyxy"], rw / image.width, rh / image.height)
             answer = vg.render_answer(box, row["target"].get("category") or "object")
         return vg.build_chat(image, row["question"], answer)
-    # <VQA> and any other text-answer task
+    # <VQA>, <CAPTION>, <CHANGE_CAPTION>: text answer, one or more images.
     chat = [
         {"role": "system", "content": [{"type": "text", "text": VQA_SYSTEM_PROMPT}]},
-        {"role": "user", "content": [{"type": "image", "image": image},
-                                     {"type": "text", "text": row["question"]}]},
+        {"role": "user", "content": [{"type": "image", "image": im} for im in images]
+                                    + [{"type": "text", "text": row["question"]}]},
     ]
     if with_answer:
-        chat.append({"role": "assistant", "content": [{"type": "text", "text": str(row["target"])}]})
+        target = row["target"]
+        if isinstance(target, list):  # eval rows carry all references; train on the first
+            target = target[0]
+        chat.append({"role": "assistant", "content": [{"type": "text", "text": str(target)}]})
     return chat
 
 
@@ -108,7 +113,7 @@ class Rows:
         from PIL import Image
 
         r = self.rows[i]
-        return Image.open(r["_image"]).convert("RGB"), r
+        return [Image.open(q).convert("RGB") for q in r["_images"]], r
 
 
 class Collate:
@@ -118,9 +123,9 @@ class Collate:
 
     def __call__(self, items):
         images, texts = [], []
-        for img, r in items:
-            texts.append(self.processor.apply_chat_template(chat_for(r, img, self.processor, True), tokenize=False))
-            images.append(img)
+        for imgs, r in items:
+            texts.append(self.processor.apply_chat_template(chat_for(r, imgs, self.processor, True), tokenize=False))
+            images.extend(imgs)  # flattened in order of appearance, as the processor expects
         batch = self.processor(text=texts, images=images, return_tensors="pt", padding=True)
         labels = batch["input_ids"].clone()
         for i in range(labels.shape[0]):
@@ -130,16 +135,17 @@ class Collate:
         return batch
 
 
-def generate_batch(model, processor, images, rows, max_new_tokens):
+def generate_batch(model, processor, image_lists, rows, max_new_tokens):
     import torch
 
     tok = processor.tokenizer
     prev = tok.padding_side
     tok.padding_side = "left"
     try:
-        texts = [processor.apply_chat_template(chat_for(r, img, processor, False), tokenize=False,
-                                               add_generation_prompt=True) for img, r in zip(images, rows)]
-        batch = processor(text=texts, images=list(images), return_tensors="pt", padding=True)
+        texts = [processor.apply_chat_template(chat_for(r, imgs, processor, False), tokenize=False,
+                                               add_generation_prompt=True) for imgs, r in zip(image_lists, rows)]
+        flat = [im for imgs in image_lists for im in imgs]
+        batch = processor(text=texts, images=flat, return_tensors="pt", padding=True)
     finally:
         tok.padding_side = prev
     batch = batch.to(model.device)
@@ -158,24 +164,47 @@ def evaluate(model, processor, rows: list[dict], batch_size: int) -> dict:
     by_task: dict[str, list] = collections.defaultdict(list)
     for s in range(0, len(rows), batch_size):
         chunk = rows[s:s + batch_size]
-        images = [Image.open(r["_image"]).convert("RGB") for r in chunk]
-        replies, grids = generate_batch(model, processor, images, chunk, 48)
-        for r, img, rep, grid in zip(chunk, images, replies, grids):
+        image_lists = [[Image.open(q).convert("RGB") for q in r["_images"]] for r in chunk]
+        replies, grids = generate_batch(model, processor, image_lists, chunk, 48)
+        gi = 0
+        for r, imgs, reply in zip(chunk, image_lists, replies):
+            grid = grids[gi]
+            gi += len(imgs)
             if r["task"] == "<GROUNDING>":
-                box = vg.parse_box(rep)
+                img = imgs[0]
+                box = vg.parse_box(reply)
                 iou = 0.0
                 if box:
                     rh, rw = vg.resized_hw(grid)
                     iou = vg.iou_xyxy(vg.scale_box(box, img.width / rw, img.height / rh), r["target"]["bbox_xyxy"])
                 by_task[r["task"]].append({"hit": iou >= 0.5, "iou": iou})
+            elif r["task"] in ("<CAPTION>", "<CHANGE_CAPTION>"):
+                refs = r["target"] if isinstance(r["target"], list) else [str(r["target"])]
+                by_task[r["task"]].append({"hyp": reply, "refs": refs,
+                                           "changeflag": (r.get("metadata") or {}).get("changeflag")})
             else:
-                hit = normalise_answer(rep) == normalise_answer(str(r["target"]))
+                hit = normalise_answer(reply) == normalise_answer(str(r["target"]))
                 by_task[r["task"]].append({"hit": hit, "type": (r.get("metadata") or {}).get("type", "all")})
     model.train()
     out: dict = {"n": len(rows)}
     sel = []
     for task, items in by_task.items():
         n = len(items)
+        if task in ("<CAPTION>", "<CHANGE_CAPTION>"):
+            from evaluation.metrics.caption_corpus import score_corpus
+
+            hyps, refs = [i["hyp"] for i in items], [i["refs"] for i in items]
+            res = {"n": n, "corpus": {k: round(v, 4) for k, v in score_corpus(hyps, refs).items()}}
+            if task == "<CHANGE_CAPTION>":
+                for name, flag in (("changed", 1), ("unchanged", 0)):
+                    sub = [i for i in items if i["changeflag"] == flag]
+                    if sub:
+                        res[name] = {k: round(v, 4) for k, v in
+                                     score_corpus([i["hyp"] for i in sub], [i["refs"] for i in sub]).items()}
+            res["unique_fraction"] = round(len(set(hyps)) / n, 4)
+            out[task] = res
+            sel.append(res["corpus"]["bleu4"])
+            continue
         acc = sum(i["hit"] for i in items) / n
         if task == "<GROUNDING>":
             out[task] = {"n": n, "acc@0.5": acc, "miou": sum(i["iou"] for i in items) / n}
