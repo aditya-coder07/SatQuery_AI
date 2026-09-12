@@ -171,7 +171,7 @@ def intent_logits():
 
 def change_mask_logits(
     index_path: Path, checkpoint: Path, dim: int, batch_size: int,
-    pixels_per_image: int, limit: int | None,
+    pixels_per_image: int, limit: int | None, split: str = "test",
 ):
     """Change head over LEVIR-CD test, subsampled by pixel within each image.
 
@@ -186,11 +186,14 @@ def change_mask_logits(
     from training.train_change_mask import LevirCD, batches, build_model
 
     index = json.loads(index_path.read_text(encoding="utf-8"))
-    rows = index["splits"].get("test", [])
+    # Phase 6 fits on the official VAL split (`--levir-split val`) so the
+    # parameters never see the tiles the F1 is reported on; the historical
+    # default stays "test" so the Phase 4/5 registries reproduce.
+    rows = index["splits"].get(split, [])
     if limit:
         rows = rows[:limit]
     if not rows:
-        raise SystemExit(f"no test rows in {index_path}")
+        raise SystemExit(f"no {split} rows in {index_path}")
 
     # A directory of step checkpoints, or one file (Phase 6 trainers keep a
     # val-selected best.pt; that is the deployed artefact, so it is what
@@ -228,7 +231,7 @@ def change_mask_logits(
     return (
         np.concatenate(logits),
         np.concatenate(labels),
-        f"LEVIR-CD official test split, {len(rows)} tiles, {pixels_per_image} "
+        f"LEVIR-CD official {split} split, {len(rows)} tiles, {pixels_per_image} "
         f"pixels sampled per tile, checkpoint {latest.name}. Split for "
         f"fitting is by TILE, not by pixel, because pixels within a tile are "
         f"spatially correlated and a pixel-wise split would leak. The head was "
@@ -248,6 +251,7 @@ def produce_logits(head: str, args):
     return change_mask_logits(
         args.levir_index, args.change_ckpt, args.change_dim,
         args.batch_size, args.pixels_per_image, args.limit_change,
+        split=args.levir_split,
     )
 
 
@@ -330,6 +334,8 @@ def main() -> int:
     p.add_argument("--change-ckpt", type=Path, default=Path("checkpoints/change_mask"))
     p.add_argument("--dim", type=int, default=64)
     p.add_argument("--change-dim", type=int, default=16)
+    p.add_argument("--levir-split", default="test", choices=["test", "val"],
+                   help="which LEVIR-CD split the change head is fitted on (Phase 6: val)")
     p.add_argument("--batch-size", type=int, default=32)
     p.add_argument("--pixels-per-image", type=int, default=1024)
     p.add_argument("--limit-change", type=int)
