@@ -1,0 +1,44 @@
+# Phase 5 checkpoints - an OVERLAY, not a replacement.
+#
+#   docker compose -f docker-compose.yml -f docker-compose.v2.yml up api
+#
+# The default compose files keep pointing at the v1 checkpoints, and that is
+# deliberate. Switching the default is a deployment decision with two
+# preconditions that are not yet met, and this overlay exists so the switch
+# can be tried, measured and reverted with one flag rather than an edit:
+#
+#   1. `landcover` and `change_mask` carry calibration transforms and decision
+#      thresholds (configs/thresholds.yaml, configs/calibration.json) that were
+#      FITTED TO v1 SCORES. A v2 model's raw scores have a different
+#      distribution; the 0.70 assertion threshold and the affine ECE fit do not
+#      carry over and must be refitted (`make calibrate`) before the selective
+#      prediction in those tools is trusted.
+#   2. Nothing downstream - the demo bundle, the golden traces, the rehearsal
+#      records - has been re-run against v2 outputs.
+#
+# Every path here was verified loadable through the production tool loaders by
+# scripts/verify_v2_deploy.py (8/8, 2026-09-12). The checkpoint per tool is the
+# one its Phase 5 card in docs/model-cards.md recommends:
+#
+#   grounding and caption use the PRETRAINED arms (grounding_pre, caption_pre);
+#   the from-scratch v2 checkpoints exist as the comparison and are not deployed.
+#
+#   optsar_fusion points at v2 but read its card first - the fused head scores
+#   below optical-alone under this architecture too, and the tool's value is in
+#   its per-stream heads, not the fusion.
+#
+#   rs_vqa uses adapter_final from the full run, which is marginally ahead of
+#   the early-stopped adapter on the official RSVQA-LR test (0.8947 vs 0.8851).
+
+services:
+  api:
+    environment:
+      - SATQUERY_VQA_BASE=/app/models/qwen25_vl_3b
+      - SATQUERY_VQA_ADAPTER=/app/checkpoints/v2/track_b_vqa/adapter_final
+      - SATQUERY_CAPTION=/app/checkpoints/v2/caption_pre
+      - SATQUERY_LANDCOVER=/app/checkpoints/v2/track_a
+      - SATQUERY_GROUNDING=/app/checkpoints/v2/grounding_pre
+      - SATQUERY_CHANGE_MASK=/app/checkpoints/v2/change_mask
+      - SATQUERY_CHANGE_CAPTION=/app/checkpoints/v2/change_caption
+      - SATQUERY_CHANGE_VQA=/app/checkpoints/v2/change_vqa/best.pt
+      - SATQUERY_FUSION=/app/checkpoints/v2/optsar_fusion
