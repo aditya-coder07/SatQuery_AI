@@ -1,18 +1,18 @@
 {
   "version": 1,
-  "generated_utc": "2026-09-12T13:13:04.348876+00:00",
+  "generated_utc": "2026-09-12T13:19:15.081800+00:00",
   "heads": {
     "TEMPORAL_CHANGE_MAP": {
       "method": "affine",
-      "T": 1.7431231794916315,
-      "a": 0.5736829225641084,
-      "b": -0.9654462276767241,
-      "ece_before": 0.0067656091971164236,
-      "ece_after": 0.0012934986750658892,
-      "n_fit": 1024,
-      "n_eval": 1024,
+      "T": 1.6641080739418268,
+      "a": 0.6009225095767173,
+      "b": -1.1794165743472411,
+      "ece_before": 0.005338489740048745,
+      "ece_after": 0.0010973587071027547,
+      "n_fit": 512,
+      "n_eval": 512,
       "dataset": "LEVIR-CD",
-      "split_note": "LEVIR-CD official test split, 2048 tiles, 1024 pixels sampled per tile, checkpoint best.pt. Split for fitting is by TILE, not by pixel, because pixels within a tile are spatially correlated and a pixel-wise split would leak. The head was trained with pos_weight=10.1, so its logits carry a deliberate positive-class offset that temperature scaling alone cannot remove."
+      "split_note": "LEVIR-CD official val split, 1024 tiles, 1024 pixels sampled per tile, checkpoint best.pt. Split for fitting is by TILE, not by pixel, because pixels within a tile are spatially correlated and a pixel-wise split would leak. The head was trained with pos_weight=10.1, so its logits carry a deliberate positive-class offset that temperature scaling alone cannot remove."
     }
   },
   "rejected": {},
