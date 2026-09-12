@@ -294,6 +294,15 @@ class TestRuntimeRegistry:
             # reports 0.0, is excluded from the model component, and caps the
             # final score at STUB_CONFIDENCE_CAP.
             "stub",
+            # Added 2026-09-12 for the selective heads (landcover, optsar)
+            # when every class falls in their abstention band. Decided NOT
+            # calibratable: the tool made no claim, so there is no P(correct)
+            # of any answer to transform. Excluded from the model-confidence
+            # minimum - its 0.0 was vetoing answers other tools gave - and,
+            # when no learned tool scored at all, the final is capped like a
+            # stub, because the combined number would otherwise describe
+            # input quality alone while reading as a model result.
+            "no_assertion",
         }
         for method in allowed:
             assert method not in CALIBRATABLE_CONFIDENCE_METHODS, method
@@ -329,3 +338,46 @@ class TestRuntimeRegistry:
             assert row["ece_after"] < row["ece_before"], head
             assert row["n_fit"] > 0 and row["n_eval"] > 0, head
             assert row["split_note"], f"{head} ships without a split note"
+
+
+# --- apply_logit: the lossless path ------------------------------------------
+
+
+def _entry(method="affine", a=0.35, b=-0.85, T=2.9):
+    from satquery.controller.calibration import CalibrationEntry
+
+    return CalibrationEntry(head="h", method=method, T=T, a=a, b=b,
+                            ece_before=0.1, ece_after=0.05, n_fit=100,
+                            n_eval=100, dataset="d", split_note="s")
+
+
+@pytest.mark.parametrize("method", ["affine", "temperature"])
+@pytest.mark.parametrize("z", [-12.0, -3.0, -0.5, 0.0, 0.5, 3.0, 12.0])
+def test_apply_logit_equals_apply_of_sigmoid_inside_the_clamp(method, z):
+    """Every v1 head lives in this range, so v1 behaviour is bit-for-bit kept."""
+    import math
+
+    entry = _entry(method)
+    via_probability = entry.apply(1.0 / (1.0 + math.exp(-z)))
+    assert entry.apply_logit(z) == pytest.approx(via_probability, abs=1e-9)
+
+
+def test_apply_logit_keeps_ranking_beyond_the_clamp():
+    """The Phase 5 failure: logits of +44 and +71 must not calibrate equal.
+
+    Through `apply` they do - float32 sigmoid saturates, the clamp caps the
+    recovered logit at 13.8, and both land on the same served probability.
+    That merged the 89%-precise top 56 decisions into a bucket of 33,620 at
+    40%, and the tool could assert nothing.
+    """
+    entry = _entry("affine", a=0.045, b=-1.18)      # the fitted v2 transform
+    top, next_ = entry.apply_logit(71.0), entry.apply_logit(44.0)
+    assert top > next_ > entry.apply_logit(13.8)
+    assert top > 0.85, "the most confident decision must be servable as confident"
+
+
+def test_apply_still_clamps_for_callers_that_only_have_a_probability():
+    """The confidence combiner passes probabilities; log(0) must stay guarded."""
+    entry = _entry("affine")
+    assert 0.0 < entry.apply(0.0) < 1.0
+    assert 0.0 < entry.apply(1.0) < 1.0

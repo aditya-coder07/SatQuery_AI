@@ -319,7 +319,12 @@ class LandcoverTool(ToolProtocol):
         # is not the same as transforming an aggregate.
         entry = load_registry().lookup("SINGLE_LANDCOVER")
         if entry is not None:
-            probs = np.array([entry.apply(float(1 / (1 + np.exp(-z)))) for z in logits])
+            # From the LOGIT, not from a probability made from it. A float32
+            # sigmoid saturates at z ~ 17 and `apply` clamps at 13.8; this
+            # head reaches +71, and the round trip flattened its top 33,620
+            # decisions onto one value. `apply_logit` is the same transform
+            # without the two lossy steps in front of it.
+            probs = np.array([entry.apply_logit(float(z)) for z in logits])
             calibration = f"{entry.method}:SINGLE_LANDCOVER"
         else:
             probs = 1.0 / (1.0 + np.exp(-logits))
@@ -386,7 +391,9 @@ class LandcoverTool(ToolProtocol):
             # A probability, but an aggregate over a threshold-selected
             # subset - not P(correct) for the answer. Same reasoning as
             # optsar_fusion; see CALIBRATABLE_CONFIDENCE_METHODS.
-            confidence_method="mean_asserted_probability",
+            confidence_method=(
+                "mean_asserted_probability" if asserted else "no_assertion"
+            ),
             model_card=f"Track A land-cover head ({Path(handle.path).name})",
             runtime_ms=int((time.perf_counter() - started) * 1000),
             warnings=warnings,

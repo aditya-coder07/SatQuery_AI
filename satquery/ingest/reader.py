@@ -90,6 +90,66 @@ def _read_sample(src) -> np.ndarray:
     return np.ma.filled(arr.astype("float64"), np.nan)
 
 
+# Cloud is bright in every optical band and spectrally flat - which is what
+# distinguishes it from bright ground (roofs, sand, snow aside), whose bands
+# differ. Both conditions are relative to the scene's own brightest pixels,
+# so a dark scene and a bright one are judged on the same terms.
+_CLOUD_BRIGHTNESS = 0.85     # fraction of each band's 99.9th percentile
+_CLOUD_MAX_CV = 0.15         # coefficient of variation across bands
+_CLOUD_MAX_BANDS = 4         # visible + NIR is enough; SWIR adds nothing here
+
+
+def _read_band_sample(src, indexes: list[int]) -> np.ndarray:
+    """A decimated sample of the given 1-based bands, (len, H, W), NaN for nodata.
+
+    Takes explicit indexes rather than "the first N": an alpha channel that
+    `photometric_bands` dropped is still present in the file, and reading
+    1..N would hand the estimator a transparency mask as if it were a band.
+    """
+    out_h = min(src.height, _SAMPLE_MAX)
+    out_w = min(src.width, _SAMPLE_MAX)
+    arr = src.read(indexes, out_shape=(len(indexes), out_h, out_w), masked=True)
+    return np.ma.filled(arr.astype("float64"), np.nan)
+
+
+def estimate_cloud_pct(bands: np.ndarray) -> float | None:
+    """Percentage of pixels that look like cloud, or None if it cannot be judged.
+
+    WHY THIS EXISTS NOW
+
+    `cloud_pct` has been in the manifest contract since Phase 1, annotated
+    "requires a cloud mask; Phase 2 work", and was never populated or read.
+    The demo bundle's abstention beat - a 63% clouded scene that "must
+    abstain" - passed for two reasons neither of which was cloud: under CI the
+    beat's expectation is `answered_or_abstained` and cannot fail, and with
+    the learned tools enabled the land-cover head vetoed the answer with a
+    0.0 that meant "no claim". When that veto was fixed on 2026-09-12 the
+    scene was captioned at 0.88 confidence as "a white building near a road
+    lake". Nothing in the pipeline had ever looked at the cloud.
+
+    This is deliberately a coarse estimator, not a cloud mask: bright in every
+    band AND spectrally flat, both relative to the scene's own brightest
+    pixels. It will count snow and some very bright roofs, and it will miss
+    thin cirrus. Its job is the WARN/FAIL check in `checks.py` - "is most of
+    this scene unusable?" - not per-pixel masking, and it is honest about
+    that in its name.
+    """
+    if bands.ndim != 3 or bands.shape[0] < 3:
+        return None
+    finite = np.all(np.isfinite(bands), axis=0)
+    if finite.sum() < 100:
+        return None
+    pixels = bands[:, finite]                                   # (B, N)
+    top = np.nanpercentile(pixels, 99.9, axis=1)                # per band
+    if np.any(top <= 0):
+        return None
+    scaled = pixels / top[:, None]
+    bright = np.all(scaled >= _CLOUD_BRIGHTNESS, axis=0)
+    mean = scaled.mean(axis=0)
+    flat = (scaled.std(axis=0) / np.maximum(mean, 1e-9)) <= _CLOUD_MAX_CV
+    return float(100.0 * np.mean(bright & flat))
+
+
 def _gsd_metres(src) -> float:
     """Ground sample distance in metres, converting from degrees if needed.
 
@@ -287,6 +347,16 @@ def read_image(
         finite = sample[np.isfinite(sample)]
         nodata_pct = float(100.0 * (1.0 - finite.size / sample.size)) if sample.size else 0.0
 
+        # Only for optical: SAR has no notion of cloud, and estimating it on
+        # backscatter would report speckle as weather.
+        cloud_pct = None
+        if modality in ("OPTICAL", "MSI") and band_count >= 3:
+            cloud_pct = estimate_cloud_pct(
+                _read_band_sample(src, list(keep_indices[:_CLOUD_MAX_BANDS]))
+            )
+            if cloud_pct is not None:
+                cloud_pct = round(cloud_pct, 2)
+
         sensor_guess = (
             tags.get("SATELLITE")
             or tags.get("SENSOR")
@@ -309,7 +379,7 @@ def read_image(
             effective_bits=estimate_effective_bits(sample, src.dtypes[0]),
             acquisition_dt=parse_acquisition_dt(tags),
             nodata_pct=round(nodata_pct, 4),
-            cloud_pct=None,  # requires a cloud mask; Phase 2 work
+            cloud_pct=cloud_pct,
             sensor_guess=str(sensor_guess) if sensor_guess else None,
             polarisations=pols or None,
             # Equivalent number of looks, from the vendor's RangeLooks x

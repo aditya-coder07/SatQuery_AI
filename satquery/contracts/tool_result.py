@@ -50,6 +50,12 @@ class ToolResult(BaseModel):
         "deterministic",
         "segmentation_derived",
         "stub",
+        # The tool ran, was not a stub, and made NO claim - a selective head
+        # whose every class fell inside its abstention band. Its 0.0 is "I
+        # am not asserting anything", not "I am certain of nothing", and the
+        # executor treats it accordingly: excluded from the model-confidence
+        # minimum, so it cannot veto an answer another tool did give.
+        "no_assertion",
     ]
     model_card: str
     runtime_ms: int

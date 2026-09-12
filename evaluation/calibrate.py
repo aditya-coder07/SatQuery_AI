@@ -196,7 +196,12 @@ def change_mask_logits(
     if latest is None:
         raise SystemExit(f"no checkpoint in {checkpoint}")
     device = "cuda" if torch.cuda.is_available() else "cpu"
-    model = build_model(dim)
+    # As in evaluation/splits/multires.py: the checkpoint says which
+    # architecture wrote it. Absent means v1, so v1 checkpoints are unchanged.
+    from training.common.checkpointing import safe_torch_load
+
+    extra = safe_torch_load(latest).get("extra") or {}
+    model = build_model(extra.get("dim", dim), arch=extra.get("arch", "v1"))
     load_checkpoint(latest, model, map_location="cpu")
     model = model.to(device).eval()
 
@@ -359,6 +364,7 @@ def main() -> int:
                 print(f"cached logits to {cached}", flush=True)
 
         print(f"logits {logits.shape}  labels {labels.shape}", flush=True)
+
         for method in spec["methods"]:
             report = calibrate_head(
                 logits, labels, head=head, mode=spec["mode"],

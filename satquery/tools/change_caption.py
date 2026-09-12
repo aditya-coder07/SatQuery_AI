@@ -227,24 +227,25 @@ class ChangeCaptionTool(ToolProtocol):
 
 
 def _mean_token_probability(torch, handle, a, b, mask, tokens) -> float:
+    """Mean probability of the chosen tokens, via `forward`. See caption.py.
+
+    `model(a, b, mask, tokens) -> (B, T, V)`, position i predicting token
+    i+1, is the contract both the v1 GRU and the v2 transformer honour.
+    Stepping the GRU by hand, as this did before, is the same arithmetic on
+    v1 and an AttributeError on v2.
+    """
     if not tokens:
         return 0.0
     from training.train_change_caption import BOS
 
     with torch.no_grad():
-        context = handle.model.features(
-            torch.from_numpy(a).unsqueeze(0).to(handle.device),
-            torch.from_numpy(b).unsqueeze(0).to(handle.device),
-            torch.from_numpy(mask).unsqueeze(0).to(handle.device),
-        )
-        hidden = context.unsqueeze(0).contiguous()
-        token = torch.full((1, 1), BOS, dtype=torch.long, device=handle.device)
-        probs = []
-        for expected in tokens:
-            out, hidden = handle.model.gru(handle.model.embed(token), hidden)
-            step = torch.softmax(handle.model.out(out[:, -1]).float(), dim=-1)
-            probs.append(float(step[0, int(expected)]))
-            token = torch.full(
-                (1, 1), int(expected), dtype=torch.long, device=handle.device
-            )
-    return round(sum(probs) / len(probs), 6) if probs else 0.0
+        ab = torch.from_numpy(a).unsqueeze(0).to(handle.device)
+        bb = torch.from_numpy(b).unsqueeze(0).to(handle.device)
+        mb = torch.from_numpy(mask).unsqueeze(0).to(handle.device)
+        prefix = torch.tensor([[BOS] + [int(x) for x in tokens[:-1]]],
+                              dtype=torch.long, device=handle.device)
+        logits = handle.model(ab, bb, mb, prefix).float()     # (1, T, V)
+        step = torch.softmax(logits[0], dim=-1)
+        idx = torch.tensor([int(x) for x in tokens], device=handle.device)
+        probs = step[torch.arange(len(tokens), device=handle.device), idx]
+    return round(float(probs.mean()), 6)

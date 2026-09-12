@@ -7,12 +7,11 @@
 # preconditions that are not yet met, and this overlay exists so the switch
 # can be tried, measured and reverted with one flag rather than an edit:
 #
-#   1. `landcover` and `change_mask` carry calibration transforms and decision
-#      thresholds (configs/thresholds.yaml, configs/calibration.json) that were
-#      FITTED TO v1 SCORES. A v2 model's raw scores have a different
-#      distribution; the 0.70 assertion threshold and the affine ECE fit do not
-#      carry over and must be refitted (`make calibrate`) before the selective
-#      prediction in those tools is trusted.
+#   1. DONE 2026-09-12 - calibration and thresholds refitted to v2 and
+#      selected below via SATQUERY_CALIBRATION / SATQUERY_THRESHOLDS. The v1
+#      files are untouched. landcover: ECE 0.2146 -> 0.0228 (affine), assertion
+#      threshold 0.69 at 0.900 precision (v1: 0.70 at 0.9107). change_mask:
+#      ECE 0.0106 -> 0.0052. docs/assets/calibration_v2/ has the diagrams.
 #   2. Nothing downstream - the demo bundle, the golden traces, the rehearsal
 #      records - has been re-run against v2 outputs.
 #
@@ -42,3 +41,8 @@ services:
       - SATQUERY_CHANGE_CAPTION=/app/checkpoints/v2/change_caption
       - SATQUERY_CHANGE_VQA=/app/checkpoints/v2/change_vqa/best.pt
       - SATQUERY_FUSION=/app/checkpoints/v2/optsar_fusion
+      # Registries fitted to the v2 heads. Without these the v1 transforms
+      # would be applied to v2 scores, which is the failure the refit exists
+      # to prevent.
+      - SATQUERY_CALIBRATION=/app/configs/calibration.v2.json
+      - SATQUERY_THRESHOLDS=/app/configs/thresholds.v2.yaml

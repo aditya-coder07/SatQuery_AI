@@ -62,9 +62,35 @@ class CalibrationEntry:
     split_note: str
 
     def apply(self, probability: float) -> float:
-        """Recalibrate a probability by transforming it in logit space."""
+        """Recalibrate a probability by transforming it in logit space.
+
+        Clamps to [_EPS, 1-_EPS] first, so the logit it can recover is capped
+        at +/-13.8. For a caller that HAS the logit, that cap is pure loss -
+        use `apply_logit`. This entry point is kept for callers that only have
+        a probability (the confidence combiner), where the clamp is the
+        correct guard against log(0).
+        """
         p = min(max(float(probability), _EPS), 1.0 - _EPS)
-        z = math.log(p / (1.0 - p))
+        return self.apply_logit(math.log(p / (1.0 - p)))
+
+    def apply_logit(self, z: float) -> float:
+        """Recalibrate from the logit directly. Lossless.
+
+        WHY THIS EXISTS
+
+        The Phase 5 land-cover head emits logits in [-54, +71]. Routed through
+        `apply`, that became: float32 sigmoid saturates to exactly 1.0 above
+        z ~ 17, the clamp then caps the recovered logit at 13.8, and the
+        affine transform - fitted on the true range - maps everything above to
+        the same value. Every one of the 33,620 most confident decisions
+        served as p <= 0.365, the tool could assert nothing at any threshold,
+        and its raw ranking was 89% precise in the top 56 the whole time.
+        Measured 2026-09-12.
+
+        For |z| below the clamp this is identical to `apply(sigmoid(z))`, so
+        every v1 head - none of which exceeds it - is unaffected.
+        """
+        z = float(z)
         if self.method == "affine":
             z = (self.a if self.a is not None else 1.0) * z + (self.b or 0.0)
         else:

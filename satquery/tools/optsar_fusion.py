@@ -227,7 +227,9 @@ class OptSARFusionTool(ToolProtocol):
         return ToolResult(
             tool=TOOL_NAME, version=TOOL_VERSION, payload=payload, artifacts=[],
             confidence=float(np.mean([p_fused[i] for i in asserted])) if asserted else 0.0,
-            confidence_method="mean_asserted_probability",
+            confidence_method=(
+                "mean_asserted_probability" if asserted else "no_assertion"
+            ),
             model_card=f"optical-SAR triad ({Path(handle.path).name})",
             runtime_ms=int((time.perf_counter() - started) * 1000),
             warnings=(

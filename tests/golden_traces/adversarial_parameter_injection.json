@@ -53,6 +53,11 @@
         "status": "PASS"
       },
       {
+        "message": "single: ~2% cloud",
+        "name": "cloud_cover",
+        "status": "PASS"
+      },
+      {
         "message": "single: 128x128",
         "name": "min_dimension",
         "status": "PASS"

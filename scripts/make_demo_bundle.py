@@ -356,7 +356,14 @@ def build_bundle(out: Path) -> list[DemoInput]:
         beat="4:50 - the abstention. Cloud fraction is written into the tags.",
         query="Describe the land-cover and major objects visible in this image.",
         images=[build_clouded_optical(synth / "clouded_optical.tif")],
-        expect="answered_or_abstained",
+        # Was `answered_or_abstained`, which cannot fail. The module docstring
+        # says this beat "must abstain", and until 2026-09-12 nothing in the
+        # pipeline looked at cloud at all: with the learned tools on, the
+        # scene was captioned at 0.88 confidence as "a white building near a
+        # road lake". The abstention it appeared to produce came from the
+        # land-cover head vetoing the plan with a 0.0 that meant "no claim".
+        # `cloud_cover` is now a real check, so the beat can be a real check.
+        expect="rejected_or_abstained",
     ))
 
     # 8 - the large scene, real Cartosat if we have it.

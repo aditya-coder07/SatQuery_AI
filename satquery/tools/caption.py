@@ -230,24 +230,29 @@ class CaptionTool(ToolProtocol):
 def _mean_token_probability(torch, handle, batch, tokens) -> float:
     """Mean probability of the tokens the greedy decode chose.
 
-    Re-runs the decoder teacher-forced on its own output rather than asking
-    `generate` for scores, because `generate` returns only argmax ids. The
-    values are identical - the same model on the same prefix - and this keeps
-    the training script's generate() untouched.
+    Re-runs the model teacher-forced on its own output through `forward`,
+    the one entry point every captioner - v1 GRU or v2 transformer - shares:
+    `model(image, tokens) -> (B, T, V)` logits, where position i predicts
+    token i+1. Feeding `[BOS] + tokens[:-1]` therefore yields, at position i,
+    the distribution from which `tokens[i]` was chosen.
+
+    The first version stepped v1's `.vision`, `.gru` and `.embed` by hand.
+    That is the same computation, and it broke on every v2 checkpoint at
+    inference - after the loader had accepted them - because v2 has none of
+    those attributes. Found by the demo bundle on 2026-09-12: four of nine
+    beats reported "caption_v1 failed". A tool that depends on a model's
+    internals beyond its forward contract is a tool that only works on the
+    model it was written against.
     """
     if not tokens:
         return 0.0
-    with torch.no_grad():
-        hidden = handle.model.vision(batch).flatten(1).unsqueeze(0).contiguous()
-        from training.train_change_caption import BOS
+    from training.train_change_caption import BOS
 
-        token = torch.full((1, 1), BOS, dtype=torch.long, device=handle.device)
-        probs = []
-        for expected in tokens:
-            out, hidden = handle.model.gru(handle.model.embed(token), hidden)
-            step = torch.softmax(handle.model.out(out[:, -1]).float(), dim=-1)
-            probs.append(float(step[0, int(expected)]))
-            token = torch.full(
-                (1, 1), int(expected), dtype=torch.long, device=handle.device
-            )
-    return round(sum(probs) / len(probs), 6) if probs else 0.0
+    with torch.no_grad():
+        prefix = torch.tensor([[BOS] + [int(x) for x in tokens[:-1]]],
+                              dtype=torch.long, device=handle.device)
+        logits = handle.model(batch, prefix).float()          # (1, T, V)
+        step = torch.softmax(logits[0], dim=-1)                # (T, V)
+        idx = torch.tensor([int(x) for x in tokens], device=handle.device)
+        probs = step[torch.arange(len(tokens), device=handle.device), idx]
+    return round(float(probs.mean()), 6)
