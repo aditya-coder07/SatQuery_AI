@@ -42,4 +42,4 @@ adapter switch per request, not a second model.
 | caption | VLM caption adapter | v2 caption_pre (corpus BLEU-4 0.1744) | pending | |
 | change_caption | VLM two-image adapter | v1 (0.384, oracle-mask) | pending | VLM arm sees images only - the fair comparison |
 | landcover | v3 SSL4EO trunk, full official split (`landcover_full/best.pt`) | v2 (0.315 on a geographic subset) | **select** | official test micro 0.885 / macro 0.792; retention 0.94 (≥ 0.9 rule met); calibrated on val (ECE 0.0030); threshold 0.69 → precision 0.90 at recall 0.61 (v2: 0.0026); verify_deploy OK |
-| change_vqa | Landsat-SCD model | v2 (SECOND) | benchmark replacement only | CDVQA tool path unchanged; SECOND licence unresolved |
+| change_vqa | Landsat-SCD model (`scd_landsat/best.pt`, mIoU 0.573 / SeK 0.460 on the licensed benchmark) | v2 (SECOND) | benchmark replacement only | CDVQA tool path unchanged (its questions are SECOND's classes); SECOND licence unresolved; the Landsat-SCD model is the licensed semantic-change reference, not a drop-in for the CDVQA tool |

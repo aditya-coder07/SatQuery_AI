@@ -17,7 +17,7 @@ per-benchmark ledger is `docs/research/sota_matrix.md`, the run ledger is
 | RSICD test | corpus BLEU-4 / CIDEr-D | 0.1744 / 0.562 (rescored; 0.266 was sentence-mean) | *pending* (VLM SFT) | ~0.30–0.45 / 1.5–2.5+ | — | — | A | bootstrap CI |
 | LEVIR-CC test | corpus BLEU-4 (5 refs) | 0.384 / changed 0.222 (v1, oracle mask; v2 0.388 / 0.231 — no regression) | *pending* (VLM, images only) | 65.5 SAGE-CC | — | — | B→A | bootstrap CI |
 | BigEarthNet-19 (S2 v1.0) official test | micro mAP / macro mAP / 4-band retention | 0.315 macro on a geographic subset shard (Category B under shift; L1 revised) | **0.885 micro / 0.792 macro / retention 0.94** (SSL4EO-S12 trunk, complete official split, val-selected) | 88.5 SeaMo (micro), ~88.2 SpectralGPT | +0.48 macro vs Phase 5 (not comparable: different test) | — | **A** (official split, micro mAP) | 125,866 test patches; calibration ECE 0.0085 → 0.0030 on val; assertion threshold 0.69 at precision 0.90 / recall 0.61 |
-| Landsat-SCD test (CC BY 4.0) | change-type mIoU / SeK | none (SECOND unlicensed) | *pending* | GSTM-SCD-class methods report SeK ~20–30 on SCD sets | — | — | B | pair bootstrap |
+| Landsat-SCD test (CC BY 4.0) | change-type mIoU / SeK / Score | none (SECOND unlicensed) | **0.573 / 0.460 / 0.504** (binary change F1 0.851) | no comparable published number on this split (GSTM-SCD-class methods report SeK ~20–30 on SECOND with a different decomposition) | — | — | B | 477 test pairs; val-selected |
 | CDVQA test1 | overall acc | 0.6061 | unchanged | — | — | — | A | — |
 
 ## 2. What changed and why (chronological, evidence-first)
