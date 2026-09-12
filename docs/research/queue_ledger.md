@@ -1,0 +1,64 @@
+# Cluster queue ledger — 2026-09-12 (night 1 → night 3)
+
+Every job that is running or queued on `compute01` (`adi01@172.16.1.161`,
+`~/satquery`), in dependency order. Nothing else of ours runs on the card.
+All jobs are `systemd-run --user --unit=<unit> --same-dir --collect`
+units; `MainPID` is the unit's main process (the wrapper for queued
+steps; the python process is its child and appears in `nvidia-smi`).
+Queue scripts are committed verbatim: `scripts/cluster_queue_night1.sh`,
+`scripts/cluster_queue_night3.sh` (night 2 was stopped at 21:33 before it
+ran anything, and replaced by night 3), `scripts/cluster_landcover_full.sh`,
+`scripts/cluster_run_when_free.sh`.
+
+**GPU assumptions (shared NVIDIA L40S, 46,068 MiB).** Another user
+(dev01) holds 3–7 GB at any time. Every step sizes from *free* VRAM at
+launch: VLM steps wait for ≥ 18 GB free (`MIN_FREE_GB`), the land-cover
+run for ≥ 8 GB, the SCD run for ≥ 14 GB, single-model evals for ≥ 4–10 GB.
+Only one 3B-LoRA job runs at a time (24 GB bf16). No job of another user
+is ever signalled.
+
+**Verification rule.** A job counts as finished only when all four hold:
+(1) the wrapper/queue log has `EXIT 0` / `DONE <name> (exit 0)`; (2) the
+checkpoint listed below exists and loads; (3) the metrics artefact exists
+with the expected `n`; (4) the registry has a `done` record with the
+checkpoint sha256. Status column values: RUNNING, WAITING, DONE (verified),
+FAILED, STOPPED.
+
+## Jobs
+
+| # | Unit / PID | Command (exact, see script) | Dataset manifest (sha256 prefix) | Config | Expected runtime | Checkpoint | Log | Depends on | VRAM |
+|---|---|---|---|---|---|---|---|---|---|
+| 1 | `sq-train-ground-lora-e1` / 816558 (started 16:36) | `python training/train_grounding_vlm.py --model models/qwen25_vl_3b --data data/dior_rsvg_official --ckpt-dir checkpoints/v3/grounding_vlm_r16 --epochs 1 --batch-size 8 --grad-accum 2 --lr 1e-4 --val-limit 400 --val-every 400 --save-every 200 --workers 8 --quant none --resume` | DIOR-RSVG official train `2cbc6e7e…` (26,991) / val subsample 400 | LoRA r16 α32 on LLM linears, bf16, cosine, 1 epoch = 1,686 steps | 15 s/step → ends ≈ 22:35 (step 1,500 at 21:55) | `checkpoints/v3/grounding_vlm_r16/{adapter_best,adapter_last,adapter_final}` | `logs/train_ground_lora_r16.log` | — | 24 GB, running |
+| 2 | `sq-prep-ben-full` / 863170 (20:05) | `python training/prepare/bigearthnet_v1_full.py --stage all` | HF `lc-col/bigearthnet` (39 files, 146 GB, LFS sha256-verified) | pack → uint16 memmaps, CSV order | download+unpack done 21:00; packing ≈ 22:20 | `data/ben_v1_full/{train,val,test}_images.u16.npy` + `manifests/stats.json` | `logs/prep_ben_v1_full.log` | — | CPU/disk only |
+| 3 | `sq-train-landcover-v3-full` / 866532 (20:20, waiting) | `bash scripts/cluster_landcover_full.sh` → `cluster_run_when_free.sh 8 train_landcover_v3_full python training/train_landcover_v3.py --data data/ben_v1_full --ckpt-dir checkpoints/v3/landcover_full --epochs 30 --batch-size 128 --val-limit 20000` | `data/ben_v1_full/manifests/stats.json` (269,695 / 123,723 / 125,866) | SSL4EO-S12 MoCo R50, band dropout 0.3, AdamW 1e-3 head / 1e-4 trunk, cosine, bf16, val-selected | 2,107 steps/epoch ≈ 6–8 min → ≈ 3.5–4 h + test | `checkpoints/v3/landcover_full/{best,last,final}.pt`, `metrics.json` | `logs/landcover_full_queue.log`, `logs/train_landcover_v3_full.log` | #2 (manifest must exist; refuses otherwise) | needs ≥ 8 GB free; ~4 GB used; runs beside the VLM job |
+| 4 | `sq-train-scd-landsat` / 838185 (17:55, waiting) | `cluster_run_when_free.sh 14 train_scd_landsat python training/train_scd_landsat.py --ckpt-dir checkpoints/v3/scd_landsat --epochs 40 --batch-size 8 --workers 6` | `data/landsat_scd/index.json` `a7dd275f…` (5,134 / 477 / 477) | siamese R50 + FPN, 10-way change-type head, median-freq weights | ≈ 2–3 h once it starts | `checkpoints/v3/scd_landsat/best.pt` | `logs/train_scd_landsat.log` | free VRAM ≥ 14 GB (i.e. after #1 ends and before/around night-1 evals) | ≈ 10 GB |
+| 5 | `sq-queue-night1` / 827471 (17:09, waiting on #1) step 1 `eval_ground_official` | `python evaluation/grounding_official_eval.py --base models/qwen25_vl_3b --data data/dior_rsvg_official --arms zero_shot=BASE lora_r16=checkpoints/v3/grounding_vlm_r16/adapter_best --out artifacts/benchmark_reports/dior_rsvg_official_phase6.json --batch 24` | DIOR-RSVG official test (7,500 expr; hashes recorded in report) | greedy, bf16, both arms, paired McNemar | ≈ 45–60 min | report only | `logs/eval_ground_official.log`, `logs/queue_night1.log` | #1 | ≥ 18 GB free |
+| 6 | night-1 step 2 `train_vqa_official` | `python training/train_vlm_sft.py --model … --train data/rsvqa_lr_official/manifests/train.jsonl data/instruct_mix_v2/manifests/train_no_rsvqa.jsonl --val … --val-limit 1000 --ckpt-dir checkpoints/v3/vqa_official --epochs 1 --batch-size 16 --grad-accum 1 --lr 1e-4 --val-every 500 --save-every 250 --workers 8 --quant none` | RSVQA-LR official train `755cd50d…` (57,223) + instruct_mix_v2 `1982a780…` (3,010) | fresh LoRA r16, 1 epoch = 3,765 steps | ≈ 3–4 h | `checkpoints/v3/vqa_official/adapter_best` | `logs/train_vqa_official.log` | #5 | ≥ 18 GB free |
+| 7 | night-1 step 3 `eval_vqa_official` | `python evaluation/rsvqa_official_eval.py --base … --data data/rsvqa_lr_official --arms v3_official=checkpoints/v3/vqa_official/adapter_best v2_deployed=checkpoints/v2/track_b_vqa/adapter_final --out artifacts/benchmark_reports/rsvqa_lr_official_phase6.json` | RSVQA-LR official test (10,004 q) | 4-bit deployed path, both arms | ≈ 40 min | report | `logs/eval_vqa_official.log` | #6 | ≥ 18 GB |
+| 8 | night-1 step 4 `train_caption_vlm` | `train_vlm_sft.py --train data/rsicd/manifests/train.jsonl --val …/val.jsonl --val-limit 300 --ckpt-dir checkpoints/v3/caption_vlm --epochs 1 --batch-size 16 --grad-accum 1 --lr 1e-4 --val-every 400 --save-every 200` | RSICD train `67c61c33…` (43,670 rows) | fresh LoRA r16, 2,730 steps | ≈ 3 h | `checkpoints/v3/caption_vlm/adapter_best` | `logs/train_caption_vlm.log` | #7 | ≥ 18 GB |
+| 9 | night-1 step 5 `eval_caption_vlm` | `vlm_task_eval.py --manifest data/rsicd/manifests/test.jsonl --arms base=BASE caption_lora=checkpoints/v3/caption_vlm/adapter_best --out artifacts/benchmark_reports/rsicd_test_vlm.json --batch 32` | RSICD test (1,093 × 5 refs) | corpus BLEU/ROUGE-L/CIDEr-D/meteor_exact | ≈ 20 min | report | `logs/eval_caption_vlm.log` | #8 | ≥ 18 GB |
+| 10 | night-1 step 6 `train_change_caption_vlm` | `train_vlm_sft.py --train data/levir_mci/manifests/train.jsonl --val …/val.jsonl --val-limit 300 --ckpt-dir checkpoints/v3/change_caption_vlm --epochs 1 --batch-size 8 --grad-accum 2 --lr 1e-4` | LEVIR-CC train `2333113e…` (34,075 rows, two images) | fresh LoRA r16, 2,130 steps | ≈ 4–5 h | `checkpoints/v3/change_caption_vlm/adapter_best` | `logs/train_change_caption_vlm.log` | #9 | ≥ 18 GB |
+| 11 | night-1 step 7 `eval_change_caption_vlm` | `vlm_task_eval.py --manifest data/levir_mci/manifests/test.jsonl --arms base=BASE cc_lora=… --out artifacts/benchmark_reports/levircc_test_vlm.json --batch 16` | LEVIR-CC test (1,929 × 5) | changed/unchanged halves | ≈ 30 min | report | `logs/eval_change_caption_vlm.log` | #10 | ≥ 18 GB |
+| 12 | `sq-queue-night3` / 888821 (21:56, waiting on #5–#11) **gate** `gate_arm_a` | checks `DONE eval_ground_official (exit 0)`, `adapter_best/{adapter_config.json,adapter_model.safetensors}` (>100 tensors), report has `arms.lora_r16.acc@0.5` with n = 7,500 | — | — | seconds | — | `logs/queue_night3.log` | #5 | none; **queue exits 1 on failure, arm C never starts** |
+| 13 | night-3 step A `train_ground_vrs` (arm C) | `train_vlm_sft.py --train data/dior_rsvg_official/manifests/train.jsonl data/vrsbench/manifests/train_grounding.jsonl --train-weight 0.4 1.0 --val …/val.jsonl data/vrsbench/manifests/val_grounding.jsonl --val-limit 400 --init-adapter checkpoints/v3/grounding_vlm_r16/adapter_best --ckpt-dir checkpoints/v3/grounding_vlm_vrs --epochs 1 --batch-size 8 --grad-accum 2 --lr 5e-5 --max-pixels 409600 --val-every 400 --save-every 200 --workers 8 --quant none` | DIOR-RSVG train ×0.4 (10,796) + VRSBench grounding `bc82fd58…` (33,440 clean rows) | arm-A adapter continued, 640-px cap, 2,765 steps; smoke-tested 21:45 (4-bit, 4 rows) | ≈ 8–10 h | `checkpoints/v3/grounding_vlm_vrs/adapter_best` | `logs/train_ground_vrs.log` | #12 | ≥ 18 GB |
+| 14 | night-3 step A2 `eval_ground_armC` + `eval_vrsbench_ground` | official DIOR-RSVG test, arms lora_r16 vs lora_vrs (paired McNemar) → `dior_rsvg_official_armC.json`; VRSBench val grounding (16,159) base / lora_r16 / lora_vrs → `vrsbench_val_grounding.json` | DIOR-RSVG test; VRSBench `val_grounding.jsonl` | greedy | ≈ 1 h + 1.5 h | reports | `logs/eval_ground_armC.log`, `logs/eval_vrsbench_ground.log` | #13 | ≥ 18 GB |
+| 15 | night-3 step B `train_cm_v3_scratch` | `train_change_mask.py --index data/levircd/index.json --ckpt-dir checkpoints/v3/change_mask_scratch --arch v3 --no-pretrained --dim 64 --epochs 40 --batch-size 16 --lr 2e-4 --loss bce_dice --augment --cosine --amp --workers 6 --select-on-val --save-every 445` | LEVIR-CD index (7,120 / 1,024 / 2,048) | ablation: same trunk from scratch | ≈ 2 h | `checkpoints/v3/change_mask_scratch/best.pt` | `logs/train_cm_v3_scratch.log` | #14 | ≈ 8 GB |
+| 16 | night-3 step C `train_ground_lora_merger` (arm B) + `eval_ground_merger` | `train_grounding_vlm.py … --ckpt-dir checkpoints/v3/grounding_vlm_r16_merger --epochs 1 … --train-merger`; then official test → `dior_rsvg_official_armB.json` | DIOR-RSVG official train | LoRA r16 + trainable merger, 1,686 steps | ≈ 7 h + 1 h | `checkpoints/v3/grounding_vlm_r16_merger/adapter_best` | `logs/train_ground_lora_merger.log`, `logs/eval_ground_merger.log` | #15 | ≥ 18 GB |
+
+## Finished today (verified)
+
+| Job | Exit | Checkpoint | Metrics | Registry |
+|---|---|---|---|---|
+| `sq-train-landcover-v3-holdout` | EXIT 0 (20:01) | `checkpoints/v3/landcover_holdout/final.pt` | `metrics.json` mAP 0.536 / micro 0.685 (n_test 15,000) | done |
+| `sq-eval-tracka-v2-holdout-b8` | EXIT 0 (20:19) | v2 `checkpoints/v2/track_a` (eval-only) | `rescoring/track_a_v2_on_holdout_p3.json` 0.900 (p3 in v2's train set — not a holdout for v2) | — |
+| independent LEVIR-CD re-score (foreground, 20:40) | 0 | `checkpoints/v3/change_mask/best.pt` sha256 739077ad… | `levircd_test_independent_v3.json` F1 0.9038 (n 2,048) | `eval_levircd_independent_*` |
+| `sq-eval-cc-v2` | EXIT 0 (21:20) | `checkpoints/v2/change_caption` (eval-only) | `rescoring/v2cc/levircc_change_caption_v2.json` (n 1,929) | — |
+| `sq-dl-vrsbench`, `sq-prep-vrsbench` | 0 / 0 (21:32) | — | `data/vrsbench/manifests/stats.json` (130,565 train / 11,825 quarantined) | — |
+| arm-C smoke (foreground, 4-bit, 4 rows, `/tmp/smoke_vrs`) | 0 | discarded (under /tmp, excluded from registry) | val selection 0.5 on 8 items — pipeline check only | excluded |
+
+## Stopped
+
+* `sq-queue-night2` — stopped 21:33 while still waiting on night 1; it had
+  run nothing. Its steps A and C are carried into night 3 (#15, #16); its
+  step B (land-cover scratch on the geographic-prefix subset) is dropped
+  because that subset is no longer a benchmark (audit L1, revised).

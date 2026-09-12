@@ -33,9 +33,37 @@ wait_vram() {
 run() { local name=$1; shift; wait_vram; log "START $name"
   if "$@" >> "logs/$name.log" 2>&1; then log "DONE $name (exit 0)"; else log "FAILED $name (exit $?)"; fi; }
 
+# Gate: arm C continues arm A's adapter, so arm A must have finished cleanly
+# (exit 0 in its log), its adapter_best must exist and load, and the official
+# test report for lora_r16 must be present with 7,500 items. A failed gate
+# stops this queue (exit 1) instead of guessing; nothing downstream runs.
+gate_arm_a() {
+  local ad=checkpoints/v3/grounding_vlm_r16/adapter_best
+  local rep=artifacts/benchmark_reports/dior_rsvg_official_phase6.json
+  grep -q "DONE eval_ground_official (exit 0)" logs/queue_night1.log || { log "GATE FAIL: eval_ground_official did not finish with exit 0"; return 1; }
+  [ -f "$ad/adapter_config.json" ] && [ -f "$ad/adapter_model.safetensors" ] || { log "GATE FAIL: $ad incomplete"; return 1; }
+  [ -f "$rep" ] || { log "GATE FAIL: $rep missing"; return 1; }
+  $PY - "$rep" "$ad" <<'PYEOF' || { log "GATE FAIL: report/adapter verification failed"; return 1; }
+import json, sys
+rep, ad = sys.argv[1], sys.argv[2]
+d = json.load(open(rep))
+arms = d.get("arms") or {}
+a = arms.get("lora_r16") or {}
+n = a.get("n") or d.get("n") or 0
+acc = a.get("acc@0.5")
+assert acc is not None and n == 7500, (acc, n)
+from safetensors import safe_open
+with safe_open(f"{ad}/adapter_model.safetensors", "pt") as f:
+    keys = list(f.keys())
+assert len(keys) > 100, len(keys)
+print(f"GATE OK: arm A lora_r16 acc@0.5={acc:.4f} on n={n}; adapter tensors={len(keys)}")
+PYEOF
+}
+
 log "queue 3 started; waiting for sq-queue-night1"
 wait_unit sq-queue-night1
 log "night 1 finished"
+if ! gate_arm_a >> "$LOG" 2>&1; then log "queue 3 STOPPED at the arm-A gate; nothing else run"; exit 1; fi
 
 # A. Grounding arm C: arm A adapter continued on DIOR-RSVG train (40% resample,
 #    already seen once) + VRSBench grounding (all clean rows), 1 epoch.
