@@ -18,7 +18,7 @@ change a number or a plan are marked **FINDING**.
 | `second` | 2.3 G | CDVQA's own train ids, 1,600 / 400 | n/a | **no licence** — weights unpublishable; benchmark use flagged |
 | `whu_opt_sar` | 2.9 G | random **by tile**, 1,548 / 387 | no | **FINDING F1 (leakage):** all 36 source scenes appear on both sides. Tiles are 512 px crops of ~5,500×3,700 scenes; neighbours share texture and season. Validation is optimistic; the −0.030 fusion gain is measured on a leaky split and must be re-measured scene-disjoint. Tile names encode `SCENE_ROW_COL`, so a scene split is possible. |
 | `whu_opt_sar` labels | — | — | — | **FINDING F2 (label misalignment, critical):** `prepare/whu_opt_sar.py` cut each label tile at `row*512, col*512` treating the `_RR_CC` suffix as 0-based; the mirror's indices are **1-based** (1..6 × 1..9). Every label tile was one tile down and one right of its imagery. Detected by the NDWI test (water-labelled pixels vs the rest: old labels +0.001, re-cut labels **+0.184** over 322 tiles; six crop hypotheses in `prepare/whu_opt_sar_relabel.py`). Consequences: every `optsar_fusion` result (v1 −0.006, v2 −0.030, v3-on-old-labels −0.002) was trained and scored on labels unrelated to the pixels — the "fusion adds nothing" conclusion is **void**, not negative; the WHU rows of `instruct_mix` (2,786 VQA answers such as "forest covers about 78%" + 122 refusals) were wrong, so the deployed VQA adapter learned from mislabelled SAR/optical questions. Fixed: `prepared/lbl_v2/`, `index_v2*.json`, `instruct_mix_v2/`. Old artefacts kept for reproducibility. |
-| `ben_full` | 43 G | prepared HDF5 shards, 65,867 patches (11% of 590k) | partial | official BEN v2 split ids honoured within the subset; clean. Data-limited, not leaky. |
+| `ben_full` | 43 G | HF HDF5 partition mirror: 4 train shards (60,000) + `test_p8` (5,867) | partial | **FINDING L1 (critical): `test_p8`'s labels are unrelated to its images.** Physics check: in train shards the water class has an NDWI gap of +0.76 and the dominant vegetation class an NDVI gap of +0.58 over the rest; in `test_p8` every class gap is ≈0 and the label frequencies bear no relation to train's (class 4: 83% vs 9%, class 7: 0% vs 31%). A model that fits the train shards at 0.82 mAP scores 0.30 on it and **no column permutation** recovers the signal (best-match mAP 0.57 = base rate of the majority columns); row shifts do not either. Every Track A / landcover number since v0 (0.285, 0.315, 0.339) was scored on this shard and is **void**. Fixed by `data/ben_holdout/`: shard p3 (15,000 patches) held out as test, p0–p2 as train; Category B (official-train patches, not the official test). |
 | `instruct_mix` | 1.2 M | pointers into `whu_opt_sar` + `rsvqa_lr_2k` | n/a | inherits F1 for its `whu_opt_sar` rows (VQA-style questions over tiles) |
 
 ## Integrity checks run
@@ -52,3 +52,9 @@ change a number or a plan are marked **FINDING**.
    (Category A needs corpus BLEU-4 on the standard test list).
 4. Nothing was deleted. The retired parquet mirror stays under
    `data/dior_rsvg` for reproducibility of the Phase 5 numbers.
+5. Land cover is re-measured on `data/ben_holdout` (L1). The three data
+   findings that voided published numbers (G1, F2, L1) share one cause:
+   nobody had checked the labels against the pixels. The NDWI/NDVI class
+   signature test (`training/prepare/whu_opt_sar_relabel.py::ndwi_gap` and
+   the inline BEN check in this audit) is now the first thing run on any
+   labelled raster dataset before training.

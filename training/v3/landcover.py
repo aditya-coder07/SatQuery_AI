@@ -45,7 +45,11 @@ def build_landcover_v3(pretrained: bool = True, n_classes: int = N_CLASSES, drop
     if pretrained:
         from torchgeo.models import ResNet50_Weights, resnet50
 
-        net = resnet50(weights=ResNet50_Weights.SENTINEL2_ALL_MOCO)  # in_chans=13, no head
+        net = resnet50(weights=ResNet50_Weights.SENTINEL2_ALL_MOCO)  # in_chans=13
+        # torchgeo's resnet50 keeps timm's 1000-way fc; drop it so the state
+        # dict matches the scratch build (num_classes=0) and nothing unused
+        # is saved.
+        net.reset_classifier(0)
         with torch.no_grad():
             w = net.conv1.weight[:, _keep_indices()].clone()
         conv = nn.Conv2d(12, 64, 7, stride=2, padding=3, bias=False)
