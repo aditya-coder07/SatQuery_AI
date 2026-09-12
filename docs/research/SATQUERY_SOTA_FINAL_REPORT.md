@@ -16,7 +16,7 @@ per-benchmark ledger is `docs/research/sota_matrix.md`, the run ledger is
 | WHU-OPT-SAR (scene-disjoint) | fused − optical mIoU | −0.030 (tile-mAP, misaligned labels: **void**) | **+0.021** (0.447 → 0.468) | +1–3 mIoU reported by MCANet/ASANet | n/a (baseline void) | — | B | per-tile paired bootstrap CI [+0.006, +0.012] |
 | RSICD test | corpus BLEU-4 / CIDEr-D | 0.1744 / 0.562 (rescored; 0.266 was sentence-mean) | *pending* (VLM SFT) | ~0.30–0.45 / 1.5–2.5+ | — | — | A | bootstrap CI |
 | LEVIR-CC test | corpus BLEU-4 (5 refs) | 0.384 (oracle mask) | *pending* (VLM, images only) | 65.5 SAGE-CC | — | — | B→A | bootstrap CI |
-| BigEarthNet-19 test shard | macro mAP / 4-band retention | 0.315 / 0.926 | *pending* (SSL4EO-S12 trunk) | 88.5 SeaMo (micro) | — | — | B (subset) | — |
+| BigEarthNet-19 (S2 v1.0) official test | micro mAP / macro mAP / 4-band retention | 0.315 macro on a geographic subset shard (Category B under shift; L1 revised) | *pending* (SSL4EO-S12 trunk on the complete official split, `data/ben_v1_full`) | 88.5 SeaMo (micro) | — | — | A once the full split is scored | val-selected; 125,866 test patches |
 | Landsat-SCD test (CC BY 4.0) | change-type mIoU / SeK | none (SECOND unlicensed) | *pending* | GSTM-SCD-class methods report SeK ~20–30 on SCD sets | — | — | B | pair bootstrap |
 | CDVQA test1 | overall acc | 0.6061 | unchanged | — | — | — | A | — |
 
@@ -53,7 +53,7 @@ per-benchmark ledger is `docs/research/sota_matrix.md`, the run ledger is
 | fusion | WHU-OPT-SAR 29 scenes / 1,557 tiles | 7 scenes / 378 tiles | same (no separate test) | unstated |
 | caption | RSICD train 8,734 × 5 refs | RSICD val 300 | RSICD test 1,093 | unstated |
 | change caption | LEVIR-CC train 6,815 × 5 refs | val 300 | test 1,929 | academic-only |
-| landcover | BigEarthNet v2 subset 65,867 | — (no selection) | test shard 5,867 | CDLA-Permissive-1.0 |
+| landcover | BigEarthNet-S2 v1.0 official train 269,695 (subset 60,000 before 2026-09-12 20:00) | official val (20,000-item subsample) | official test 125,866 | CDLA-Permissive-1.0 |
 | semantic change | Landsat-SCD 1,431 originals + 3,703 aug copies | 477 originals | 477 originals | CC BY 4.0 |
 
 ## 4. MODEL USED
@@ -78,8 +78,10 @@ per run are in the registry; Phase 6 day 1: ≈ 12 GPU-h measured so far.
   absolute mIoU is below full-data papers; the *gain* is the claim.
 * Change captioning's Phase 5 number used the ground-truth mask at test
   time; the fair (images-only) number is the VLM arm's.
-* Land cover remains data-limited (11% of BigEarthNet); the full download
-  (~380 GB) is a user decision.
+* Land cover before 20:00 was measured on a geographic prefix of the
+  mirror (audit L1, revised); the complete official split (146 GB
+  compressed, sha256-verified) was pulled the same evening and every
+  land-cover number from here on is on it.
 * Everything is one seed (42). Seed variance has not been measured; CIs
   are over test items, not over training runs.
 * The unified (shared-adapter) study, HPO beyond defaults, hard-negative

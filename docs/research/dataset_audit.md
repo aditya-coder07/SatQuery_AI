@@ -18,7 +18,7 @@ change a number or a plan are marked **FINDING**.
 | `second` | 2.3 G | CDVQA's own train ids, 1,600 / 400 | n/a | **no licence** — weights unpublishable; benchmark use flagged |
 | `whu_opt_sar` | 2.9 G | random **by tile**, 1,548 / 387 | no | **FINDING F1 (leakage):** all 36 source scenes appear on both sides. Tiles are 512 px crops of ~5,500×3,700 scenes; neighbours share texture and season. Validation is optimistic; the −0.030 fusion gain is measured on a leaky split and must be re-measured scene-disjoint. Tile names encode `SCENE_ROW_COL`, so a scene split is possible. |
 | `whu_opt_sar` labels | — | — | — | **FINDING F2 (label misalignment, critical):** `prepare/whu_opt_sar.py` cut each label tile at `row*512, col*512` treating the `_RR_CC` suffix as 0-based; the mirror's indices are **1-based** (1..6 × 1..9). Every label tile was one tile down and one right of its imagery. Detected by the NDWI test (water-labelled pixels vs the rest: old labels +0.001, re-cut labels **+0.184** over 322 tiles; six crop hypotheses in `prepare/whu_opt_sar_relabel.py`). Consequences: every `optsar_fusion` result (v1 −0.006, v2 −0.030, v3-on-old-labels −0.002) was trained and scored on labels unrelated to the pixels — the "fusion adds nothing" conclusion is **void**, not negative; the WHU rows of `instruct_mix` (2,786 VQA answers such as "forest covers about 78%" + 122 refusals) were wrong, so the deployed VQA adapter learned from mislabelled SAR/optical questions. Fixed: `prepared/lbl_v2/`, `index_v2*.json`, `instruct_mix_v2/`. Old artefacts kept for reproducibility. |
-| `ben_full` | 43 G | HF HDF5 partition mirror: 4 train shards (60,000) + `test_p8` (5,867) | partial | **FINDING L1 (critical): `test_p8`'s labels are unrelated to its images.** Physics check: in train shards the water class has an NDWI gap of +0.76 and the dominant vegetation class an NDVI gap of +0.58 over the rest; in `test_p8` every class gap is ≈0 and the label frequencies bear no relation to train's (class 4: 83% vs 9%, class 7: 0% vs 31%). A model that fits the train shards at 0.82 mAP scores 0.30 on it and **no column permutation** recovers the signal (best-match mAP 0.57 = base rate of the majority columns); row shifts do not either. Every Track A / landcover number since v0 (0.285, 0.315, 0.339) was scored on this shard and is **void**. Fixed by `data/ben_holdout/`: shard p3 (15,000 patches) held out as test, p0–p2 as train; Category B (official-train patches, not the official test). |
+| `ben_full` | 43 G | HDF5 partition mirror (`lc-col/bigearthnet`, BigEarthNet-S2 **v1.0**, torchgeo split lists): first 4 of 18 train shards (60,000) + the *last* test shard `test_p8` (5,866 + 1 phantom row) | partial | **FINDING L1 (revised 20:10, see below): the shard is a geographic subset, its labels are aligned.** The first reading of this finding ("labels unrelated to images") was wrong and is retracted. Evidence for the revision: the mirror's `bigearthnet_hdf5_test.csv` names the patches behind every `test_p8` row (5,866 patches from ~10 Sentinel-2 acquisitions, Iberia-type land cover: agro-forestry 27%, permanent crops 27%, pastures 13%); the train shards p0–p3 are a different set of acquisitions (pastures 85%, marine 14%, agro-forestry 0%, permanent crops 0.1%). With water rare in `test_p8` (inland 6.8%, marine 0.3%) the NDWI gap is +0.144 at row shift 0 vs +0.05 at shift ±1 — labels ARE row-aligned; conifer/mixed NDVI +0.09/+0.08, industrial −0.07 — the class signatures are present, just weaker than in a shard that is 14% open sea. The converter (`lccol/bigearthnet-conversion`, Apache-2.0) writes shards in split-list order and the lists are grouped by acquisition, so **any prefix of shards is one region**; a model trained on 60k Irish-type patches scoring 0.30 macro mAP on an Iberian shard is a domain-shift result, and macro mAP over classes with 0 train examples collapses by construction. Real construction bug found in the converter: `compute_block_size` has `+ 1`, so the last shard of every split has one all-zero row with an empty label (quarantined). Consequence: every subset number (0.285 / 0.315 / 0.339 / holdout 0.536) is **Category B under geographic shift**, not void; none is the official benchmark. Fix: the complete official split (269,695 / 123,723 / 125,866) is now prepared by `training/prepare/bigearthnet_v1_full.py` (sha256-verified against the Hub, phantom rows dropped, CSV order) as `data/ben_v1_full`. |
 | `instruct_mix` | 1.2 M | pointers into `whu_opt_sar` + `rsvqa_lr_2k` | n/a | inherits F1 for its `whu_opt_sar` rows (VQA-style questions over tiles) |
 
 ## Integrity checks run
@@ -52,9 +52,17 @@ change a number or a plan are marked **FINDING**.
    (Category A needs corpus BLEU-4 on the standard test list).
 4. Nothing was deleted. The retired parquet mirror stays under
    `data/dior_rsvg` for reproducibility of the Phase 5 numbers.
-5. Land cover is re-measured on `data/ben_holdout` (L1). The three data
-   findings that voided published numbers (G1, F2, L1) share one cause:
-   nobody had checked the labels against the pixels. The NDWI/NDVI class
-   signature test (`training/prepare/whu_opt_sar_relabel.py::ndwi_gap` and
-   the inline BEN check in this audit) is now the first thing run on any
-   labelled raster dataset before training.
+5. Land cover (L1, revised). The physics test was run correctly but read
+   wrongly: the `test_p8` signatures are weak because the shard is a
+   different region with little water, not because its labels are
+   broken (the row-shift control — +0.144 at shift 0 vs +0.05 at ±1 —
+   settles it). The lesson is the opposite of G1/F2: a *weak* physics
+   signature needs a shift control and a class-frequency check before it
+   is called misalignment. The three data findings that changed
+   published numbers (G1, F2, and L1 as revised) still share one cause:
+   nobody had checked what a split actually contained. The NDWI/NDVI
+   class-signature test (`training/prepare/whu_opt_sar_relabel.py::ndwi_gap`)
+   with a ±1 row-shift control is now the first thing run on any
+   labelled raster dataset before training. Land cover moves to the
+   complete official split (`data/ben_v1_full`); `data/ben_holdout`
+   (p0–p2 → p3) stays as an in-subset comparison of v2 vs v3 only.

@@ -153,5 +153,5 @@
   ],
   "gpu_hours": 0.7133834379911422,
   "pretrained": true,
-  "VOID": "test_p8 labels are unrelated to its images (audit finding L1); this number is not a measurement of the model. See docs/research/dataset_audit.md."
+  "CAVEAT": "Category B under geographic shift: trained on train shards p0-p3 (one set of acquisitions) and scored on test_p8 (the last test shard, a different region; audit finding L1 as revised 2026-09-12 20:10). Labels are aligned; the number is a real but non-benchmark measurement. The official-split number comes from data/ben_v1_full."
 }

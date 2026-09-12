@@ -15,4 +15,5 @@ while true; do
 done
 echo "$(date '+%F %T') START $*" >> "logs/$name.log"
 "$@" >> "logs/$name.log" 2>&1
-echo "$(date '+%F %T') EXIT $?" >> "logs/$name.log"
+rc=$?  # capture before the date substitution below resets $?
+echo "$(date '+%F %T') EXIT $rc" >> "logs/$name.log"
