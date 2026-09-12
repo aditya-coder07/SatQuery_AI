@@ -322,6 +322,17 @@ def main() -> int:
 
     if not args.no_write_registry:
         registry = build_registry(reports)
+        # Merge with the registry on disk: heads fitted in an earlier run
+        # (e.g. change_mask on LEVIR-CD val) survive a run that only refits
+        # landcover; a head refitted here replaces its old entry (and leaves
+        # `rejected` if it now passes, or `heads` if it now fails).
+        if args.registry.exists():
+            old = json.loads(args.registry.read_text(encoding="utf-8"))
+            touched = set(registry["heads"]) | set(registry["rejected"])
+            for section in ("heads", "rejected"):
+                for key, entry in (old.get(section) or {}).items():
+                    if key not in touched:
+                        registry[section][key] = entry
         args.registry.parent.mkdir(parents=True, exist_ok=True)
         args.registry.write_text(json.dumps(registry, indent=2), encoding="utf-8")
         print(f"Wrote {args.registry}  "
