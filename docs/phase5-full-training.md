@@ -1,9 +1,11 @@
 # Phase 5 — full training of all nine tools on cluster GPU
 
-**Written 2026-09-09.** This document is a *plan and a harness*, not a result.
-No number in it is measured. When runs complete, their numbers go into a new
-dated section of `docs/phase1-status.md` and new cards in `docs/model-cards.md`
-— **never as an edit to a v1 number**, for the reason in §1.
+**Written 2026-09-09; results appended 2026-09-12 in §7.** §§1–6 are the
+plan as written before any run existed and are kept unedited; §7 is what
+happened, including which of the plan's premises turned out to be false. The
+measured numbers live in a dated section of `docs/phase1-status.md` and in
+new cards in `docs/model-cards.md` — **never as an edit to a v1 number**, for
+the reason in §1.
 
 ---
 
@@ -228,3 +230,95 @@ Stated plainly rather than left to be discovered:
   numbers exist — the shape of the decision is in `docs/checkpoint-decision.md`.
 * **Licensing is unchanged.** `change_vqa_v1` weights remain unpublishable:
   SECOND states no licence at all. Retraining does not change that.
+
+---
+
+## 7. What happened — 2026-09-12
+
+§6 above was written before any run existed and is kept as written. Three of
+its four bullets are now out of date; this section supersedes them.
+
+**Every run executed.** Ten campaign runs, 16.63 GPU-h measured, on the AI
+Lab's NVIDIA L40S (`compute01`, RHEL 9, shared with other students). Then a
+40-epoch extension of both Track A arms, an early-stopping rerun of Track B,
+the official RSVQA-LR evaluation, and pretrained-backbone arms for grounding
+and caption — roughly 25 GPU-h in all. Results and the per-tool discussion
+are in `docs/phase1-status.md` §"Phase 5 — 2026-09-12" and the cards in
+`docs/model-cards.md` §"Phase 5 cards". The numbers themselves are in
+`docs/assets/phase5/`.
+
+**The estimates were wrong by 3–5×, in the safe direction.** 91 GPU-h
+estimated, 16.6 measured. They were laptop extrapolations and the L40S is
+simply faster; `est_hours` in `configs/campaign.yaml` should be revised
+downward before the config is reused.
+
+**The environment was not what §3 planned for.** The lab gives real SSH, not
+notebook-only access, so the campaign ran as a `systemd --user` service with
+lingering enabled rather than from the notebook. That turned out to be
+necessary and not merely nicer: bare `nohup`/`setsid` processes were killed
+with the SSH session on this box. The notebook still works and was not
+needed.
+
+### What the hardware found that the plan did not
+
+Fourteen distinct problems surfaced by actually running, each fixed and
+tested. The ones that changed a design decision:
+
+* **The shared GPU had 10.8 GB free of 47.7.** `env_probe` sized batches from
+  total VRAM and would have OOMed on the first step. It now sizes from
+  `mem_get_info`, and records the shared-card condition in the run metadata.
+* **The probe's batch size was never wired in.** `campaign.yaml` pinned
+  `--batch-size 64`; Track A's stem reshapes to `batch × 12 bands` and OOMed
+  after loading 43 GB. The driver now injects the measured size.
+* **Two runs trained fully and died in the evaluator** because the v2
+  captioners had no `generate()`. Forward contracts were verified; auxiliary
+  methods were not. Fixed, with a test for the class of bug.
+* **Checkpoint pruning deleted the best model.** `keep_last=3` removed the
+  step the trainer had itself recorded as best. Pruning now protects it, and
+  the best adapter is saved the moment it is found.
+* **A driver killed mid-run left its trainer orphaned**, and the queue —
+  tracking only the driver's pid — would have started a second trainer on the
+  same checkpoint directory. The trainer's pid is now tracked and verified
+  against `/proc`.
+* **Three trainers need `pyarrow`, Track B needs `torchvision`**, neither in
+  `requirements.txt`. `bootstrap.sh` checks both.
+
+### Two premises of this document that turned out to be false
+
+**§2 "No `timm` / `torchgeo` pretrained weights", on the grounds that the
+cluster may have no network.** `compute01` reaches pypi, github and
+huggingface, and the whole environment was pip-installed over that network.
+Pretrained ImageNet backbones were added for grounding and caption and both
+beat their from-scratch arms (Acc@0.5 0.1262 → 0.1604; BLEU-4 0.2255 →
+0.2658), with the internal evidence — pretrained vs scratch on SECOND, 0.2933
+vs 0.1730 — having predicted it. The no-`trust_remote_code` decision stands;
+this one does not.
+
+**§4's reading of Track A as the run "with the most headroom".** 28 extra
+epochs moved test mAP by 0.0023 while training loss fell tenfold. Track A is
+data-limited — 65,867 patches against ~549k — not schedule-limited, and the
+published 0.65–0.85 was never a like-for-like target.
+
+### What §6 said that is still true
+
+* **The tools have not been re-pointed at v2 checkpoints.** The plumbing works
+  — `arch` in `extra`, dispatch tested end-to-end — but no `SATQUERY_*`
+  variable points at a v2 directory, and the v1 calibration and thresholds
+  were fitted to v1 scores. Per-tool deployment is the next decision, with the
+  recommendation stated on each Phase 5 card.
+* **Licensing is unchanged.** `change_vqa` weights remain unpublishable.
+
+### What remains
+
+In order of what it would settle:
+
+1. **Deploy per tool**, refitting calibration where the v1 transform was fitted
+   to v1 scores (`landcover`, `change_mask`).
+2. **Reinstate `bleu4_changed`** in the change-caption evaluator, so that tool
+   has a meaningful comparison rather than an inflated aggregate.
+3. **Full BigEarthNet** for Track A — the one gap that is now demonstrably data
+   and not schedule. ~380 GB and hours of preparation; a decision, not a
+   default.
+4. **`optsar_fusion`**: state the negative result. Two designs on the one
+   paired corpus available have not shown SAR complementarity, and the report
+   is stronger for saying so than for a third attempt.

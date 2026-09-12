@@ -2149,3 +2149,198 @@ Corrections propagated the same day to `docs/00` §3.1/§3.5/L10,
 `docs/model-cards.md`, `docs/deck.md` and `docs/judge-qa.md`;
 `docs/external_benchmark_audit.md` and its JSON companion carry a correction
 banner instead, being dated audits.
+
+---
+
+## Phase 5 — 2026-09-12: all nine tools retrained on an L40S, v2 against v1
+
+**Appended, not edited.** Every v1 number above stays exactly as written; it
+is the baseline each v2 number below is compared against, and overwriting it
+would destroy the comparison. Every figure here is read from a `metrics.json`
+written by the run that produced it, all of which are in
+`docs/assets/phase5/`. Nothing is quoted from memory.
+
+**What ran.** Ten campaign runs plus three follow-ups on the AI Lab's NVIDIA
+L40S (`compute01`), reached over SSH and driven by
+`training/cluster/campaign.py`. The campaign's ten runs took **16.63 GPU-h**
+measured (`docs/assets/phase5/campaign_state.json`) against 91 estimated — the
+estimates were laptop extrapolations. With the 40-epoch Track A extension,
+the early-stopping rerun and the two pretrained arms, the whole of Phase 5 is
+roughly 25 GPU-hours.
+
+### The table
+
+| tool | metric | v1 | v2 | Δ | |
+|---|---|---|---|---|---|
+| `rs_vqa_v1` | RSVQA-LR official, published conv. | — | **0.8947** | new | in the 89–93% literature range |
+| `change_mask_v1` | F1, change class | 0.5597 | **0.8550** | +0.2953 | |
+| `change_mask_v1` | IoU, change class | 0.3886 | **0.7467** | +0.3581 | |
+| `grounding_v1` | Acc@0.5 | 0.0762 | 0.1262 | +0.0500 | from scratch |
+| `grounding_v1` | Acc@0.5 | 0.0762 | **0.1604** | +0.0841 | pretrained ResNet-50 |
+| `caption_v1` | BLEU-4 | 0.2446 | 0.2255 | −0.0191 | from scratch — **regression** |
+| `caption_v1` | BLEU-4 | 0.2446 | **0.2658** | +0.0212 | pretrained ResNet-50 |
+| `landcover_v1` | mAP, 12 bands | 0.2854 | 0.3150 | +0.0296 | 40 epochs |
+| `landcover_v1` | 4-band retention | 0.9015 | **0.9262** | +0.0247 | |
+| `change_vqa_v1` | change-class mIoU | 0.2636 | 0.2933 | +0.0297 | pretrained stem |
+| `change_caption_v1` | BLEU-4, aggregate | 0.5686 | 0.5746 | +0.0060 | see caveat |
+| `optsar_fusion_v1` | fused − best single | −0.0064 | **−0.0301** | −0.0238 | **regression** |
+| `optsar_fusion_v1` | fused mAP | 0.7714 | 0.7420 | −0.0294 | **regression** |
+
+One competitive result, one large gain, four modest gains, two regressions
+of which one matters. Each is taken in turn, the regressions first.
+
+### `optsar_fusion_v1`: fusion still adds nothing, and it is PS-mandatory
+
+| head | v1 | v2 |
+|---|---|---|
+| optical only | 0.7778 | 0.7722 |
+| SAR only | 0.7410 | 0.7369 |
+| fused | 0.7714 | 0.7420 |
+| **fused − best single** | **−0.0064** | **−0.0301** |
+
+v1 already found the fused head *worse* than optical alone, and the v2
+architecture — cross-attention in both directions *before* pooling, the
+textbook fix — made it worse again. **Two architectures have now failed to
+show SAR adding anything on WHU-OPT-SAR**, and the three-head output exists
+precisely so this cannot be hidden: the per-stream heads read pre-attention
+features, so "optical alone" means optical alone.
+
+This is recorded as a finding about the data, not a modelling bug to chase.
+Optical–SAR fusion is a PS-mandatory capability, and the honest statement is
+that on the one openly-licensed mid-resolution paired corpus available, the
+SAR stream is not complementary at the scene-classification level. The tool
+still runs; its `fused` head is not the reason to trust it.
+
+### `caption_v1`: from-scratch regressed, pretrained recovered it
+
+| arm | BLEU-4 | unique captions |
+|---|---|---|
+| v1 | 0.2446 | 146 (13.4%) |
+| v2 from scratch | 0.2255 | 714 (65.3%) |
+| **v2 pretrained** | **0.2658** | **764 (69.9%)** |
+
+The from-scratch v2 lost 0.019 BLEU-4 while producing five times as many
+distinct captions. That is *consistent* with v1 collapsing onto a few safe
+captions BLEU happens to reward, but it is not claimed as a hidden win: the
+from-scratch samples inspected were diverse and wrong ("white waves near a
+beach" for an airport). The ImageNet ResNet-50 backbone recovers it and
+passes v1, while keeping the diversity.
+
+### `rs_vqa_v1`: the strongest result, on the tool whose weights were destroyed
+
+The v1 adapter is 99.99% NUL bytes (`docs/model-cards.md`, 2026-09-01) and
+could not be loaded. It was retrained from the same recipe, then scored on the
+**official RSVQA-LR test split** — 10,004 questions over 100 images, Zenodo
+6344334 — with `evaluation/rsvqa_official_eval.py`, which mirrors the
+deployed generation path exactly.
+
+| arm | all types | published convention | presence | comp | count | rural/urban |
+|---|---|---|---|---|---|---|
+| train-fitted per-type constant | 0.5695 | 0.7006 | | | | |
+| base Qwen2.5-VL-3B, no adapter | 0.2622 | 0.3717 | 0.1959 | 0.5067 | 0.0000 | 0.16 |
+| **v2 adapter** (`adapter_final`) | **0.6958** | **0.8947** | 0.8931 | 0.8971 | 0.2195 | 0.85 |
+| v2 adapter, early-stopped | 0.6958 | 0.8851 | 0.8751 | 0.8968 | 0.2426 | 0.71 |
+
+Three things make 0.8947 trustworthy rather than flattering:
+
+* **The base model scores 0.3717.** The gain is the adapter, not Qwen already
+  knowing RSVQA.
+* **It beats the constant by 19 points.** This matters here specifically:
+  the Phase 2 sections above record that on the 2,000-question slice this
+  project used to quote, a per-type constant scored *identically* to the
+  deployed model. On the official split the model is doing work the constant
+  cannot.
+* **95% CI [0.8873, 0.9017]**, n = 7,057 for the published convention.
+
+Count questions stay at 0.22, which is why the literature excludes them and
+why both conventions are reported.
+
+**A claim this measurement disproved.** The early-stopped rerun reached a
+held-out loss of 0.1301 against the original run's 0.2529 — half — and the
+`metrics.json` it wrote asserted that `adapter_best` should be deployed on
+that basis. The benchmark says otherwise: identical all-types accuracy, and
+the *higher-loss* adapter marginally ahead on the published convention. Loss
+on the instruction mix did not predict RSVQA accuracy. The note in
+`training/track_b_vlm_qlora.py` now says so and defers to the official
+evaluator. Early stopping keeps its place for a different reason — it cut
+compute by 62% and bounds an otherwise unbounded overfit — but the deployment
+claim was wrong and has been removed.
+
+### `change_mask_v1`: the large gain
+
+F1 0.5597 → 0.8550; IoU 0.3886 → 0.7467; precision 0.4426 → 0.8182 with
+recall 0.7613 → 0.8952 — both moved, so this is not a threshold shift. The
+v2 keeps what v1 reasoned about correctly (one shared encoder, absolute
+difference) and adds differences at every scale with a concat-skip decoder,
+which is what lets small buildings survive to the output. 1.86 GPU-h.
+
+### `landcover_v1`: not schedule-limited, and band dropout is a regulariser
+
+| arm | epochs | mAP 12-band | mAP 4-band | retention |
+|---|---|---|---|---|
+| dropout 0.3 | 12 | 0.3127 | — | — |
+| dropout 0.3 | **40** | **0.3150** | 0.2917 | **0.9262** |
+| dropout 0.0 | 12 | 0.3213 | 0.2696 | 0.8392 |
+| dropout 0.0 | **40** | 0.3015 | 0.2646 | 0.8775 |
+
+Two findings, one of which corrects a reading made during the campaign.
+
+**28 extra epochs moved test mAP by 0.0023 while training loss fell tenfold**
+(0.1146 → 0.0110). During the run the falling loss was read as "still
+learning"; the test number says it was memorising. `track_a` is not
+schedule-limited. Its ceiling here is the data — `data/ben_full` holds 65,867
+patches, about 11% of BigEarthNet v2's ~549k, which is the reason the
+published 0.65–0.85 was never a like-for-like target.
+
+**Band dropout is doing two jobs.** At 12 epochs the no-dropout arm led on
+12-band mAP (0.3213 vs 0.3127) and trailed badly on retention. At 40 epochs it
+had *lost* 0.02 mAP while the dropout arm gained 0.002: without dropout the
+encoder overfits, with it the encoder holds. The 2026-08-29 ablation measured
+retention only and was single-seed; this is both arms on an identical
+40-epoch schedule, and the retention gap (92.6% vs 87.8%) is a properly
+controlled ~5 points.
+
+### `grounding_v1`: the defect was real, the gap remains
+
+Removing the global-average-pool that `docs/model-cards.md` named as the
+cause took Acc@0.5 from 0.0762 to 0.1262; the ImageNet backbone took it to
+0.1604 (Acc@0.7 0.0088 → 0.0543, six times). Both are real and both leave it
+far below the published 0.70–0.80. The from-scratch run's training loss
+reached 0.0054 — it had memorised the 38k referring expressions — so, as with
+Track A, the remaining gap is not one that more epochs address.
+
+### `change_vqa_v1`: the ablation confirms what pretraining is worth
+
+| arm | change-class mIoU |
+|---|---|
+| pretrained ResNet-18 stem (deployed) | **0.2933** |
+| v2 from scratch | 0.1730 |
+
++0.12 from pretraining alone, same data and schedule, on ~1,600 SECOND pairs.
+This is the measurement that justified the pretrained arms for grounding and
+caption. The SECOND licence position is unchanged: these weights remain
+unpublishable.
+
+### `change_caption_v1`: a caveat, not a gain
+
+0.5686 → 0.5746 is aggregate-to-aggregate, and the 2026-08 card says the
+aggregate is inflated by the ~965 trivially-unchanged pairs. v1's meaningful
+figure was `bleu4_changed` 0.3063; the current evaluator no longer computes
+that split. Read the row as "not worse overall". Reinstating the split is the
+next thing to do on this tool.
+
+### What Phase 5 established, in one paragraph
+
+Architecture was the binding constraint on `change_mask` and it is fixed.
+Pretraining is the binding constraint on `grounding`, `caption` and
+`change_vqa`, measured directly, and a network-free environment was the wrong
+premise for excluding it. Data is the binding constraint on `landcover`,
+proven by a schedule that did nothing. `rs_vqa_v1` is competitive on the
+official benchmark and was the one tool with no fallback. And `optsar_fusion`
+has now failed under two designs on the only paired corpus available, which
+is a statement about the corpus that belongs in the report as such.
+
+**Source of truth:** `docs/assets/phase5/` (every `metrics.json`,
+`rsvqa_lr_official_test.json`, `v1_v2_comparison.json`,
+`campaign_state.json`). Reproduce the table with
+`python evaluation/compare_v2.py`.

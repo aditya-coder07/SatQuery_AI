@@ -1,6 +1,14 @@
 # Session handoff — 2026-08-30 (post-freeze audit, and a data loss)
 
-> **Newest — 2026-09-09: Phase 5 exists.** `docs/phase5-full-training.md` is a
+> **Newest — 2026-09-12: Phase 5 has run.** All nine tools retrained on the
+> AI Lab L40S; results in `docs/phase1-status.md` §"Phase 5 — 2026-09-12"
+> and `docs/model-cards.md` §"Phase 5 cards". Headline: `rs_vqa_v1` scores
+> **0.8947** on the official RSVQA-LR test (published convention, in the
+> literature's 89–93% range); `change_mask` F1 0.56 → 0.86; `optsar_fusion`
+> still shows no SAR complementarity under a second architecture. Nothing
+> is deployed yet — the per-tool recommendation is on each card.
+>
+> **Earlier — 2026-09-09: Phase 5 exists.** `docs/phase5-full-training.md` is a
 > harness and a plan for retraining all nine tools on college cluster GPU,
 > because the constraint every model here was sized for — "free-tier Colab and
 > Kaggle only, T4 16 GB" (`docs/03` §1) — no longer holds.
