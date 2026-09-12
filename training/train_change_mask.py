@@ -42,7 +42,7 @@ from training.common.paths import index_path  # noqa: E402
 PATCH = 256
 
 
-def build_model(dim: int = 16, arch: str = "v1"):
+def build_model(dim: int = 16, arch: str = "v1", pretrained: bool = True):
     if arch == "v2":
         from training.v2.architectures import build_change_mask
 
@@ -50,7 +50,9 @@ def build_model(dim: int = 16, arch: str = "v1"):
     if arch == "v3":
         from training.v3.change_mask import build_change_mask_v3
 
-        return build_change_mask_v3(dim=dim)
+        # `pretrained=False` is the scratch ablation; loaders pass the default
+        # and overwrite the ImageNet init with the checkpoint anyway.
+        return build_change_mask_v3(dim=dim, weights="IMAGENET1K_V2" if pretrained else None)
 
     import torch
     import torch.nn as nn
@@ -191,6 +193,8 @@ def main() -> int:
         help="v1 = the published architecture; v2 = training/v2/architectures.py; "
              "v3 = training/v3/change_mask.py (ImageNet ResNet-50 siamese + FPN)",
     )
+    p.add_argument("--no-pretrained", action="store_true",
+                   help="ablation: the v3 trunk from scratch instead of ImageNet")
     p.add_argument("--loss", choices=["bce", "bce_dice"], default="bce")
     p.add_argument("--augment", action="store_true", help="dihedral + date-swap augmentation")
     p.add_argument("--cosine", action="store_true", help="cosine LR with a one-epoch warmup")
@@ -224,7 +228,7 @@ def main() -> int:
     test_ds, val_ds = LevirCD(test_rows), LevirCD(val_rows)
     print(f"train {len(train_ds)} | val {len(val_ds)} | test {len(test_ds)}")
 
-    model = build_model(args.dim, arch=args.arch).to(device)
+    model = build_model(args.dim, arch=args.arch, pretrained=not args.no_pretrained).to(device)
     n_params = sum(p.numel() for p in model.parameters())
     print(f"parameters: {n_params/1e6:.3f}M")
 
@@ -246,6 +250,7 @@ def main() -> int:
         "task": "change_mask_tinycd", "n_train": len(train_ds),
         "epochs": args.epochs, "lr": args.lr, "dim": args.dim,
         "n_params": n_params, "pos_weight": float(pos_weight), "arch": args.arch,
+        "pretrained": not args.no_pretrained,
         "loss": args.loss, "augment": args.augment, "cosine": args.cosine,
         "amp": args.amp, "select_on_val": args.select_on_val,
     })
