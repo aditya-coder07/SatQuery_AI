@@ -103,7 +103,8 @@ def load_model(checkpoint: Path, torch, device, dim: int):
         safe_torch_load,
     )
 
-    latest = find_latest_checkpoint(checkpoint)
+    # A run directory (latest `ckpt_step_*.pt`) or one weights file (v3 `best.pt`).
+    latest = checkpoint if Path(checkpoint).is_file() else find_latest_checkpoint(checkpoint)
     if latest is None:
         raise SystemExit(f"no checkpoint in {checkpoint}")
     payload = safe_torch_load(latest)

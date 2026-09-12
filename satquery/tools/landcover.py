@@ -140,7 +140,7 @@ def is_available() -> tuple[bool, str]:
     # Readable, not merely present. `track_a_full_multires/band_stats.json`
     # came back from a shadow-copy restore as 1,156 bytes of NUL on
     # 2026-08-31, and an existence check would have declared that head ready.
-    ok, reason = readable_json(Path(path) / "band_stats.json", expect=dict)
+    ok, reason = readable_json(_stats_dir(Path(path)) / "band_stats.json", expect=dict)
     if not ok:
         return False, (
             f"{reason}; regenerate it with training.track_a_full.compute_stats "
@@ -232,11 +232,18 @@ class _Handle:
         return cls._instance
 
 
+def _stats_dir(checkpoint: Path) -> Path:
+    """`SATQUERY_LANDCOVER` may name a run directory (v1/v2: latest
+    `ckpt_step_*.pt` inside it) or one weights file (v3: `best.pt`); the
+    band statistics sit beside the weights in both cases."""
+    return checkpoint.parent if checkpoint.is_file() else checkpoint
+
+
 def load_band_stats(checkpoint: Path) -> tuple[np.ndarray, np.ndarray, float]:
     """Dataset-level band statistics saved beside the weights."""
     import json
 
-    blob = json.loads((checkpoint / "band_stats.json").read_text(encoding="utf-8"))
+    blob = json.loads((_stats_dir(checkpoint) / "band_stats.json").read_text(encoding="utf-8"))
     return (
         np.asarray(blob["mean"], dtype="float32"),
         np.asarray(blob["std"], dtype="float32"),
