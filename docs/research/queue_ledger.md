@@ -24,6 +24,18 @@ with the expected `n`; (4) the registry has a `done` record with the
 checkpoint sha256. Status column values: RUNNING, WAITING, DONE (verified),
 FAILED, STOPPED.
 
+## Scheduling change (2026-09-13 03:10, on the user's instruction)
+
+Jobs no longer wait for a whole "night" queue to finish. Night 3 and night
+4 were stopped (both still waiting, nothing run) and replaced by one unit
+per job, each of which waits only on its own gate and on free VRAM:
+`scripts/cluster_unit_armC.sh` (gate: arm A verified), `cluster_unit_cm_scratch.sh`,
+`cluster_unit_armB.sh`, `cluster_unit_unified.sh` (gate: the four specialist
+reports, polled every 10 min). VLM units use batch 4 × accum 4 (same
+effective batch) so two can share the card; whichever unit finds the VRAM
+first starts, the others keep waiting. Night 1 continues unchanged.
+Deployment of these units is pending the cluster link (down at 03:12).
+
 ## Jobs
 
 | # | Unit / PID | Command (exact, see script) | Dataset manifest (sha256 prefix) | Config | Expected runtime | Checkpoint | Log | Depends on | VRAM |
