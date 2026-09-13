@@ -395,3 +395,236 @@ Otsu/GMM thresholding, SWIR-free fallbacks. No learned parameters, no training
 data, no failure mode beyond bad input. It is the independent referee the
 neural outputs are checked against, and it is why quantitative answers in this
 system come from arithmetic rather than generation.
+
+---
+
+# Phase 5 cards — 2026-09-12 (v2, trained on an L40S)
+
+**These are additions.** Every card above is the v1 record and is unchanged;
+it is the baseline each card below is measured against. The rules from
+`docs/code-freeze.md` are honoured the same way: new checkpoint directories
+(`checkpoints/v2/`), new architectures behind `--arch v2`, new dated numbers.
+Every figure is read from a `metrics.json` in `docs/assets/phase5/`.
+
+**Weight availability.** All Phase 5 checkpoints are on the AI Lab server at
+`/scratch/home/adi01/satquery/checkpoints/v2/`. None have been copied
+elsewhere yet and none are published; the licence position in §"Publication
+status" is unchanged, and `change_vqa` weights remain unpublishable.
+
+**Which checkpoint each tool should load** is stated per card. Where a
+pretrained arm exists it is the recommendation, and the from-scratch v2 is
+kept as the comparison that justifies it.
+
+---
+
+## `rs_vqa_v1` — v2 adapter
+
+| | |
+|---|---|
+| Checkpoint | `checkpoints/v2/track_b_vqa/adapter_final` |
+| Base | Qwen2.5-VL-3B-Instruct, 4-bit NF4, unchanged |
+| Adapter | LoRA r=16 on the language tower, 37.15M trainable (0.98%) |
+| Training | 6,000 steps on the 4,806-row instruction mix, 3.79 GPU-h |
+| **RSVQA-LR official test, published convention** | **0.8947** — 95% CI [0.8873, 0.9017] |
+| RSVQA-LR official test, all types | 0.6958 |
+| Base model, same split | 0.3717 / 0.2622 |
+| Train-fitted per-type constant | 0.7006 / 0.5695 |
+
+**Why this is the card to lead with.** The v1 adapter was destroyed (§"Weight
+availability — 2026-08-31") and could not be scored. This one was retrained
+from the same recipe and is the first Track B number measured on the
+**official** RSVQA-LR test split rather than the 2,000-question validation
+slice, where a constant scored identically to the model. On the official
+split the adapter beats the constant by 19 points and the base model by 52.
+
+**Deployment note, corrected.** An early-stopped rerun
+(`checkpoints/v2/track_b_vqa_es/adapter_best`, val loss 0.1301 vs 0.2529)
+scores 0.6958 all-types — identical — and 0.8851 on the published
+convention, marginally behind. Held-out loss on the instruction mix did not
+predict benchmark accuracy, and the earlier note recommending `adapter_best`
+on that basis was wrong. Either adapter is acceptable; `adapter_final` is
+listed because it is marginally ahead on the metric that matters.
+
+**Count questions score 0.22** and are excluded from the published
+convention, as the literature does. Both figures are reported.
+
+---
+
+## `change_mask_v1` — v2
+
+| | |
+|---|---|
+| Checkpoint | `checkpoints/v2/change_mask/` |
+| Architecture | siamese residual encoder, multi-scale absolute difference, concat-skip decoder, **7.395M parameters** |
+| Training | LEVIR-CD, 7,120 tiles, 60 epochs, `pos_weight` 10.1, 1.86 GPU-h |
+| **F1 (change class)** | **0.8550** (v1 0.5597) |
+| IoU | **0.7467** (v1 0.3886) |
+| Precision / Recall | 0.8182 / 0.8952 (v1 0.4426 / 0.7613) |
+
+Precision and recall both rose, so this is a better detector and not a moved
+threshold. v1's over-calling (0.44 precision) is gone without giving up the
+recall a screening tool needs. The two things v1 reasoned about correctly —
+one shared encoder, absolute difference — are kept; what changed is that the
+difference is taken at every scale and the decoder has skips, so small
+buildings survive to the output.
+
+**Recommendation:** load this checkpoint. Calibration has not been refitted
+for v2 and the v1 affine transform should not be assumed to carry over.
+
+---
+
+## `grounding_v1` — v2, pretrained
+
+| | |
+|---|---|
+| Checkpoint | `checkpoints/v2/grounding_pre/` |
+| Architecture | ImageNet ResNet-50 backbone → 1×1 projection → phrase cross-attends over the feature map → box read from the attention; **32.4M parameters** |
+| Training | DIOR-RSVG, all ~38k referring expressions, 40 epochs |
+| **Acc@0.5** | **0.1604** (v1 0.0762; v2 from-scratch 0.1262) |
+| Acc@0.7 | 0.0543 (v1 0.0088) |
+| mIoU | 0.1974 (v1 0.1405) |
+
+The v1 card names the defect — global-average-pooling before regressing the
+box — and removing it accounts for 0.0762 → 0.1262. The pretrained backbone
+accounts for the rest. Acc@0.5 has doubled and Acc@0.7 has risen six-fold.
+
+**It is still far below the published 0.70–0.80**, and the reason is now
+narrowed: the from-scratch run's training loss reached 0.0054, so the model
+memorised the training set, and more epochs would not help. What remains is
+the gap between an ImageNet backbone and the pretrained detection backbones
+and BERT-class text encoders the literature uses.
+
+**Recommendation:** load `grounding_pre`. Keep the confidence-gated
+abstention the v1 card describes; at 16% Acc@0.5 most boxes are still wrong.
+
+---
+
+## `caption_v1` — v2, pretrained
+
+| | |
+|---|---|
+| Checkpoint | `checkpoints/v2/caption_pre/` |
+| Architecture | ImageNet ResNet-50 → 1×1 projection → transformer decoder with cross-attention; **43.3M parameters** |
+| Training | RSICD, 8,734 captions, 40 epochs |
+| **BLEU-4** | **0.2658** (v1 0.2446; v2 from-scratch 0.2255) |
+| Unique captions | 764 / 1,093 (69.9%) — v1 146 (13.4%) |
+
+The from-scratch v2 **regressed** on BLEU-4 while producing five times as
+many distinct captions. That pattern is consistent with v1 collapsing onto a
+few safe captions BLEU rewards, but it is not claimed as a hidden win — the
+from-scratch samples inspected were diverse and wrong. The pretrained
+backbone recovers BLEU-4 past v1 while keeping the diversity.
+
+**Recommendation:** load `caption_pre`. The from-scratch checkpoint is kept
+as the comparison and should not be deployed.
+
+---
+
+## Track A — v2 → `landcover_v1`
+
+| | |
+|---|---|
+| Checkpoint | `checkpoints/v2/track_a/` |
+| Architecture | band-agnostic residual encoder, per-band stem, masked mean, FiLM GSD conditioning at every stage, **12.04M parameters** |
+| Training | 65,867 prepared BigEarthNet patches (11% of v2), 40 epochs, band dropout 0.3, multi-resolution, bf16 |
+| **mAP, 12 bands** | **0.3150** (v1 0.2854) |
+| mAP, Cartosat 4-band | 0.2917 |
+| **Retention** | **0.9262** (v1 0.9015) |
+
+| ablation arm | epochs | mAP 12-band | retention |
+|---|---|---|---|
+| dropout 0.3 | 12 → 40 | 0.3127 → 0.3150 | — → 0.9262 |
+| dropout 0.0 | 12 → 40 | 0.3213 → 0.3015 | 0.8392 → 0.8775 |
+
+**The ablation is now controlled** — both arms, identical 40-epoch schedule —
+and it says more than the single-seed v1 version did. Band dropout costs
+nothing on 12 bands and buys ~5 points of 4-band retention, as before; but it
+also **prevents the overfit** the no-dropout arm shows between epochs 12 and
+40. It is a regulariser as well as a robustness mechanism.
+
+**mAP is data-limited, not schedule-limited.** 28 extra epochs moved it by
+0.0023 while training loss fell tenfold. The published 0.65–0.85 is measured
+on ~549k patches; this is measured on 65,867, and no schedule will close that.
+
+**Recommendation:** load `track_a`. The v1 calibration and the 0.70 assertion
+threshold were fitted to v1 scores and must be refitted before the selective
+prediction in `satquery/tools/landcover.py` is trusted on v2.
+
+---
+
+## `change_vqa_v1` — v2 (pretrained stem, as v1)
+
+| | |
+|---|---|
+| Checkpoint | `checkpoints/v2/change_vqa/` |
+| Architecture | as v1 — ImageNet ResNet-18 stem, two unshared per-date decoders |
+| Training | SECOND, 60 epochs |
+| **Change-class mIoU** | **0.2933** (v1 0.2636) |
+| mIoU, all classes | 0.3623 |
+| Ablation, from-scratch v2 | 0.1730 |
+
+The ablation arm answers the question it was run for: on ~1,600 pairs a
+from-scratch encoder loses **0.12 mIoU** to a pretrained stem, same data and
+schedule. That measurement is what justified the pretrained arms above.
+
+**Publication:** still **BLOCKED** — SECOND states no licence. Retraining
+does not change that.
+
+---
+
+## `change_caption_v1` — v2 (NOT deployed)
+
+| | |
+|---|---|
+| Checkpoint | `checkpoints/v2/change_caption/` — **kept as the comparison; the tool loads v1** |
+| Architecture | siamese residual encoder → difference + mask → transformer decoder; 25.39M parameters |
+| Training | LEVIR-MCI, 50 epochs |
+| **BLEU-4, changed pairs** | **0.1641** (v1 0.3063) — **regression** |
+| BLEU-4, unchanged pairs | 0.9846 (v1 0.9706) |
+| BLEU-4, aggregate | 0.5746 (v1 0.5686) |
+| Unique captions | 638 (v1 85) |
+
+**Quote 0.1641, never 0.5746** — the same rule the v1 card states, and the
+reason this card exists in this form. The aggregate rose while the changed
+half fell by 0.14, because v2 is slightly better at the fixed "there is no
+difference" sentence that half the test set expects. The evaluator had
+dropped the split; the first Phase 5 write-up read the aggregate as "not
+worse" and was wrong. Reinstated and re-scored 2026-09-12.
+
+**Recommendation:** load `checkpoints/change_caption` (v1). This is the one
+tool where Phase 5 produced a worse model, and the one where the
+architecture changed without a pretrained backbone; a pretrained arm is the
+obvious next attempt and has not been run.
+
+---
+
+## `optsar_fusion_v1` — v2
+
+| | |
+|---|---|
+| Checkpoint | `checkpoints/v2/optsar_fusion/` |
+| Architecture | separate optical (4-band) and SAR (1-band) residual encoders, bidirectional cross-attention **before** pooling, three heads; 6.26M parameters |
+| Training | WHU-OPT-SAR, 40 epochs, 0.09 GPU-h |
+| optical-only mAP | 0.7722 (v1 0.7778) |
+| SAR-only mAP | 0.7369 (v1 0.7410) |
+| fused mAP | 0.7420 (v1 0.7714) |
+| **complementarity gain** | **−0.0301** (v1 −0.0064) |
+
+**The fused head is worse than optical alone, for the second architecture in
+a row.** The three-head design exists so this cannot be hidden: the
+per-stream heads read pre-attention features, so the comparison is honest.
+Cross-attention before pooling — the textbook remedy for v1's concatenation —
+did not help and slightly hurt.
+
+**Recommendation:** do not deploy the `fused` head on the strength of this
+number. The tool remains available and its per-stream heads are sound; the
+claim that the fusion *adds* information is not supported on WHU-OPT-SAR and
+the report should say so. This is a PS-mandatory capability and the finding
+is about the corpus, not a bug.
+
+---
+
+## `index_engine_v1` — unchanged
+
+No training run, by design. Deterministic NumPy. The fallback every other
+tool degrades to, and the reason `change_vqa` cannot score zero.

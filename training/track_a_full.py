@@ -70,7 +70,7 @@ BEN_GSD_M = 10.0
 class ShardedBigEarthNet:
     """Reads directly from HDF5 shards, keeping files open across items."""
 
-    def __init__(self, paths: list[Path], stats=None):
+    def __init__(self, paths: list[Path], stats=None, preload: bool = False):
         import h5py
 
         self.files = [h5py.File(p, "r") for p in paths]
@@ -80,6 +80,51 @@ class ShardedBigEarthNet:
             total += f["images"].shape[0]
         self.total = total
         self.stats = stats
+        self.images = None
+        self.labels = None
+        if preload:
+            self._preload()
+
+    def _preload(self) -> None:
+        """Pull every shard into RAM once, in its stored dtype.
+
+        The loader was the bottleneck, not the GPU: utilisation sampled
+        44-100% with the dips landing between batches while h5py served one
+        patch at a time from a 10 GB file. 66k patches at 12x120x120 is ~21 GB
+        as int16, against 503 GB of RAM on this node - the whole corpus fits
+        with room to spare.
+
+        Kept in the STORED dtype rather than float32: that is half the memory
+        and it moves the scale-and-normalise arithmetic into one vectorised
+        pass per batch instead of 32 separate per-item ones.
+        """
+        first = self.files[0]["images"]
+        shape = (self.total,) + first.shape[1:]
+        print(f"preloading {self.total} patches "
+              f"({np.prod(shape) * first.dtype.itemsize / 1e9:.1f} GB) into RAM...",
+              flush=True)
+        self.images = np.empty(shape, dtype=first.dtype)
+        labels = []
+        for f, offset in zip(self.files, self.offsets):
+            n = f["images"].shape[0]
+            f["images"].read_direct(self.images, np.s_[0:n], np.s_[offset:offset + n])
+            labels.append(np.asarray(f["labels19"], dtype="float32"))
+        self.labels = np.concatenate(labels)
+        print("  preload complete", flush=True)
+
+    def batch(self, idx: np.ndarray):
+        """One batch, vectorised. Numerically identical to stacking __getitem__.
+
+        Returns None when nothing is cached, so the caller falls back to the
+        per-item path and the uncached behaviour is bit-for-bit unchanged.
+        """
+        if self.images is None:
+            return None
+        image = self.images[idx].astype("float32") / REFLECTANCE_SCALE
+        if self.stats is not None:
+            mean, std = self.stats
+            image = (image - mean[None, :, None, None]) / std[None, :, None, None]
+        return image, self.labels[idx]
 
     def __len__(self) -> int:
         return self.total
@@ -115,7 +160,15 @@ def compute_stats(dataset, sample: int = 2000, seed: int = 0):
     return mean.astype("float32"), std.astype("float32")
 
 
-def build_model(n_bands: int = 12, dim: int = 96, gsd_conditioning: bool = True):
+def build_model(n_bands: int = 12, dim: int = 96, gsd_conditioning: bool = True,
+                arch: str = "v1"):
+    if arch == "v2":
+        from training.v2.architectures import build_track_a
+
+        return build_track_a(n_bands=n_bands, dim=dim,
+                             gsd_conditioning=gsd_conditioning,
+                             n_classes=N_CLASSES)
+
     import torch
     import torch.nn as nn
 
@@ -200,6 +253,10 @@ def batches(dataset, size, rng, shuffle=True):
     order = rng.permutation(len(dataset)) if shuffle else np.arange(len(dataset))
     for start in range(0, len(order), size):
         idx = np.sort(order[start : start + size])  # sorted reads are far faster in HDF5
+        batch = getattr(dataset, "batch", lambda _: None)(idx)
+        if batch is not None:
+            yield batch
+            continue
         xs, ys = zip(*(dataset[int(i)] for i in idx))
         yield np.stack(xs), np.stack(ys)
 
@@ -246,6 +303,15 @@ def main() -> int:
              "has a varying signal to learn from",
     )
     p.add_argument("--limit-eval", type=int)
+    p.add_argument(
+        "--fast", action="store_true",
+        help="bf16 autocast, cudnn.benchmark and an in-RAM dataset cache. "
+             "Needs compute capability 8.0+; falls back with a warning below.",
+    )
+    p.add_argument(
+        "--arch", choices=["v1", "v2"], default="v1",
+        help="v1 = the published architecture; v2 = training/v2/architectures.py",
+    )
     p.add_argument("--seed", type=int, default=42)
     p.add_argument("--save-every", type=int, default=200)
     p.add_argument("--resume", action="store_true")
@@ -258,6 +324,30 @@ def main() -> int:
 
     set_seed(args.seed)
     device = "cuda" if torch.cuda.is_available() else "cpu"
+
+    # `--fast`: the three settings this trainer never had. Measured on the
+    # lab L40S, GPU utilisation sat at ~78% in fp32 with the dips falling
+    # between batches - the card was waiting on the loader, and doing the
+    # arithmetic it did get in fp32 on a chip with bf16 tensor cores.
+    #
+    # bf16 rather than fp16: it carries fp32's exponent range, so it needs no
+    # GradScaler and cannot silently underflow a gradient to zero. That is
+    # why `docs/03` warns about fp16 on Turing and why this is safe here -
+    # sm89 has native bf16, which a T4 does not.
+    autocast_dtype = None
+    if args.fast:
+        capability = torch.cuda.get_device_capability(0) if device == "cuda" else (0, 0)
+        if capability >= (8, 0):
+            autocast_dtype = torch.bfloat16
+            # Fixed input shapes every step, so let cuDNN benchmark once and
+            # then reuse the fastest algorithm.
+            torch.backends.cudnn.benchmark = True
+            torch.backends.cuda.matmul.allow_tf32 = True
+            torch.backends.cudnn.allow_tf32 = True
+            print(f"fast: bf16 autocast + cudnn.benchmark (sm{capability[0]}{capability[1]})")
+        else:
+            print(f"fast: bf16 unavailable on sm{capability[0]}{capability[1]}; "
+                  "running fp32. The RAM cache still applies.")
     print(f"device: {device}")
 
     train_paths = sorted(Path(x) for x in glob.glob(str(args.data / "*train*.hdf5")))
@@ -273,11 +363,13 @@ def main() -> int:
     stats = compute_stats(raw_train)
     raw_train.close()
 
-    train_ds = ShardedBigEarthNet(train_paths, stats)
-    test_ds = ShardedBigEarthNet(test_paths, stats) if test_paths else None
+    train_ds = ShardedBigEarthNet(train_paths, stats, preload=args.fast)
+    test_ds = (ShardedBigEarthNet(test_paths, stats, preload=args.fast)
+               if test_paths else None)
     print(f"train {len(train_ds)} patches" + (f" | test {len(test_ds)}" if test_ds else ""))
 
-    model = build_model(dim=args.dim, gsd_conditioning=not args.no_gsd).to(device)
+    model = build_model(dim=args.dim, gsd_conditioning=not args.no_gsd,
+                        arch=args.arch).to(device)
     print(f"parameters: {sum(q.numel() for q in model.parameters())/1e6:.2f}M")
 
     budget = args.batch_size * len(BAND_NAMES_12) * args.dim
@@ -336,12 +428,19 @@ def main() -> int:
                 x = degrade_resolution(x, factor)
                 gsd_value = BEN_GSD_M * factor
 
-            out = model(
-                torch.from_numpy(x).to(device),
-                torch.from_numpy(mask).to(device),
-                torch.full((x.shape[0],), gsd_value, device=device),
-            )
-            loss = criterion(out, torch.from_numpy(y).to(device))
+            xb = torch.from_numpy(x).to(device, non_blocking=True)
+            mb = torch.from_numpy(mask).to(device, non_blocking=True)
+            yb = torch.from_numpy(y).to(device, non_blocking=True)
+            gb = torch.full((x.shape[0],), gsd_value, device=device)
+
+            if autocast_dtype is not None:
+                with torch.autocast("cuda", dtype=autocast_dtype):
+                    out = model(xb, mb, gb)
+                    loss = criterion(out, yb)
+            else:
+                out = model(xb, mb, gb)
+                loss = criterion(out, yb)
+
             optimizer.zero_grad(set_to_none=True)
             loss.backward()
             optimizer.step()
@@ -350,14 +449,20 @@ def main() -> int:
             step += 1
             if step % args.save_every == 0:
                 state.step, state.epoch = step, epoch
-                save_checkpoint_unless_eval(args, step, model, optimizer, state=state)
+                save_checkpoint_unless_eval(
+                    args, step, model, optimizer, state=state,
+                    extra={"arch": args.arch, "dim": args.dim},
+                )
                 print(f"  step {step}  loss {running/max(seen,1):.4f}", flush=True)
 
         print(f"epoch {epoch+1}/{args.epochs}  loss {running/max(seen,1):.4f}  "
               f"({time.time()-started:.0f}s)", flush=True)
 
     state.step, state.epoch = step, args.epochs
-    save_checkpoint_unless_eval(args, step, model, optimizer, state=state)
+    save_checkpoint_unless_eval(
+        args, step, model, optimizer, state=state,
+        extra={"arch": args.arch, "dim": args.dim},
+    )
 
     results = {}
     if test_ds:

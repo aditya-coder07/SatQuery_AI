@@ -110,7 +110,12 @@ def load_model(checkpoint: Path, torch, device, dim: int):
     # GSD conditioning presence must match the checkpoint, or load_state_dict
     # silently leaves the FiLM layers randomly initialised.
     has_gsd = any(k.startswith("gsd_mlp.") for k in payload["model_state_dict"])
-    model = build_model(dim=dim, gsd_conditioning=has_gsd)
+    # `arch` and `dim` travel with the weights since Phase 5. A checkpoint
+    # without them is v1 at the caller's dim, which is every checkpoint
+    # written before then - so nothing published changes.
+    extra = payload.get("extra") or {}
+    model = build_model(dim=extra.get("dim", dim), gsd_conditioning=has_gsd,
+                        arch=extra.get("arch", "v1"))
     load_checkpoint(latest, model, map_location="cpu")
     return model.to(device).eval(), latest, has_gsd
 

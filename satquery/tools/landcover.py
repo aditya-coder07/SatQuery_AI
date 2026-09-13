@@ -201,8 +201,15 @@ class _Handle:
         # the FiLM layers randomly initialised - a silent partial load, which
         # is how people end up reporting a random encoder as fine-tuned.
         has_gsd = any(k.startswith("gsd_mlp.") for k in state)
-        dim = (payload.get("extra") or {}).get("dim", 64)
-        model = build_model(dim=dim, gsd_conditioning=has_gsd)
+        extra = payload.get("extra") or {}
+        dim = extra.get("dim", 64)
+        # Which architecture wrote these weights. A checkpoint from before
+        # Phase 5 has no `arch` field, so the default is v1 and every
+        # existing checkpoint rebuilds exactly as it always did. Guessing
+        # instead would load v1 weights into a v2 graph and fail on a key
+        # mismatch that says nothing about the cause.
+        arch = extra.get("arch", "v1")
+        model = build_model(dim=dim, gsd_conditioning=has_gsd, arch=arch)
         load_checkpoint(latest, model, map_location="cpu")
 
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -312,7 +319,12 @@ class LandcoverTool(ToolProtocol):
         # is not the same as transforming an aggregate.
         entry = load_registry().lookup("SINGLE_LANDCOVER")
         if entry is not None:
-            probs = np.array([entry.apply(float(1 / (1 + np.exp(-z)))) for z in logits])
+            # From the LOGIT, not from a probability made from it. A float32
+            # sigmoid saturates at z ~ 17 and `apply` clamps at 13.8; this
+            # head reaches +71, and the round trip flattened its top 33,620
+            # decisions onto one value. `apply_logit` is the same transform
+            # without the two lossy steps in front of it.
+            probs = np.array([entry.apply_logit(float(z)) for z in logits])
             calibration = f"{entry.method}:SINGLE_LANDCOVER"
         else:
             probs = 1.0 / (1.0 + np.exp(-logits))
@@ -379,7 +391,9 @@ class LandcoverTool(ToolProtocol):
             # A probability, but an aggregate over a threshold-selected
             # subset - not P(correct) for the answer. Same reasoning as
             # optsar_fusion; see CALIBRATABLE_CONFIDENCE_METHODS.
-            confidence_method="mean_asserted_probability",
+            confidence_method=(
+                "mean_asserted_probability" if asserted else "no_assertion"
+            ),
             model_card=f"Track A land-cover head ({Path(handle.path).name})",
             runtime_ms=int((time.perf_counter() - started) * 1000),
             warnings=warnings,

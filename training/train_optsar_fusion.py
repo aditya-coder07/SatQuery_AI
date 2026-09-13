@@ -49,7 +49,13 @@ from training.track_a_encoder import average_precision  # noqa: E402
 PATCH = 120
 
 
-def build_model(dim: int = 32):
+def build_model(dim: int = 32, arch: str = "v1"):
+    if arch == "v2":
+        from training.v2.architectures import build_optsar_fusion
+
+        return build_optsar_fusion(dim=dim, n_classes=N_WHU_CLASSES,
+                                   n_optical=4, n_sar=1)
+
     import torch
     import torch.nn as nn
 
@@ -204,6 +210,10 @@ def main() -> int:
     p.add_argument("--dim", type=int, default=32)
     p.add_argument("--limit-train", type=int)
     p.add_argument("--limit-eval", type=int)
+    p.add_argument(
+        "--arch", choices=["v1", "v2"], default="v1",
+        help="v1 = the published architecture; v2 = training/v2/architectures.py",
+    )
     p.add_argument("--seed", type=int, default=42)
     p.add_argument("--save-every", type=int, default=50)
     p.add_argument("--resume", action="store_true")
@@ -228,7 +238,7 @@ def main() -> int:
     train_ds, val_ds = WHUPair(train_rows), WHUPair(val_rows)
     print(f"train {len(train_ds)} | validation {len(val_ds)} (paired only)")
 
-    model = build_model(args.dim).to(device)
+    model = build_model(args.dim, arch=args.arch).to(device)
     print(f"parameters: {sum(p.numel() for p in model.parameters())/1e6:.2f}M")
 
     optimizer = torch.optim.AdamW(model.parameters(), lr=args.lr)
@@ -267,13 +277,19 @@ def main() -> int:
             step += 1
             if step % args.save_every == 0:
                 state.step, state.epoch = step, epoch
-                save_checkpoint_unless_eval(args, step, model, optimizer, state=state)
+                save_checkpoint_unless_eval(
+                    args, step, model, optimizer, state=state,
+                    extra={"arch": args.arch, "dim": args.dim},
+                )
 
         print(f"epoch {epoch+1}/{args.epochs}  loss {running/max(seen,1):.4f}  "
               f"({time.time()-started:.0f}s)", flush=True)
 
     state.step, state.epoch = step, args.epochs
-    save_checkpoint_unless_eval(args, step, model, optimizer, state=state)
+    save_checkpoint_unless_eval(
+        args, step, model, optimizer, state=state,
+        extra={"arch": args.arch, "dim": args.dim},
+    )
 
     if val_ds:
         m = evaluate_triad(model, val_ds, torch, args.batch_size, device)

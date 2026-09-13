@@ -94,6 +94,45 @@ def check_crs_present(img: ImageMeta, benchmark: bool = False) -> CheckResult:
     )
 
 
+# Cloud cover, from the coarse estimator in ingest/reader.py. FAIL is a
+# blocking failure - the run abstains with `input_validation` - so it is set
+# where the scene is more cloud than not. WARN is where a caption or a count
+# starts describing cloud as terrain.
+CLOUD_WARN_PCT = 20.0
+CLOUD_FAIL_PCT = 50.0
+
+
+def check_cloud_cover(img: ImageMeta) -> CheckResult | None:
+    """Is the scene usable at all, or mostly cloud?
+
+    None for SAR and for anything the estimator declined to judge, rather
+    than a PASS: a check that did not run must not read as a check that
+    passed. Before this existed the pipeline had never looked at cloud - see
+    `estimate_cloud_pct` for the 0.88-confidence caption of a 63% clouded
+    scene that showed it.
+    """
+    v = img.cloud_pct
+    if v is None:
+        return None
+    if v >= CLOUD_FAIL_PCT:
+        return _fail(
+            "cloud_cover",
+            f"{img.role}: ~{v:.0f}% of the scene looks like cloud - too little "
+            "ground is visible to describe",
+            v,
+            CLOUD_FAIL_PCT,
+        )
+    if v >= CLOUD_WARN_PCT:
+        return _warn(
+            "cloud_cover",
+            f"{img.role}: ~{v:.0f}% of the scene looks like cloud - answers "
+            "cover the clear part only",
+            v,
+            CLOUD_WARN_PCT,
+        )
+    return _pass("cloud_cover", f"{img.role}: ~{v:.0f}% cloud", v)
+
+
 def check_nodata(img: ImageMeta) -> CheckResult:
     v = img.nodata_pct
     if v >= NODATA_FAIL_PCT:
@@ -290,6 +329,9 @@ def run_checks(
             results.append(geocoding)
         results.append(check_crs_present(img, benchmark=benchmark))
         results.append(check_nodata(img))
+        cloud = check_cloud_cover(img)
+        if cloud is not None:
+            results.append(cloud)
         results.append(check_dimensions(img))
 
     if len(images) == 2:

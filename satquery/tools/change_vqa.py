@@ -285,12 +285,23 @@ class _SemanticHandle:
 
         payload = safe_torch_load(checkpoint)
         state = payload.get("model", payload)
-        dim = payload.get("dim", 48)
+        # Hyperparameters may sit at the top level (the checkpoints written
+        # before Phase 5) or under `extra` (everything written since). Read
+        # both, top level first, so neither shape falls back to a default that
+        # silently rebuilds the wrong-sized model.
+        extra = payload.get("extra") or {}
+        dim = payload.get("dim", extra.get("dim", 48))
+
         # The checkpoint records which encoder it was trained with. Guessing
         # would load ImageNet weights into a from-scratch graph, or fail on a
-        # key mismatch that says nothing about the cause.
-        builder = build_pretrained_model if payload.get("pretrained") else build_model
-        model = builder(dim)
+        # key mismatch that says nothing about the cause. `arch` is the same
+        # question one level down: absent means v1, so every existing
+        # checkpoint rebuilds exactly as it always did.
+        pretrained = payload.get("pretrained", extra.get("pretrained"))
+        if pretrained:
+            model = build_pretrained_model(dim)
+        else:
+            model = build_model(dim, arch=extra.get("arch", "v1"))
         model.load_state_dict(state)
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
         self.model = model.to(self.device).eval()

@@ -82,7 +82,13 @@ def decode(ids, inverse: dict[int, str]) -> str:
     return " ".join(words)
 
 
-def build_model(vocab_size: int, dim: int = 128):
+def build_model(vocab_size: int, dim: int = 128, arch: str = "v1"):
+    if arch == "v2":
+        from training.v2.architectures import build_change_caption
+
+        return build_change_caption(vocab_size=vocab_size, dim=dim,
+                                    bos_id=BOS, max_len=MAX_LEN)
+
     import torch
     import torch.nn as nn
 
@@ -182,6 +188,10 @@ def main() -> int:
     p.add_argument("--dim", type=int, default=128)
     p.add_argument("--limit-train", type=int)
     p.add_argument("--limit-eval", type=int)
+    p.add_argument(
+        "--arch", choices=["v1", "v2"], default="v1",
+        help="v1 = the published architecture; v2 = training/v2/architectures.py",
+    )
     p.add_argument("--seed", type=int, default=42)
     p.add_argument("--save-every", type=int, default=100)
     p.add_argument("--resume", action="store_true")
@@ -216,7 +226,7 @@ def main() -> int:
     train_ds = LevirCC(train_rows, vocab)
     test_ds = LevirCC(test_rows, vocab)
 
-    model = build_model(len(vocab), args.dim).to(device)
+    model = build_model(len(vocab), args.dim, arch=args.arch).to(device)
     print(f"parameters: {sum(q.numel() for q in model.parameters())/1e6:.2f}M")
 
     optimizer = torch.optim.AdamW(model.parameters(), lr=args.lr)
@@ -251,16 +261,29 @@ def main() -> int:
             step += 1
             if step % args.save_every == 0:
                 state.step, state.epoch = step, epoch
-                save_checkpoint_unless_eval(args, step, model, optimizer, state=state)
+                save_checkpoint_unless_eval(
+                    args, step, model, optimizer, state=state,
+                    extra={"arch": args.arch, "dim": args.dim},
+                )
         print(f"epoch {epoch+1}/{args.epochs}  loss {running/max(seen,1):.4f}  "
               f"({time.time()-started:.0f}s)", flush=True)
 
     state.step, state.epoch = step, args.epochs
-    save_checkpoint_unless_eval(args, step, model, optimizer, state=state)
+    save_checkpoint_unless_eval(
+        args, step, model, optimizer, state=state,
+        extra={"arch": args.arch, "dim": args.dim},
+    )
 
     if test_ds and len(test_ds):
         model.eval()
-        scores, samples = [], []
+        scores, samples, hyps = [], [], []
+        # `shuffle=False` walks the rows in order, so the i-th score belongs
+        # to test_ds.rows[i] and its `changeflag`. The split matters: half of
+        # LEVIR-CC's pairs are unchanged, where the reference is a fixed "no
+        # difference" sentence the model emits verbatim, and their BLEU near
+        # 1.0 inflates any aggregate. The v1 card quotes the changed half only
+        # and says so; this evaluator had dropped the split, which left v2
+        # comparable on the inflated number and nothing else.
         for a, b, m, t in batches(test_ds, args.batch_size, rng, shuffle=False):
             ids = model.generate(
                 torch.from_numpy(a).to(device), torch.from_numpy(b).to(device),
@@ -269,15 +292,35 @@ def main() -> int:
             for produced, target in zip(ids, t):
                 hyp, ref = decode(produced, inverse), decode(target, inverse)
                 scores.append(bleu(hyp, [ref]))
+                hyps.append(hyp)
                 if len(samples) < 3:
                     samples.append((hyp, ref))
 
+        flags = [bool(int(r.get("changeflag", 1))) for r in test_ds.rows[: len(scores)]]
+        changed = [s for s, f in zip(scores, flags) if f]
+        unchanged = [s for s, f in zip(scores, flags) if not f]
         value = float(np.mean(scores)) if scores else 0.0
-        print(f"\nLEVIR-CC test BLEU-4 (sentence mean): {value:.4f}  n={len(scores)}")
+        metrics = {
+            "bleu4_changed": round(float(np.mean(changed)), 4) if changed else None,
+            "bleu4_unchanged": round(float(np.mean(unchanged)), 4) if unchanged else None,
+            "bleu4_aggregate": round(value, 4),
+            # Kept for the runs already scored under this key.
+            "bleu4_sentence_mean": value,
+            "n_changed": len(changed),
+            "n_unchanged": len(unchanged),
+            "n": len(scores),
+            "unique_captions": len(set(hyps)),
+            "note": ("bleu4_changed is the meaningful figure; the aggregate is "
+                     "inflated by the trivially-unchanged half."),
+        }
+        print("")
+        print(f"LEVIR-CC test BLEU-4: changed {metrics['bleu4_changed']}  "
+              f"(n={len(changed)})  unchanged {metrics['bleu4_unchanged']}  "
+              f"(n={len(unchanged)})  aggregate {value:.4f}")
         for hyp, ref in samples:
             print(f"  pred: {hyp[:70]}")
             print(f"  ref : {ref[:70]}")
-        write_metrics(args, {"bleu4_sentence_mean": value, "n": len(scores)})
+        write_metrics(args, metrics)
     return 0
 
 

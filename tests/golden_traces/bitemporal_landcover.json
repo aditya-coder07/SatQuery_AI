@@ -194,6 +194,11 @@
         "status": "PASS"
       },
       {
+        "message": "t1: ~2% cloud",
+        "name": "cloud_cover",
+        "status": "PASS"
+      },
+      {
         "message": "t1: 128x128",
         "name": "min_dimension",
         "status": "PASS"
@@ -206,6 +211,11 @@
       {
         "message": "t2: 0.0% nodata",
         "name": "nodata_fraction",
+        "status": "PASS"
+      },
+      {
+        "message": "t2: ~2% cloud",
+        "name": "cloud_cover",
         "status": "PASS"
       },
       {

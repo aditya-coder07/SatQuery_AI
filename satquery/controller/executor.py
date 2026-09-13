@@ -272,6 +272,11 @@ class Executor:
         confidence_method: str | None = None
         # Set when any executed tool was a placeholder rather than a model.
         stubbed = False
+        # Learned tools that ran and asserted nothing. They do not enter the
+        # model-confidence minimum - see the `no_assertion` branch below.
+        silent_tools: list[str] = []
+        # Set when a learned tool actually contributed a score.
+        model_scored = False
         index_payload: dict = {}
         # optsar_fusion_v1 computes a per-query triad (optical / SAR / fused)
         # and puts the score in its payload. The trace hardcoded `{}`, so the
@@ -360,9 +365,28 @@ class Executor:
                 # and the FINAL score is capped - see STUB_CONFIDENCE_CAP.
                 if result.confidence_method == "stub":
                     stubbed = True
+                elif result.confidence_method == "no_assertion":
+                    # A selective head that stayed inside its abstention band
+                    # on every class. Its 0.0 means "no claim", and letting it
+                    # set the minimum vetoed answers the OTHER tools gave.
+                    #
+                    # Measured 2026-09-12 on the demo bundle with the learned
+                    # tools enabled: landcover asserted nothing on the Cartosat
+                    # scenes (correctly - a 4-band 1.6 m image is far outside
+                    # its BigEarthNet training), reported 0.0, and four of nine
+                    # beats abstained with "the model itself was unconfident"
+                    # while caption_v1 had answered at 0.56. The matrix
+                    # declares index_engine_v1 as landcover's fallback and it
+                    # had already run; the plan was answerable and said not.
+                    #
+                    # v1 passed the same beats only because it asserted classes
+                    # at 0.98 on imagery it had never seen - overconfidence
+                    # masking the defect, not the absence of it.
+                    silent_tools.append(step.tool)
                 elif result.confidence <= model_confidence:
                     model_confidence = result.confidence
                     confidence_method = result.confidence_method
+                    model_scored = True
 
             for key in _ANSWER_KEYS:
                 if key in data:
@@ -516,6 +540,21 @@ class Executor:
 
         emit("verification", verification.model_dump())
 
+        # A plan whose only learned tools stayed silent has no model claim
+        # at all. Left at the 1.0 it started from, the combined score would
+        # describe input quality and physics agreement while reading as a
+        # model result - the exact situation STUB_CONFIDENCE_CAP exists for,
+        # so the same cap applies, with a warning that says which tools
+        # declined rather than which were placeholders.
+        no_model_claim = bool(silent_tools) and not model_scored and not stubbed
+        if silent_tools:
+            warnings.append(
+                f"{', '.join(silent_tools)} asserted nothing at the measured "
+                "threshold and did not contribute to the model confidence"
+                + ("; no learned tool made a claim, so the score is capped"
+                   if no_model_claim else "")
+            )
+
         confidence: ConfidenceTrace = compute_confidence(
             model_confidence=model_confidence,
             manifest=manifest,
@@ -525,7 +564,7 @@ class Executor:
                 if confidence_method in CALIBRATABLE_CONFIDENCE_METHODS
                 else None
             ),
-            stubbed=stubbed,
+            stubbed=stubbed or no_model_claim,
         )
 
         emit("confidence", confidence.model_dump())

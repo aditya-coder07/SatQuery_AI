@@ -1,5 +1,35 @@
 # Session handoff — 2026-08-30 (post-freeze audit, and a data loss)
 
+> **Newest — 2026-09-12: Phase 5 has run.** All nine tools retrained on the
+> AI Lab L40S; results in `docs/phase1-status.md` §"Phase 5 — 2026-09-12"
+> and `docs/model-cards.md` §"Phase 5 cards". Headline: `rs_vqa_v1` scores
+> **0.8947** on the official RSVQA-LR test (published convention, in the
+> literature's 89–93% range); `change_mask` F1 0.56 → 0.86; `optsar_fusion`
+> still shows no SAR complementarity under a second architecture.
+>
+> **DEPLOYED, later that day.** The default compose files point at the Phase 5
+> checkpoints and the refitted v2 registries; `docker-compose.v1.yml` reverts
+> with one flag. 8/8 tools load, demo bundle 9/9. One tool stays on v1:
+> `change_caption`, whose v2 regressed on the changed half (0.1641 vs 0.3063)
+> once the evaluator's split was reinstated - the aggregate had hidden it.
+> Deploying also surfaced and fixed four pre-existing defects, including that
+> the pipeline had never looked at cloud cover. `docs/phase5-full-training.md`
+> §7 "Deployed".
+>
+> **Earlier — 2026-09-09: Phase 5 exists.** `docs/phase5-full-training.md` is a
+> harness and a plan for retraining all nine tools on college cluster GPU,
+> because the constraint every model here was sized for — "free-tier Colab and
+> Kaggle only, T4 16 GB" (`docs/03` §1) — no longer holds.
+>
+> **Nothing in this file or in any other document has changed as a result, and
+> no training run has been executed.** The freeze is honoured structurally: v2
+> architectures live in `training/v2/`, `--arch` defaults to `v1` everywhere, a
+> checkpoint with no `arch` field rebuilds as v1, and every new `ckpt_dir` is
+> under `checkpoints/v2/`. Every number below is still the number it was.
+>
+> Tests are **1331 passed, 0 failed** (was 1274); no-torch simulation **1171
+> passed, 71 skipped, 0 failed**.
+
 > **Newer than this file — 2026-09-07.** This handoff is dated 2026-08-30 and
 > its numbers are the numbers of that day. Kept as written; superseded here.
 >

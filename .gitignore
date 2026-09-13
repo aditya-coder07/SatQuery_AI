@@ -4,6 +4,11 @@ __pycache__/
 checkpoints/
 checkpoints_backup/
 
+# Phase 5 campaign state: which runs are done, and each run's log. Per-machine
+# and regenerated, so it is not shared - but it is what a killed session is
+# resumed from, so it must not be cleaned away between sessions either.
+runs/
+
 *.egg-info/
 
 # Python packaging / test caches
@@ -48,3 +53,12 @@ data/
 # whose parent directory is still excluded.
 !frontend/app/models/
 !frontend/app/models/**
+
+# The data manifest: ~19 MB of digests over ~94,000 files. It travels WITH the
+# data it describes (rsync it alongside), not through git - it is regenerated
+# by `stage_data.py build` and would otherwise put a large binary-shaped blob
+# in every clone.
+configs/data_manifest.json
+
+# Bootstrap creates a per-checkout venv on the training server.
+.venv/

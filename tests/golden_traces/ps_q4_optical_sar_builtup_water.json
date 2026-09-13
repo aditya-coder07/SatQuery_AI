@@ -279,6 +279,11 @@
         "status": "PASS"
       },
       {
+        "message": "optical: ~2% cloud",
+        "name": "cloud_cover",
+        "status": "PASS"
+      },
+      {
         "message": "optical: 128x128",
         "name": "min_dimension",
         "status": "PASS"

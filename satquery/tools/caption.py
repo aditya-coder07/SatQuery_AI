@@ -116,8 +116,25 @@ class _Handle:
 
         latest = find_latest_checkpoint(checkpoint) or checkpoint
         payload = safe_torch_load(latest)
-        dim = (payload.get("extra") or {}).get("dim", 192)
-        model = build_model(vocab_size=len(self.vocab), dim=dim)
+        extra = payload.get("extra") or {}
+        dim = extra.get("dim", 192)
+        # Which architecture wrote these weights. A checkpoint from before
+        # Phase 5 has no `arch` field, so the default is v1 and every
+        # existing checkpoint rebuilds exactly as it always did. Guessing
+        # instead would load v1 weights into a v2 graph and fail on a key
+        # mismatch that says nothing about the cause.
+        # `pretrained` selects a different backbone, so it must be known
+        # before the graph is built - exactly like `arch`. Two checkpoints
+        # were written before it was recorded; for those it is inferred from
+        # the weights: only the pretrained variant has a `proj.` projection
+        # after its 2048-wide ResNet-50 (the from-scratch trunk is Identity
+        # there). The same pattern `landcover` uses to infer `has_gsd`.
+        state = payload.get("model_state_dict", {})
+        pretrained = extra.get("pretrained")
+        if pretrained is None:
+            pretrained = any(k.startswith("proj.") for k in state)
+        model = build_model(vocab_size=len(self.vocab), dim=dim,
+                            arch=extra.get("arch", "v1"), pretrained=pretrained)
         load_checkpoint(latest, model, map_location="cpu")
 
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -213,24 +230,29 @@ class CaptionTool(ToolProtocol):
 def _mean_token_probability(torch, handle, batch, tokens) -> float:
     """Mean probability of the tokens the greedy decode chose.
 
-    Re-runs the decoder teacher-forced on its own output rather than asking
-    `generate` for scores, because `generate` returns only argmax ids. The
-    values are identical - the same model on the same prefix - and this keeps
-    the training script's generate() untouched.
+    Re-runs the model teacher-forced on its own output through `forward`,
+    the one entry point every captioner - v1 GRU or v2 transformer - shares:
+    `model(image, tokens) -> (B, T, V)` logits, where position i predicts
+    token i+1. Feeding `[BOS] + tokens[:-1]` therefore yields, at position i,
+    the distribution from which `tokens[i]` was chosen.
+
+    The first version stepped v1's `.vision`, `.gru` and `.embed` by hand.
+    That is the same computation, and it broke on every v2 checkpoint at
+    inference - after the loader had accepted them - because v2 has none of
+    those attributes. Found by the demo bundle on 2026-09-12: four of nine
+    beats reported "caption_v1 failed". A tool that depends on a model's
+    internals beyond its forward contract is a tool that only works on the
+    model it was written against.
     """
     if not tokens:
         return 0.0
-    with torch.no_grad():
-        hidden = handle.model.vision(batch).flatten(1).unsqueeze(0).contiguous()
-        from training.train_change_caption import BOS
+    from training.train_change_caption import BOS
 
-        token = torch.full((1, 1), BOS, dtype=torch.long, device=handle.device)
-        probs = []
-        for expected in tokens:
-            out, hidden = handle.model.gru(handle.model.embed(token), hidden)
-            step = torch.softmax(handle.model.out(out[:, -1]).float(), dim=-1)
-            probs.append(float(step[0, int(expected)]))
-            token = torch.full(
-                (1, 1), int(expected), dtype=torch.long, device=handle.device
-            )
-    return round(sum(probs) / len(probs), 6) if probs else 0.0
+    with torch.no_grad():
+        prefix = torch.tensor([[BOS] + [int(x) for x in tokens[:-1]]],
+                              dtype=torch.long, device=handle.device)
+        logits = handle.model(batch, prefix).float()          # (1, T, V)
+        step = torch.softmax(logits[0], dim=-1)                # (T, V)
+        idx = torch.tensor([int(x) for x in tokens], device=handle.device)
+        probs = step[torch.arange(len(tokens), device=handle.device), idx]
+    return round(float(probs.mean()), 6)

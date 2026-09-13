@@ -479,3 +479,96 @@ class TestSceneFootprint:
         image = ingest([msi_6band]).images[0]
         geographic = image.model_copy(update={"crs_is_projected": False})
         assert geographic.ground_extent_m is None
+
+
+# --- Cloud cover (2026-09-12) -------------------------------------------------
+
+
+class TestCloudCover:
+    """`cloud_pct` was in the contract from Phase 1 and never populated or read.
+
+    The demo's abstention beat - a 63% clouded scene - passed because its
+    expectation could not fail, and with the learned tools on it was captioned
+    at 0.88 confidence. This is the coarse estimator that makes the check real.
+    """
+
+    @staticmethod
+    def _scene(cloud_fraction: float, bands: int = 4, seed: int = 0):
+        import numpy as np
+
+        rng = np.random.default_rng(seed)
+        base = rng.uniform(0.05, 0.5, (256, 256))
+        # Independent per-band variation, as real ground has. Bands that are
+        # exact multiples of one base make EVERY pixel spectrally flat, which
+        # is the one property the estimator uses to tell cloud from ground -
+        # a first version of this scene was built that way and reported 17%
+        # cloud on a scene with none.
+        arr = np.stack([base * (0.7 + 0.1 * i) * rng.uniform(0.6, 1.4, base.shape)
+                        for i in range(bands)])
+        mask = np.zeros((256, 256), dtype=bool)
+        while mask.mean() < cloud_fraction:
+            cy, cx = rng.integers(0, 256, size=2)
+            r = int(rng.integers(30, 70))
+            yy, xx = np.ogrid[:256, :256]
+            mask |= (yy - cy) ** 2 + (xx - cx) ** 2 <= r * r
+        if cloud_fraction > 0:
+            arr[:, mask] = float(arr.max()) * 1.6      # flat and bright everywhere
+        return arr, float(mask.mean())
+
+    def test_recovers_a_known_cloud_fraction(self):
+        from satquery.ingest.reader import estimate_cloud_pct
+
+        arr, truth = self._scene(0.6)
+        est = estimate_cloud_pct(arr)
+        assert est is not None
+        assert abs(est / 100.0 - truth) < 0.12, (est, truth)
+
+    def test_a_clear_scene_is_near_zero(self):
+        from satquery.ingest.reader import estimate_cloud_pct
+
+        arr, _ = self._scene(0.0)
+        assert estimate_cloud_pct(arr) < 5.0
+
+    def test_bright_but_spectrally_varied_ground_is_not_cloud(self):
+        """A bright roof with a real spectral signature must not count."""
+        import numpy as np
+
+        from satquery.ingest.reader import estimate_cloud_pct
+
+        arr, _ = self._scene(0.0)
+        top = float(arr.max())
+        # Bright, but the bands DIFFER - the flatness test is what excludes it.
+        arr[:, 50:150, 50:150] = np.array([1.0, 0.6, 0.35, 0.9])[:, None, None] * top * 1.6
+        assert estimate_cloud_pct(arr) < 5.0
+
+    def test_declines_rather_than_guessing_on_too_few_bands(self):
+        import numpy as np
+
+        from satquery.ingest.reader import estimate_cloud_pct
+
+        assert estimate_cloud_pct(np.random.rand(2, 64, 64)) is None
+        assert estimate_cloud_pct(np.random.rand(64, 64)) is None
+
+    def test_check_thresholds(self):
+        from satquery.ingest.checks import (
+            CLOUD_FAIL_PCT, CLOUD_WARN_PCT, check_cloud_cover,
+        )
+
+        def meta(pct):
+            from types import SimpleNamespace
+
+            return SimpleNamespace(cloud_pct=pct, role="image_0")
+
+        assert check_cloud_cover(meta(None)) is None, "SAR must not be judged"
+        assert check_cloud_cover(meta(5.0)).status == "PASS"
+        assert check_cloud_cover(meta(CLOUD_WARN_PCT)).status == "WARN"
+        assert check_cloud_cover(meta(CLOUD_FAIL_PCT)).status == "FAIL"
+
+    def test_a_failing_cloud_check_blocks_the_run(self):
+        """FAIL must reach `blocking_failures`, which is what makes it abstain."""
+        from types import SimpleNamespace
+
+        from satquery.ingest.checks import blocking_failures, check_cloud_cover
+
+        fail = check_cloud_cover(SimpleNamespace(cloud_pct=71.3, role="image_0"))
+        assert "cloud_cover" in blocking_failures([fail])
