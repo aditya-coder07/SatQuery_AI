@@ -8,9 +8,9 @@
 #         held      -> Phase 5 artefact kept (with the reason)
 tools:
   rs_vqa:
-    env: {SATQUERY_VQA_BASE: models/qwen25_vl_3b, SATQUERY_VQA_ADAPTER: checkpoints/v2/track_b_vqa/adapter_final}
-    status: pending
-    note: official-train SFT arm queued (night 1); replaces only if RSVQA-LR official test improves with CI
+    env: {SATQUERY_VQA_BASE: models/qwen25_vl_3b, SATQUERY_VQA_ADAPTER: checkpoints/v3/vqa_official/adapter_best}
+    status: selected
+    note: RSVQA-LR official test (4-bit deployed path) published-convention 0.9119 [0.905, 0.918] vs v2 0.8947 [0.887, 0.902]; every type improved (presence 0.913, comp 0.912, rural/urban 0.88, count 0.270 vs 0.220); Phase 5 adapter kept at checkpoints/v2/track_b_vqa
   grounding:
     env: {SATQUERY_GROUNDING_ADAPTER: checkpoints/v3/grounding_vlm_r16/adapter_best}
     fallback_env: {SATQUERY_GROUNDING: checkpoints/v2/grounding_pre}
@@ -29,13 +29,15 @@ tools:
     status: selected
     note: SSL4EO-S12 trunk on the complete official BigEarthNet-S2 v1.0 split; official test micro mAP 0.885 / macro 0.792 (v2 0.315 on a subset shard); 4-band retention 0.94; calibrated on val; verify_deploy OK 2026-09-13 00:04
   caption:
-    env: {SATQUERY_CAPTION: checkpoints/v2/caption_pre}
-    status: pending
-    note: VLM caption arm queued; corpus BLEU-4 0.1744 is the bar
+    env: {SATQUERY_VQA_BASE: models/qwen25_vl_3b, SATQUERY_CAPTION_ADAPTER: checkpoints/v3/caption_vlm/adapter_best}
+    fallback_env: {SATQUERY_CAPTION: checkpoints/v2/caption_pre}
+    status: selected
+    note: RSICD test corpus BLEU-4 0.256 / CIDEr-D 0.793 / ROUGE-L 0.486 (specialist 0.174 / 0.562 / 0.396); tool v1.1.0 VLM path
   change_caption:
-    env: {SATQUERY_CHANGE_CAPTION: checkpoints/change_caption}
+    env: {SATQUERY_VQA_BASE: models/qwen25_vl_3b, SATQUERY_CHANGE_CAPTION_ADAPTER: checkpoints/v3/change_caption_vlm/adapter_best}
+    fallback_env: {SATQUERY_CHANGE_CAPTION: checkpoints/change_caption}
     status: pending
-    note: v1 held (oracle-mask eval caveat); VLM two-image arm queued
+    note: two-image VLM arm (images only, no mask); official LEVIR-CC test running 2026-09-14; selected only if it beats v1's fair (images-only) comparison
   change_vqa:
     env: {SATQUERY_CHANGE_VQA: checkpoints/v2/change_vqa/best.pt}
     status: held

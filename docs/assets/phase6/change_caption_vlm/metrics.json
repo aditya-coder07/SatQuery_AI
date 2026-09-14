@@ -1,0 +1,258 @@
+{
+  "best_val": {
+    "n": 300,
+    "<CHANGE_CAPTION>": {
+      "n": 300,
+      "corpus": {
+        "bleu1": 0.8346,
+        "bleu2": 0.7522,
+        "bleu3": 0.6823,
+        "bleu4": 0.6285,
+        "brevity_penalty": 0.9932,
+        "rouge_l": 0.7275,
+        "cider_d": 1.3258,
+        "meteor_exact": 0.7028,
+        "n": 300
+      },
+      "changed": {
+        "bleu1": 0.725,
+        "bleu2": 0.5761,
+        "bleu3": 0.446,
+        "bleu4": 0.3488,
+        "brevity_penalty": 0.9849,
+        "rouge_l": 0.4856,
+        "cider_d": 0.6003,
+        "meteor_exact": 0.4401,
+        "n": 151
+      },
+      "unchanged": {
+        "bleu1": 0.9713,
+        "bleu2": 0.9683,
+        "bleu3": 0.9668,
+        "bleu4": 0.9659,
+        "brevity_penalty": 1.0,
+        "rouge_l": 0.9728,
+        "cider_d": 0.0,
+        "meteor_exact": 0.969,
+        "n": 149
+      },
+      "unique_fraction": 0.2567
+    },
+    "selection": 0.6285,
+    "step": 1600
+  },
+  "history": [
+    {
+      "n": 300,
+      "<CHANGE_CAPTION>": {
+        "n": 300,
+        "corpus": {
+          "bleu1": 0.7797,
+          "bleu2": 0.6726,
+          "bleu3": 0.5953,
+          "bleu4": 0.5399,
+          "brevity_penalty": 1.0,
+          "rouge_l": 0.662,
+          "cider_d": 1.1505,
+          "meteor_exact": 0.631,
+          "n": 300
+        },
+        "changed": {
+          "bleu1": 0.6785,
+          "bleu2": 0.4836,
+          "bleu3": 0.3351,
+          "bleu4": 0.2282,
+          "brevity_penalty": 0.9878,
+          "rouge_l": 0.4202,
+          "cider_d": 0.4223,
+          "meteor_exact": 0.3671,
+          "n": 151
+        },
+        "unchanged": {
+          "bleu1": 0.8936,
+          "bleu2": 0.8827,
+          "bleu3": 0.8764,
+          "bleu4": 0.8719,
+          "brevity_penalty": 1.0,
+          "rouge_l": 0.9071,
+          "cider_d": 0.0,
+          "meteor_exact": 0.8984,
+          "n": 149
+        },
+        "unique_fraction": 0.29
+      },
+      "selection": 0.5399,
+      "step": 400
+    },
+    {
+      "n": 300,
+      "<CHANGE_CAPTION>": {
+        "n": 300,
+        "corpus": {
+          "bleu1": 0.8234,
+          "bleu2": 0.7411,
+          "bleu3": 0.6747,
+          "bleu4": 0.6247,
+          "brevity_penalty": 0.9798,
+          "rouge_l": 0.7222,
+          "cider_d": 1.29,
+          "meteor_exact": 0.6918,
+          "n": 300
+        },
+        "changed": {
+          "bleu1": 0.6932,
+          "bleu2": 0.5387,
+          "bleu3": 0.4082,
+          "bleu4": 0.3103,
+          "brevity_penalty": 0.9545,
+          "rouge_l": 0.4744,
+          "cider_d": 0.5342,
+          "meteor_exact": 0.4176,
+          "n": 151
+        },
+        "unchanged": {
+          "bleu1": 0.9713,
+          "bleu2": 0.9678,
+          "bleu3": 0.9657,
+          "bleu4": 0.9642,
+          "brevity_penalty": 1.0,
+          "rouge_l": 0.9733,
+          "cider_d": 0.0,
+          "meteor_exact": 0.9697,
+          "n": 149
+        },
+        "unique_fraction": 0.2467
+      },
+      "selection": 0.6247,
+      "step": 800
+    },
+    {
+      "n": 300,
+      "<CHANGE_CAPTION>": {
+        "n": 300,
+        "corpus": {
+          "bleu1": 0.8111,
+          "bleu2": 0.7218,
+          "bleu3": 0.65,
+          "bleu4": 0.5959,
+          "brevity_penalty": 0.9971,
+          "rouge_l": 0.7079,
+          "cider_d": 1.2994,
+          "meteor_exact": 0.6869,
+          "n": 300
+        },
+        "changed": {
+          "bleu1": 0.6819,
+          "bleu2": 0.5218,
+          "bleu3": 0.3902,
+          "bleu4": 0.2961,
+          "brevity_penalty": 0.9935,
+          "rouge_l": 0.4361,
+          "cider_d": 0.5307,
+          "meteor_exact": 0.3973,
+          "n": 151
+        },
+        "unchanged": {
+          "bleu1": 0.9827,
+          "bleu2": 0.9813,
+          "bleu3": 0.9808,
+          "bleu4": 0.9806,
+          "brevity_penalty": 1.0,
+          "rouge_l": 0.9833,
+          "cider_d": 0.0,
+          "meteor_exact": 0.9804,
+          "n": 149
+        },
+        "unique_fraction": 0.29
+      },
+      "selection": 0.5959,
+      "step": 1200
+    },
+    {
+      "n": 300,
+      "<CHANGE_CAPTION>": {
+        "n": 300,
+        "corpus": {
+          "bleu1": 0.8346,
+          "bleu2": 0.7522,
+          "bleu3": 0.6823,
+          "bleu4": 0.6285,
+          "brevity_penalty": 0.9932,
+          "rouge_l": 0.7275,
+          "cider_d": 1.3258,
+          "meteor_exact": 0.7028,
+          "n": 300
+        },
+        "changed": {
+          "bleu1": 0.725,
+          "bleu2": 0.5761,
+          "bleu3": 0.446,
+          "bleu4": 0.3488,
+          "brevity_penalty": 0.9849,
+          "rouge_l": 0.4856,
+          "cider_d": 0.6003,
+          "meteor_exact": 0.4401,
+          "n": 151
+        },
+        "unchanged": {
+          "bleu1": 0.9713,
+          "bleu2": 0.9683,
+          "bleu3": 0.9668,
+          "bleu4": 0.9659,
+          "brevity_penalty": 1.0,
+          "rouge_l": 0.9728,
+          "cider_d": 0.0,
+          "meteor_exact": 0.969,
+          "n": 149
+        },
+        "unique_fraction": 0.2567
+      },
+      "selection": 0.6285,
+      "step": 1600
+    },
+    {
+      "n": 300,
+      "<CHANGE_CAPTION>": {
+        "n": 300,
+        "corpus": {
+          "bleu1": 0.8394,
+          "bleu2": 0.7506,
+          "bleu3": 0.6786,
+          "bleu4": 0.623,
+          "brevity_penalty": 0.9932,
+          "rouge_l": 0.7206,
+          "cider_d": 1.3156,
+          "meteor_exact": 0.6942,
+          "n": 300
+        },
+        "changed": {
+          "bleu1": 0.7329,
+          "bleu2": 0.5707,
+          "bleu3": 0.4352,
+          "bleu4": 0.3323,
+          "brevity_penalty": 0.9833,
+          "rouge_l": 0.4719,
+          "cider_d": 0.5761,
+          "meteor_exact": 0.4231,
+          "n": 151
+        },
+        "unchanged": {
+          "bleu1": 0.9694,
+          "bleu2": 0.9663,
+          "bleu3": 0.9647,
+          "bleu4": 0.9635,
+          "brevity_penalty": 1.0,
+          "rouge_l": 0.9726,
+          "cider_d": 0.0,
+          "meteor_exact": 0.969,
+          "n": 149
+        },
+        "unique_fraction": 0.27
+      },
+      "selection": 0.623,
+      "step": 2000
+    }
+  ],
+  "step": 2000,
+  "elapsed_s": 5308.6679039001465
+}

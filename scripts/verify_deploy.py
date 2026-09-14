@@ -52,11 +52,12 @@ def check_tool(tool: str, spec: dict, root: Path) -> tuple[bool, str]:
     if tool == "rs_vqa":
         handle = module._ModelHandle.get(Path(os.environ["SATQUERY_VQA_BASE"]), Path(os.environ["SATQUERY_VQA_ADAPTER"]))
         return True, f"{type(handle.model).__name__}, adapters {list(handle.adapters)}, {time.time() - started:.1f}s"
-    if tool == "grounding" and "SATQUERY_GROUNDING_ADAPTER" in env:
+    adapter_env = getattr(module, "ENV_VLM_ADAPTER", None)
+    if adapter_env and adapter_env in env:  # grounding / caption / change_caption adapters on the shared base
         from satquery.tools import rs_vqa
 
         handle = rs_vqa._ModelHandle.get(Path(os.environ["SATQUERY_VQA_BASE"]), Path(os.environ["SATQUERY_VQA_ADAPTER"]))
-        handle.ensure_adapter(module.VLM_ADAPTER_NAME, Path(os.environ["SATQUERY_GROUNDING_ADAPTER"]))
+        handle.ensure_adapter(module.VLM_ADAPTER_NAME, Path(os.environ[adapter_env]))
         return True, f"adapter '{module.VLM_ADAPTER_NAME}' attached to the shared base, {time.time() - started:.1f}s"
     path = root / next(iter(env.values()))
     handle = getattr(module, LOADERS[tool])(path)

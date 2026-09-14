@@ -1,0 +1,182 @@
+{
+  "benchmark": "RSVQA-LR official test split",
+  "source": "Zenodo 10.5281/zenodo.6344334, CC-BY-4.0",
+  "n_questions": 10004,
+  "n_images": 100,
+  "type_counts": {
+    "rural_urban": 100,
+    "presence": 2955,
+    "count": 2947,
+    "comp": 4002
+  },
+  "constant_baseline": {
+    "answers": {
+      "comp": "no",
+      "count": "0",
+      "presence": "yes",
+      "rural_urban": "rural"
+    },
+    "all_types_accuracy": 0.5694722111155538,
+    "published_convention_accuracy": 0.7005809834207171
+  },
+  "arms": {
+    "v3_official": {
+      "all_types": {
+        "n": 10004,
+        "accuracy": 0.7229108356657337,
+        "ci95": [
+          0.7141,
+          0.7316
+        ]
+      },
+      "published_convention": {
+        "types": [
+          "presence",
+          "comp",
+          "rural_urban"
+        ],
+        "n": 7057,
+        "micro_accuracy": 0.9118605639790279,
+        "ci95": [
+          0.905,
+          0.9183
+        ],
+        "macro_average_accuracy": 0.9015781111136478
+      },
+      "by_type": {
+        "comp": {
+          "n": 4002,
+          "correct": 3650,
+          "accuracy": 0.9120439780109945,
+          "ci95": [
+            0.9029,
+            0.9204
+          ],
+          "constant_accuracy": 0.6674162918540729
+        },
+        "count": {
+          "n": 2947,
+          "correct": 797,
+          "accuracy": 0.2704445198506956,
+          "ci95": [
+            0.2547,
+            0.2868
+          ],
+          "constant_accuracy": 0.25551408211740756
+        },
+        "presence": {
+          "n": 2955,
+          "correct": 2697,
+          "accuracy": 0.9126903553299492,
+          "ci95": [
+            0.902,
+            0.9223
+          ],
+          "constant_accuracy": 0.750253807106599
+        },
+        "rural_urban": {
+          "n": 100,
+          "correct": 88,
+          "accuracy": 0.88,
+          "ci95": [
+            0.8019,
+            0.93
+          ],
+          "constant_accuracy": 0.56
+        }
+      },
+      "vs_constant": {
+        "both_correct": 5379,
+        "model_only_correct": 1853,
+        "constant_only_correct": 318,
+        "mcnemar_chi2_cc": 1083.904,
+        "significant_at_0.05": true
+      }
+    },
+    "v2_deployed": {
+      "all_types": {
+        "n": 10004,
+        "accuracy": 0.6958216713314674,
+        "ci95": [
+          0.6867,
+          0.7048
+        ]
+      },
+      "published_convention": {
+        "types": [
+          "presence",
+          "comp",
+          "rural_urban"
+        ],
+        "n": 7057,
+        "micro_accuracy": 0.8947144679042086,
+        "ci95": [
+          0.8873,
+          0.9017
+        ],
+        "macro_average_accuracy": 0.8800380266719432
+      },
+      "by_type": {
+        "comp": {
+          "n": 4002,
+          "correct": 3590,
+          "accuracy": 0.8970514742628686,
+          "ci95": [
+            0.8873,
+            0.9061
+          ],
+          "constant_accuracy": 0.6674162918540729
+        },
+        "count": {
+          "n": 2947,
+          "correct": 647,
+          "accuracy": 0.21954530030539532,
+          "ci95": [
+            0.205,
+            0.2349
+          ],
+          "constant_accuracy": 0.25551408211740756
+        },
+        "presence": {
+          "n": 2955,
+          "correct": 2639,
+          "accuracy": 0.893062605752961,
+          "ci95": [
+            0.8814,
+            0.9037
+          ],
+          "constant_accuracy": 0.750253807106599
+        },
+        "rural_urban": {
+          "n": 100,
+          "correct": 85,
+          "accuracy": 0.85,
+          "ci95": [
+            0.7672,
+            0.9069
+          ],
+          "constant_accuracy": 0.56
+        }
+      },
+      "vs_constant": {
+        "both_correct": 5193,
+        "model_only_correct": 1768,
+        "constant_only_correct": 504,
+        "mcnemar_chi2_cc": 702.099,
+        "significant_at_0.05": true
+      }
+    }
+  },
+  "timing": {
+    "v3_official": {
+      "generate_s": 3160.2,
+      "s_per_question": 0.3159,
+      "adapter": "checkpoints/v3/vqa_official/adapter_best"
+    },
+    "v2_deployed": {
+      "generate_s": 1384.0,
+      "s_per_question": 0.1383,
+      "adapter": "checkpoints/v2/track_b_vqa/adapter_final"
+    }
+  }
+}

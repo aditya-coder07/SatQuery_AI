@@ -10,14 +10,14 @@ per-benchmark ledger is `docs/research/sota_matrix.md`, the run ledger is
 
 | Benchmark (official split) | Metric | CURRENT BASELINE (Phase 5, deployed 2026-09-12 a.m.) | BEST NEW RESULT | PUBLISHED BEST | ABS. IMPROVEMENT | REL. | COMPARABILITY | STATISTICAL CONFIDENCE |
 |---|---|---|---|---|---|---|---|---|
-| RSVQA-LR test | published-convention acc | 0.8947 [0.887, 0.902] | *pending* (SFT on official train) | 90.70 GeoChat / 92.63 UniRS | — | — | A | Wilson CI + McNemar vs constant |
+| RSVQA-LR test | published-convention acc | 0.8947 [0.887, 0.902] | **0.9119** [0.905, 0.918] (official-train SFT, 4-bit deployed path) | 90.70 GeoChat / 92.63 UniRS | +0.017 | +1.9% | A | Wilson CIs disjoint; every question type improved; McNemar vs constant χ² 1084 |
 | DIOR-RSVG test | Acc@0.5 | 0.160 (**Category C**: trained on the test split) | **0.6877** [0.677, 0.699] (LoRA r16, official train; zero-shot 0.3823) | 83.4 LQVG / 77.7 GeoGround | +0.53 vs Phase 5 (+0.31 vs zero-shot) | +330% | A (Phase 6) | bootstrap 95% CI; McNemar 2,465 fixed / 174 broken, p ≪ 0.001 |
 | LEVIR-CD test | change F1 / IoU | 0.8550 / 0.7467 | **0.9038 / 0.8244** (independently verified; 0.9093 / 0.8336 at the val-selected threshold) | 92.06 / 85.28 ChangeGCC | +0.049 / +0.078 | +5.7% / +10.4% | B (256-px tiling) | 2,048 tiles; val-selected; per-tile bootstrap CI [0.899, 0.908]; robustness suite |
 | WHU-OPT-SAR (scene-disjoint) | fused − optical mIoU | −0.030 (tile-mAP, misaligned labels: **void**) | **+0.021** (0.447 → 0.468) | +1–3 mIoU reported by MCANet/ASANet | n/a (baseline void) | — | B | per-tile paired bootstrap CI [+0.006, +0.012] |
-| RSICD test | corpus BLEU-4 / CIDEr-D | 0.1744 / 0.562 (rescored; 0.266 was sentence-mean) | *pending* (VLM SFT) | ~0.30–0.45 / 1.5–2.5+ | — | — | A | bootstrap CI |
+| RSICD test | corpus BLEU-4 / CIDEr-D | 0.1744 / 0.562 (rescored; 0.266 was sentence-mean) | **0.256 / 0.793** (VLM adapter) | ~0.30–0.45 / 1.5–2.5+ | +0.082 / +0.23 | +47% / +41% | A | 1,093 images × 5 refs |
 | LEVIR-CC test | corpus BLEU-4 (5 refs) | 0.384 / changed 0.222 (v1, oracle mask; v2 0.388 / 0.231 — no regression) | *pending* (VLM, images only) | 65.5 SAGE-CC | — | — | B→A | bootstrap CI |
 | BigEarthNet-19 (S2 v1.0) official test | micro mAP / macro mAP / 4-band retention | 0.315 macro on a geographic subset shard (Category B under shift; L1 revised) | **0.885 micro / 0.792 macro / retention 0.94** (SSL4EO-S12 trunk, complete official split, val-selected) | 88.5 SeaMo (micro), ~88.2 SpectralGPT | +0.48 macro vs Phase 5 (not comparable: different test) | — | **A** (official split, micro mAP) | 125,866 test patches; calibration ECE 0.0085 → 0.0030 on val; assertion threshold 0.69 at precision 0.90 / recall 0.61 |
-| Landsat-SCD test (CC BY 4.0) | change-type mIoU / SeK / Score | none (SECOND unlicensed) | **0.573 / 0.460 / 0.504** (binary change F1 0.851) | no comparable published number on this split (GSTM-SCD-class methods report SeK ~20–30 on SECOND with a different decomposition) | — | — | B | 477 test pairs; val-selected |
+| Landsat-SCD test (CC BY 4.0) | change-type mIoU / SeK / Score | none (SECOND unlicensed) | **0.623 / 0.509 / 0.553** (80 ep; binary change F1 0.870) | no comparable published number on this split (GSTM-SCD-class methods report SeK ~20–30 on SECOND with a different decomposition) | — | — | B | 477 test pairs; val-selected |
 | CDVQA test1 | overall acc | 0.6061 | unchanged | — | — | — | A | — |
 
 ## 2. What changed and why (chronological, evidence-first)

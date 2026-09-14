@@ -62,7 +62,38 @@ Deployment of these units is pending the cluster link (down at 03:12).
 | 20 | `sq-train-scd-landsat-e80` (queued 01:58; waits for ≥ 14 GB) | `cluster_run_when_free.sh 14 train_scd_landsat_e80 python training/train_scd_landsat.py --ckpt-dir checkpoints/v3/scd_landsat_e80 --epochs 80 --batch-size 8 --workers 6` | `data/landsat_scd/index.json` `405e92c8…` | same arm, 2× schedule — justified by val score still rising at epoch 39/40 | ≈ 1.4 h | `checkpoints/v3/scd_landsat_e80/best.pt` | `logs/train_scd_landsat_e80.log` | free VRAM (≥ 14 GB) | ≈ 10 GB |
 | 21 | `sq-robust-landcover` (queued 02:05; waits for ≥ 6 GB) | `cluster_run_when_free.sh 6 robust_landcover python evaluation/robustness_landcover.py --data data/ben_v1_full --ckpt checkpoints/v3/landcover_full/best.pt --limit 20000 --batch 128 --out artifacts/benchmark_reports/ben_robustness_landcover_v3.json` | official test subsample 20,000 (seed 0) | 21 corruption conditions (noise, brightness, dihedral, per-band drop, 4-band, cloud patch); smoke-tested on 256 patches | ≈ 25 min | report only | `logs/robust_landcover.log` | free VRAM | ≈ 3 GB |
 
+## Reboot (2026-09-14 ≈ 09:24) and relaunch
+
+compute01 rebooted (uptime 44 min at 10:08); every user unit died. What had
+finished before it is verified below; `train_change_caption_vlm` was at
+step 2,040/2,129 (adapter_best = val-selected step 2,000, lr < 1e-6) and
+is scored from that adapter; nothing else was running. All remaining jobs
+were relaunched as per-job units at 10:12. Three VLM units passed their
+VRAM checks within 30 s of each other and two OOM'd while loading;
+`scripts/cluster_unit_lib.sh` now serialises launches with a lock held for
+5 min after each start, and arm C / unified were relaunched through it
+(`cluster_unit_armC2.sh`, `cluster_unit_unified2.sh`).
+
+| Unit (10:12–10:20) | Command | Log | State at 10:25 |
+|---|---|---|---|
+| `sq-unit-cc_resume` / 30606 | `scripts/cluster_unit_cc_resume.sh` — resume train (OOM'd at load, FAILED) → `eval_change_caption_vlm` on `adapter_best` (running) | `logs/queue_cc_resume.log` | eval running (8.7 GB) |
+| `sq-unit-cm_scratch` / 31626 | `scripts/cluster_unit_cm_scratch.sh` | `logs/queue_cm_scratch.log`, `logs/train_cm_v3_scratch.log` | training (3.6 GB) |
+| `sq-unit-armB` (relaunched) | `scripts/cluster_unit_armB.sh` (batch 4×4) | `logs/queue_armB.log`, `logs/train_ground_lora_merger.log` | training (≈ 19 GB) |
+| `sq-unit-armC2` / 75357 | `scripts/cluster_unit_armC2.sh` (gate OK: arm A 0.6877; batch 4×4; launch lock) | `logs/queue_armC2.log` | waiting for ≥ 16 GB |
+| `sq-unit-unified2` / 75365 | `scripts/cluster_unit_unified2.sh` (polls the specialist gate every 10 min; needs `levircc_test_vlm.json`) | `logs/queue_unified2.log` | waiting at the gate |
+
 ## Finished today (verified)
+
+| Job | Exit | Checkpoint | Metrics | Registry |
+|---|---|---|---|---|
+| night-1 #6 `train_vqa_official` | DONE (exit 0) 04:12 | `checkpoints/v3/vqa_official/adapter_best` (sha256 f3e4522d…, backed up) | val (1,533) published-convention 0.933 at step 3,500 | `vlm_sft-20260913-003408-b79298` done, 3,764 steps |
+| night-1 #7 `eval_vqa_official` | DONE (exit 0) 05:28 | — | `rsvqa_lr_official_phase6.json`: n 10,004 both arms; v3 0.9119 [0.905, 0.918] vs v2 0.8947 [0.887, 0.902]; all types up | — |
+| night-1 #8 `train_caption_vlm` | DONE (exit 0) 06:13 | `checkpoints/v3/caption_vlm/adapter_best` (sha256 638efb8f…, backed up) | val (300) corpus BLEU-4 0.423 | `vlm_sft-20260913-052822-1d5938` done, 2,729 steps |
+| night-1 #9 `eval_caption_vlm` | DONE (exit 0) 06:26 | — | `rsicd_test_vlm.json`: n 1,093; LoRA BLEU-4 0.256 / CIDEr-D 0.793; base 0.022 | `eval_caption_caption_lora-…` |
+| #19 `sq-eval-ground-4bit` | EXIT 0 04:45 | — | `dior_rsvg_official_lora_r16_4bit.json`: n 7,500, Acc@0.5 0.678 (bf16 0.6877) | eval record |
+| #20 `sq-train-scd-landsat-e80` | EXIT 0 04:51 | `checkpoints/v3/scd_landsat_e80/best.pt` (sha256 b9d62e81…, backed up) | test mIoU 0.623 / SeK 0.509 / Score 0.553 (477 pairs); val 0.540 at epoch 79 | `scd_landsat-20260913-025242-ab732f` done, 51,280 steps |
+
+## Finished 2026-09-12/13 (verified)
 
 | Job | Exit | Checkpoint | Metrics | Registry |
 |---|---|---|---|---|

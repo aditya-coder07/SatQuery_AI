@@ -51,9 +51,10 @@ Planned arms, in order of expected gain ÷ cost: + train the visual merger
 | Task | Arm | BLEU-4 | CIDEr-D | Source |
 |---|---|---|---|---|
 | RSICD | v2 caption_pre (specialist, ImageNet R50 + transformer decoder) | 0.1744 | 0.562 | `artifacts/benchmark_reports/rescoring/rsicd_caption_pre.json` |
-| RSICD | Qwen2.5-VL-3B + LoRA (RSICD 5 refs/image) | pending | pending | night-1 queue |
+| RSICD | Qwen2.5-VL-3B zero-shot (base) | 0.022 | 0.065 | `artifacts/benchmark_reports/rsicd_test_vlm.json` — the base does not speak RSICD's caption register at all |
+| RSICD | Qwen2.5-VL-3B + LoRA r16 (RSICD train, 1 epoch, 2,729 steps, 45 min) | **0.256** (ROUGE-L 0.486, meteor_exact 0.484) | **0.793** | same report; val (300) BLEU-4 0.42 — the val/test gap is not duplicate leakage (`dup_rsicd_train_val.json`: 0), it is the 300-item val sample; unique-caption fraction on test 0.60 |
 | LEVIR-CC | v1 mask-conditioned GRU (**GT mask at test**) | 0.384 (changed half 0.222) | 1.29 | `artifacts/benchmark_reports/rescoring/levircc_change_caption_v1.json` |
-| LEVIR-CC | Qwen2.5-VL-3B + LoRA, two images, no mask | pending | pending | night-1 queue |
+| LEVIR-CC | Qwen2.5-VL-3B + LoRA r16, two images, no mask (val-selected step 2,000/2,129) | official test running (2026-09-14) | | val (300) corpus BLEU-4 0.623, CIDEr-D 1.32 at step 2,000 |
 
 ## Land cover (BigEarthNet-19 test shard, 5,867 patches; macro mAP / 4-band retention)
 
