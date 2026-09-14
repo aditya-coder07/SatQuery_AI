@@ -151,6 +151,36 @@ The fused head loses 0.06 mIoU when SAR is zeroed at test time and 0.36
 when optical is zeroed, so the trained selective use is: optical carries,
 SAR corrects.
 
+### Why and when SAR helps (2026-09-14, from `docs/assets/phase6/optsar_fusion/metrics.json`)
+
+Per-class IoU on the scene-disjoint val (378 tiles), optical → fused, and
+the SAR-only arm for reference:
+
+| Class | optical | fused | Δ | SAR-only | Reading |
+|---|---|---|---|---|---|
+| road | 0.188 | **0.242** | **+0.054 (+29%)** | 0.076 | linear, low-contrast in optical; SAR's geometric backscatter edges resolve them |
+| others | 0.046 | **0.083** | +0.037 (+81%) | 0.021 | bare/dark surfaces optical confuses with shadow |
+| water | 0.625 | **0.655** | +0.030 | 0.573 | specular (low) backscatter is a near-unambiguous water cue where optical sees turbid or shadowed water |
+| village | 0.342 | 0.357 | +0.015 | 0.255 | built-up texture |
+| farmland | 0.612 | 0.619 | +0.007 | 0.550 | — |
+| city | 0.488 | 0.491 | +0.003 | 0.444 | — |
+| forest | 0.827 | 0.830 | +0.003 | 0.799 | optical already saturates |
+
+* **When:** fused beats optical on 65.6% of tiles; the gain is twice as
+  large on the difficult subset (optical mIoU < 0.25: +0.014, n = 95) as
+  on the easy one (+0.007, n = 283). SAR is a correction for the tiles
+  optical gets wrong, not a uniform boost.
+* **Why the gate is needed:** SAR alone is worse on every class, and
+  `fused_no_optical` collapses (mIoU 0.107) — the fusion learned to lean on
+  optical and consult SAR; `fused_no_sar` (0.409) is below optical-only
+  (0.447) because the fused encoder was never trained to run without its
+  SAR branch except under modality dropout, which is the argument for
+  keeping the optical-only specialist as the deployed fallback when SAR
+  is absent.
+* **Where it does not help:** classes optical already separates by colour
+  (forest, farmland, city) gain ≤ 0.007; fusion is worth its second
+  encoder for roads, water and the "others" residual.
+
 ## Data failures found by the audit (not model failures)
 
 * DIOR-RSVG: trained on the test split (G1). Fixed by the official release.
