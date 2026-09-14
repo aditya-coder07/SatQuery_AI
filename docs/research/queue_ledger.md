@@ -82,6 +82,7 @@ VRAM checks within 30 s of each other and two OOM'd while loading;
 | `sq-unit-armC2` / 75357 | `scripts/cluster_unit_armC2.sh` (gate OK: arm A 0.6877; batch 4×4; launch lock) | `logs/queue_armC2.log`, `logs/train_ground_vrs.log` | TRAINING since 10:32 (2,764 steps, 13.9 s/step, ≈ 24 GB) → evals |
 | `sq-unit-unified2` → `sq-unit-unified3` / 203162 | `scripts/cluster_unit_unified2.sh` with MIN_FREE_GB 28 (gate passed 10:38: all four specialist reports present) | `logs/queue_unified2.log` | waiting for VRAM (after arm C / arm B) |
 | `sq-verify-deploy` | `cluster_run_when_free.sh 10 verify_deploy_v3 python scripts/verify_deploy.py --map configs/deploy.v3.yaml` | `logs/verify_deploy_v3.log` | DONE 10:29 (exit 0): **8/8 tools load** through their deployed loaders (rs_vqa v3 adapter, grounding/caption/change_caption adapters on the shared base, change_mask v3, fusion v3, landcover v3, change_vqa v2) |
+| 22 | `sq-robust-grounding` (queued 11:05; ≥ 8 GB) | `cluster_run_when_free.sh 8 robust_grounding python evaluation/robustness_grounding.py --base models/qwen25_vl_3b --adapter checkpoints/v3/grounding_vlm_r16/adapter_best --quant 4bit --manifest data/dior_rsvg_official/manifests/test.jsonl --limit 1000 --batch 16 --out artifacts/benchmark_reports/dior_rsvg_robustness_lora_r16.json` | DIOR-RSVG official test, 1,000-item subsample (seed 0) | 9 conditions (JPEG, blur, brightness, noise, hflip with box flipped, 4× downscale); smoke-tested on 16 | ≈ 50 min | report only | `logs/robust_grounding.log` | free VRAM | ≈ 6 GB |
 
 ## Finished today (verified)
 
