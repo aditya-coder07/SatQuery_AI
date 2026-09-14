@@ -12,10 +12,12 @@ are measured by this project; sources are the report/metrics files named.
 | v2 (Phase 5) | scratch residual, 60 ep | BCE pos_weight | none | last | 0.8550 | 0.7467 | `docs/assets/phase5/change_mask` |
 | **v3** | ImageNet ResNet-50 siamese + FPN, 40 ep | BCE pos_weight + Dice, cosine, bf16 | dihedral + date swap | best val F1 | **0.9038** | **0.8244** | `docs/assets/phase6/change_mask` |
 | v3, final-epoch weights | same | same | same | last | 0.9005 | 0.8190 | same file |
+| v3 `--no-pretrained` | same trunk **from scratch**, 40 ep | same | same | best val F1 | 0.8751 | 0.7780 | `docs/assets/phase6/change_mask_scratch` (2026-09-14) |
 
-Pretraining + decoder + loss + augmentation are confounded in one step (+4.9
-F1 over v2); the val-selection alone is worth +0.3 F1. A scratch-encoder
-v3 arm is the missing ablation and is cheap (~25 min); queued for day 2.
+Of the +4.9 F1 over v2, ImageNet initialisation is worth **+2.9** (the
+scratch arm, same decoder/loss/augmentation/selection, reaches 0.8751);
+the decoder + Dice + augmentation account for the remaining +2.0; the
+val-selection alone is worth +0.3.
 
 ## Optical-SAR fusion (WHU-OPT-SAR, 7-class mIoU; per-tile gain = fused − optical)
 
