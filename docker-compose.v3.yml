@@ -1,0 +1,35 @@
+# Phase 6 checkpoints - an OVERLAY on the default (v2):
+#
+#   docker compose -f docker-compose.yml -f docker-compose.v3.yml up api
+#
+# Mirrors configs/deploy.v3.yaml (verified 8/8 by scripts/verify_deploy.py
+# on 2026-09-14 10:29). Every tool that has a Phase 6 winner points at it;
+# change_vqa stays on v2 (SECOND licence unresolved; the licensed
+# Landsat-SCD model is a benchmark reference, not the CDVQA tool). The
+# VLM tools share one 4-bit Qwen2.5-VL-3B base and attach task adapters
+# by name; caption and change_caption fall back to their specialists if
+# the adapter variables are unset. Calibration and thresholds are the v3
+# registries fitted on official VALIDATION splits.
+#
+# Measured on the official tests (docs/research/sota_matrix.md):
+#   rs_vqa 0.9119 | grounding Acc@0.5 0.6877 (0.678 in 4-bit) | change_mask F1 0.9038
+#   landcover micro mAP 0.885 | caption BLEU-4 0.256 | change_caption BLEU-4 0.6045
+#   optsar_fusion fused mIoU 0.468 (+0.021 over optical)
+
+services:
+  api:
+    environment:
+      - SATQUERY_VQA_BASE=/app/models/qwen25_vl_3b
+      - SATQUERY_VQA_ADAPTER=/app/checkpoints/v3/vqa_official/adapter_best
+      - SATQUERY_GROUNDING_ADAPTER=/app/checkpoints/v3/grounding_vlm_r16/adapter_best
+      - SATQUERY_GROUNDING=/app/checkpoints/v2/grounding_pre
+      - SATQUERY_CAPTION_ADAPTER=/app/checkpoints/v3/caption_vlm/adapter_best
+      - SATQUERY_CAPTION=/app/checkpoints/v2/caption_pre
+      - SATQUERY_CHANGE_CAPTION_ADAPTER=/app/checkpoints/v3/change_caption_vlm/adapter_best
+      - SATQUERY_CHANGE_CAPTION=/app/checkpoints/change_caption
+      - SATQUERY_CHANGE_MASK=/app/checkpoints/v3/change_mask/best.pt
+      - SATQUERY_LANDCOVER=/app/checkpoints/v3/landcover_full/best.pt
+      - SATQUERY_FUSION=/app/checkpoints/v3/optsar_fusion/best.pt
+      - SATQUERY_CHANGE_VQA=/app/checkpoints/v2/change_vqa/best.pt
+      - SATQUERY_CALIBRATION=/app/configs/calibration.v3.json
+      - SATQUERY_THRESHOLDS=/app/configs/thresholds.v3.yaml

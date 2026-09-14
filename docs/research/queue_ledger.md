@@ -76,11 +76,12 @@ VRAM checks within 30 s of each other and two OOM'd while loading;
 
 | Unit (10:12–10:20) | Command | Log | State at 10:25 |
 |---|---|---|---|
-| `sq-unit-cc_resume` / 30606 | `scripts/cluster_unit_cc_resume.sh` — resume train (OOM'd at load, FAILED) → `eval_change_caption_vlm` on `adapter_best` (running) | `logs/queue_cc_resume.log` | eval running (8.7 GB) |
-| `sq-unit-cm_scratch` / 31626 | `scripts/cluster_unit_cm_scratch.sh` | `logs/queue_cm_scratch.log`, `logs/train_cm_v3_scratch.log` | training (3.6 GB) |
-| `sq-unit-armB` (relaunched) | `scripts/cluster_unit_armB.sh` (batch 4×4) | `logs/queue_armB.log`, `logs/train_ground_lora_merger.log` | training (≈ 19 GB) |
-| `sq-unit-armC2` / 75357 | `scripts/cluster_unit_armC2.sh` (gate OK: arm A 0.6877; batch 4×4; launch lock) | `logs/queue_armC2.log` | waiting for ≥ 16 GB |
-| `sq-unit-unified2` / 75365 | `scripts/cluster_unit_unified2.sh` (polls the specialist gate every 10 min; needs `levircc_test_vlm.json`) | `logs/queue_unified2.log` | waiting at the gate |
+| `sq-unit-cc_resume` / 30606 | `scripts/cluster_unit_cc_resume.sh` — resume train (OOM'd at load, FAILED) → `eval_change_caption_vlm` on `adapter_best` | `logs/queue_cc_resume.log` | DONE 10:43 (exit 0): `levircc_test_vlm.json` n 1,929, cc_lora BLEU-4 0.6045 / changed 0.322; adapter sha256 in `checksums.tsv`, backed up |
+| `sq-unit-cm_scratch` / 31626 | `scripts/cluster_unit_cm_scratch.sh` | `logs/queue_cm_scratch.log`, `logs/train_cm_v3_scratch.log` | DONE 10:38 (exit 0): `change_mask_scratch/best.pt` test F1 0.8751 / IoU 0.7780 (val-selected epoch 32); backed up |
+| `sq-unit-armB` → `sq-unit-armB2` / 203150 | stopped twice (it kept winning the VRAM race over arm C, the data arm); relaunched through `scripts/cluster_unit_armB2.sh` (launch lock, MIN_FREE_GB 28) | `logs/queue_armB2.log` | waiting (starts when arm C ends) |
+| `sq-unit-armC2` / 75357 | `scripts/cluster_unit_armC2.sh` (gate OK: arm A 0.6877; batch 4×4; launch lock) | `logs/queue_armC2.log`, `logs/train_ground_vrs.log` | TRAINING since 10:32 (2,764 steps, 13.9 s/step, ≈ 24 GB) → evals |
+| `sq-unit-unified2` → `sq-unit-unified3` / 203162 | `scripts/cluster_unit_unified2.sh` with MIN_FREE_GB 28 (gate passed 10:38: all four specialist reports present) | `logs/queue_unified2.log` | waiting for VRAM (after arm C / arm B) |
+| `sq-verify-deploy` | `cluster_run_when_free.sh 10 verify_deploy_v3 python scripts/verify_deploy.py --map configs/deploy.v3.yaml` | `logs/verify_deploy_v3.log` | DONE 10:29 (exit 0): **8/8 tools load** through their deployed loaders (rs_vqa v3 adapter, grounding/caption/change_caption adapters on the shared base, change_mask v3, fusion v3, landcover v3, change_vqa v2) |
 
 ## Finished today (verified)
 
