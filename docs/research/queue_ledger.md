@@ -84,6 +84,21 @@ VRAM checks within 30 s of each other and two OOM'd while loading;
 | `sq-verify-deploy` | `cluster_run_when_free.sh 10 verify_deploy_v3 python scripts/verify_deploy.py --map configs/deploy.v3.yaml` | `logs/verify_deploy_v3.log` | DONE 10:29 (exit 0): **8/8 tools load** through their deployed loaders (rs_vqa v3 adapter, grounding/caption/change_caption adapters on the shared base, change_mask v3, fusion v3, landcover v3, change_vqa v2) |
 | 22 | `sq-robust-grounding` (queued 11:05; ≥ 8 GB) | `cluster_run_when_free.sh 8 robust_grounding python evaluation/robustness_grounding.py --base models/qwen25_vl_3b --adapter checkpoints/v3/grounding_vlm_r16/adapter_best --quant 4bit --manifest data/dior_rsvg_official/manifests/test.jsonl --limit 1000 --batch 16 --out artifacts/benchmark_reports/dior_rsvg_robustness_lora_r16.json` | DIOR-RSVG official test, 1,000-item subsample (seed 0) | 9 conditions (JPEG, blur, brightness, noise, hflip with box flipped, 4× downscale); smoke-tested on 16 | ≈ 50 min | report only | `logs/robust_grounding.log` | free VRAM | ≈ 6 GB |
 
+## External kills (2026-09-14 14:58:36 and 15:14:40)
+
+All three trainers (arm C at step 1,060, arm B at 600, unified at 580)
+received SIGKILL in the same second at 14:58:36 — not a cgroup OOM
+(`memory.events` oom_kill 0; 431 GB RAM free), not our scripts. They
+were relaunched with `--resume` from `adapter_last`/`train_state.pt`
+(`scripts/cluster_unit_{armC,armB,unified}_resume.sh`) at 15:04; the
+resumed arm C was killed again at 15:14:40 while alone on the card. `last`
+shows a root login at 10:05 and a root process `python original.py` has
+been using the GPU since 15:13 — an administrator is working on the card.
+This is the charter's "another user's GPU job" case: nothing of theirs is
+touched, our jobs run at reduced footprint, and the user is asked to
+check with the administrator. Lost: ≈ 1 h of arm C, 1 h of arm B, 15 min
+of unified (the resume points are the last saves).
+
 ## Finished today (verified)
 
 | Job | Exit | Checkpoint | Metrics | Registry |
