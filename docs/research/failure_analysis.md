@@ -65,6 +65,20 @@ B) for the small-object end, and build the hard-negative set from the
 390 `wrong_object` + 1,085 `wrong_box` items' images for the retrain that
 follows.
 
+### Robustness of arm A (4-bit deployed path, 1,000-item test subsample) — 2026-09-14
+
+`artifacts/benchmark_reports/dior_rsvg_robustness_lora_r16.json`
+(`evaluation/robustness_grounding.py`; clean Acc@0.5 on this subsample
+0.666, mIoU 0.592):
+
+| Condition | Acc@0.5 | Δ | Reading |
+|---|---|---|---|
+| JPEG q30 / brightness ×0.8 / ×1.2 / noise σ8 | 0.673 / 0.667 / 0.677 / 0.663 | +0.007 / +0.001 / +0.011 / −0.003 | photometric changes are free — within subsample noise |
+| blur σ1 | 0.646 | −0.020 | |
+| blur σ2 | 0.568 | −0.098 | |
+| 4× downscale-upscale | 0.559 | **−0.107** | resolution is the axis, as the size breakdown said: small objects need the pixels |
+| horizontal flip (box flipped too) | 0.425 | **−0.241** | not a pure robustness failure: DIOR-RSVG phrases carry absolute positions ("the ship on the left", "top-right") that a flipped image contradicts; the drop measures how much the adapter *uses* positional language, which is what it should do. A phrase-mirrored flip is the fair test and is the natural augmentation for arm D |
+
 ## Change detection — LEVIR-CD, v3
 
 Source: `docs/assets/phase6/change_mask/metrics.json`, independently

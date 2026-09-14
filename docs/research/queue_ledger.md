@@ -88,6 +88,7 @@ VRAM checks within 30 s of each other and two OOM'd while loading;
 
 | Job | Exit | Checkpoint | Metrics | Registry |
 |---|---|---|---|---|
+| #22 `sq-robust-grounding` | EXIT 0 12:53 | read-only | `dior_rsvg_robustness_lora_r16.json` n 1,000: photometric ≤ ±0.011, blur σ2 −0.098, 4× downscale −0.107, hflip −0.241 (positional phrases) | `robustness_grounding-…` done |
 | night-1 #6 `train_vqa_official` | DONE (exit 0) 04:12 | `checkpoints/v3/vqa_official/adapter_best` (sha256 f3e4522d…, backed up) | val (1,533) published-convention 0.933 at step 3,500 | `vlm_sft-20260913-003408-b79298` done, 3,764 steps |
 | night-1 #7 `eval_vqa_official` | DONE (exit 0) 05:28 | — | `rsvqa_lr_official_phase6.json`: n 10,004 both arms; v3 0.9119 [0.905, 0.918] vs v2 0.8947 [0.887, 0.902]; all types up | — |
 | night-1 #8 `train_caption_vlm` | DONE (exit 0) 06:13 | `checkpoints/v3/caption_vlm/adapter_best` (sha256 638efb8f…, backed up) | val (300) corpus BLEU-4 0.423 | `vlm_sft-20260913-052822-1d5938` done, 2,729 steps |
