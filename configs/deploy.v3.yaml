@@ -36,8 +36,8 @@ tools:
   change_caption:
     env: {SATQUERY_VQA_BASE: models/qwen25_vl_3b, SATQUERY_CHANGE_CAPTION_ADAPTER: checkpoints/v3/change_caption_vlm/adapter_best}
     fallback_env: {SATQUERY_CHANGE_CAPTION: checkpoints/change_caption}
-    status: pending
-    note: two-image VLM arm (images only, no mask); official LEVIR-CC test running 2026-09-14; selected only if it beats v1's fair (images-only) comparison
+    status: selected
+    note: LEVIR-CC official test, images only (no mask): corpus BLEU-4 0.6045 all / 0.322 changed half, CIDEr-D 1.29, ROUGE-L 0.712 (v1 with the GT mask 0.384 / 0.222); verify_deploy OK 2026-09-14 10:29
   change_vqa:
     env: {SATQUERY_CHANGE_VQA: checkpoints/v2/change_vqa/best.pt}
     status: held
