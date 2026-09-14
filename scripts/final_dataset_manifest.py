@@ -135,6 +135,20 @@ def build(data: Path) -> list[dict]:
                 leakage="WHU rows scene-split; rsvqa rows are HF-val material (excluded from train_no_rsvqa)",
                 findings=["F2"], checksums=sums)
 
+    r = data / "vrsbench"
+    if (r / "manifests" / "stats.json").exists():
+        st = json.loads((r / "manifests" / "stats.json").read_text(encoding="utf-8"))
+        splits, sums = jsonl_manifests(r, ("train", "train_caption", "train_vqa", "train_grounding", "val_caption",
+                                           "val_vqa", "val_grounding", "quarantine_train"))
+        add("vrsbench", dataset="VRSBench", version="xiang709/VRSBench (per-image annotations; official EVAL files)",
+            license="CC-BY-4.0", usable_for="train+eval", task="caption / VQA / grounding", provenance=st["source"],
+            preprocessing_version="training/prepare/vrsbench.py (unified manifest v1, precise boxes from obj_corner)",
+            splits={k: v for k, v in splits.items() if not k.startswith("quarantine")}, valid=st["train"]["n"],
+            quarantined=[{"n": st["quarantine_train"]["n"], "reason": st["quarantine_train"]["reason"]}],
+            leakage=(f"{st['leakage']['dior_rsvg_val_test_source_images_blocked']} DIOR-RSVG val/test source images blocked from train; "
+                     f"val rows on DIOR-RSVG train images flagged (grounding {st['val']['grounding']['n_dior_source_in_rsvg_train']} of {st['val']['grounding']['n']})"),
+            findings=["V1"], checksums=sums)
+
     # --- captioning ------------------------------------------------------
     r = data / "rsicd"
     if r.exists():

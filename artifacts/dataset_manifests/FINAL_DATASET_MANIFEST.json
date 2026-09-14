@@ -1,5 +1,5 @@
 {
- "generated": "2026-09-12T20:19:47",
+ "generated": "2026-09-14T10:46:32",
  "datasets": [
   {
    "key": "dior_rsvg_official",
@@ -172,6 +172,49 @@
    "manifest_hash": "7847d0508c7c60643b01e0665d56244b016692a47e17c504205df57dce0ef2c5"
   },
   {
+   "key": "vrsbench",
+   "path": "data/vrsbench",
+   "dataset": "VRSBench",
+   "version": "xiang709/VRSBench (per-image annotations; official EVAL files)",
+   "license": "CC-BY-4.0",
+   "usable_for": "train+eval",
+   "task": "caption / VQA / grounding",
+   "provenance": "VRSBench (xiang709/VRSBench); crops of DOTA-v2 and DIOR",
+   "preprocessing_version": "training/prepare/vrsbench.py (unified manifest v1, precise boxes from obj_corner)",
+   "splits": {
+    "train": 130565,
+    "train_caption": 18421,
+    "train_vqa": 78704,
+    "train_grounding": 33440,
+    "val_caption": 9350,
+    "val_vqa": 37409,
+    "val_grounding": 16159
+   },
+   "valid": 130565,
+   "quarantined": [
+    {
+     "n": 11825,
+     "reason": "DIOR source image is in the DIOR-RSVG official val or test split"
+    }
+   ],
+   "leakage": "8452 DIOR-RSVG val/test source images blocked from train; val rows on DIOR-RSVG train images flagged (grounding 4843 of 16159)",
+   "findings": [
+    "V1"
+   ],
+   "checksums": {
+    "manifests/train.jsonl": "ca2f4a267f7258df418f77b8e20bc19759fc8e0d06cf67506fd8a26147d0ae0a",
+    "manifests/train_caption.jsonl": "b81647cc6c25b13a6aa8d81bdb4b6e8f693b2ba6961ea47906449c758e087f5e",
+    "manifests/train_vqa.jsonl": "844f56e833baf1ebd94906910d9f544457af50ccb2bef86c64ee2f4d184378fa",
+    "manifests/train_grounding.jsonl": "bc82fd58f398c0d476085ecff463af6e25674a5ce13c703c3f587a83b59181bb",
+    "manifests/val_caption.jsonl": "859650226f969b86e88da4e116c4cd06178014fd512e6808ad5644a20a2009fc",
+    "manifests/val_vqa.jsonl": "a3e5de01d6401a07b869b90fb42975e61c15c8e3ae8652340719a64fd60e9024",
+    "manifests/val_grounding.jsonl": "d38df23e953dc1b3d57ea3616e8eafa464acfc19306e0bbe83d65976844728a2",
+    "manifests/quarantine_train.jsonl": "04d96e8c6e2b11339b8736b48b07415945f27a1e5f7df0c02733c1dad07463ea",
+    "manifests/stats.json": "a74ce03e3c39c04b60a1664d8f2591ad403752c2389dbe9759289d5be07d0f5c"
+   },
+   "manifest_hash": "1f0c0391c2f9bd5d7cb070d2ba8fae6e87a4f46b7a9231927dfacd8323b61d3c"
+  },
+  {
    "key": "rsicd",
    "path": "data/rsicd",
    "dataset": "RSICD",
@@ -285,22 +328,53 @@
   {
    "key": "ben_v1_full",
    "path": "data/ben_v1_full",
-   "dataset": "BigEarthNet-S2 v1.0",
-   "version": "in preparation",
-   "license": "CDLA-Permissive-1.0",
-   "usable_for": "pending",
+   "dataset": "BigEarthNet-S2 v1.0 (19-label)",
+   "version": "lc-col/bigearthnet HDF5 mirror, torchgeo split lists",
+   "license": "CDLA-Permissive-1.0 (BigEarthNet); mirror converter Apache-2.0",
+   "usable_for": "train+eval",
    "task": "land cover",
-   "provenance": "lc-col/bigearthnet",
-   "preprocessing_version": "pending",
-   "splits": {},
-   "valid": 0,
-   "quarantined": [],
-   "leakage": "pending",
+   "provenance": "https://huggingface.co/datasets/lc-col/bigearthnet (torchgeo split lists; converter github.com/lccol/bigearthnet-conversion)",
+   "preprocessing_version": "ben_v1_full/1 (uint16 memmap, CSV order, phantom rows dropped)",
+   "splits": {
+    "train": 269695,
+    "val": 123723,
+    "test": 125866
+   },
+   "valid": 519284,
+   "quarantined": [
+    {
+     "split": "train",
+     "shard": "bigearthnet_train_p17.hdf5",
+     "stored_rows": 14696,
+     "csv_rows": 14695,
+     "reason": "rows beyond the mapping CSV (converter off-by-one)"
+    },
+    {
+     "split": "val",
+     "shard": "bigearthnet_val_p8.hdf5",
+     "stored_rows": 3724,
+     "csv_rows": 3723,
+     "reason": "rows beyond the mapping CSV (converter off-by-one)"
+    },
+    {
+     "split": "test",
+     "shard": "bigearthnet_test_p8.hdf5",
+     "stored_rows": 5867,
+     "csv_rows": 5866,
+     "reason": "rows beyond the mapping CSV (converter off-by-one)"
+    }
+   ],
+   "leakage": "official split lists; patch ids pairwise disjoint (see split_id_overlap); test never read for selection; id overlap {'train&val': 0, 'test&train': 0, 'test&val': 0}",
    "findings": [
     "L1 (revised)"
    ],
-   "checksums": {},
-   "manifest_hash": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a"
+   "checksums": {
+    "manifests/stats.json": "ab1d40f798c0a293ca2e92cda49040cb0414fb368e029f10eedc735ec00eeef4",
+    "train_ids.txt": "b75522e3f5b155141fcd7f683882e9055abe2beb149a9fb316bdb58b0f298aca",
+    "val_ids.txt": "c1e22426ce7f149764a4eaafa97a38fe386696b72176df04ee882562ae58d838",
+    "test_ids.txt": "4a7807b0f3cfa4a762def62495d06c7178f3f33a9989298e82fb0ffcfea8b104"
+   },
+   "manifest_hash": "28a6effeddd2296d5e824ef9893a98fcd73dadf20fd2a932dc8629298a2965ba"
   },
   {
    "key": "ben_full",
@@ -354,9 +428,9 @@
    "leakage": "originals cut 3:1:1 by seed 42; augmented copies follow their original and are train-only; 0 copies without an original dropped",
    "findings": [],
    "checksums": {
-    "index.json": "a7dd275f772d195fc9ad0b5a3f1553a616f14f488015fbdf8868913902e88e87"
+    "index.json": "405e92c8fcf412b48871bee30b872629e4f2dd1205e9a8ce7207b86e9b1bbb56"
    },
-   "manifest_hash": "ec29bbe309017f7a70594d19eb021a0a7cd915d49e69fffd10258d48b14052d7"
+   "manifest_hash": "3309783109b0145d1cc20a0663ddacaa048c0c2fd61748b2eed22c14e94614c2"
   },
   {
    "key": "second",
