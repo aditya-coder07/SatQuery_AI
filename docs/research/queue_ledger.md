@@ -99,6 +99,16 @@ touched, our jobs run at reduced footprint, and the user is asked to
 check with the administrator. Lost: ≈ 1 h of arm C, 1 h of arm B, 15 min
 of unified (the resume points are the last saves).
 
+## Third kill and server outage (2026-09-14 18:35 → 2026-09-15 09:24)
+
+The three resumed trainers were SIGKILLed again at 18:35:36 (arm C at step
+1,600, arm B at 860, unified at 1,620); the units then attempted their
+evaluations, which were killed at 18:48 / 18:52, and the node went down
+until a reboot at 09:24 on the 15th (a root process `python
+qvit_pipeline.py` has been on the GPU since 10:13). Relaunched 10:47 as
+`sq-unit-{armC,armB,unified}-resume3` from the last saves (arm C 1,600, arm
+B 800, unified 1,500). Cumulative loss to external kills: ≈ 4 GPU-hours.
+
 ## Finished today (verified)
 
 | Job | Exit | Checkpoint | Metrics | Registry |
