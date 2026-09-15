@@ -58,7 +58,12 @@ agree within noise.
   image, another object of the same class, contrastive phrasing) and for
   VRSBench's referring expressions, which are written to be discriminative.
 
-**What this directs (arms B/C, queued):** keep native resolution (a 640-px
+**Arm B result (2026-09-15):** the trainable merger did not move the
+small-object bucket (0.491 vs 0.509) or anything else (0.6736 overall);
+the taxonomy is unchanged (wrong_box 1,099, scale_error 706, wrong_object
+404). Rejected.
+
+**What this directs (arm C running; hard negatives next):** keep native resolution (a 640-px
 cap was removed from arm C for this reason), add VRSBench's 33k
 discriminative expressions (arm C), try the trainable visual merger (arm
 B) for the small-object end, and build the hard-negative set from the

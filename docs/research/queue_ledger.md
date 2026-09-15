@@ -109,6 +109,12 @@ qvit_pipeline.py` has been on the GPU since 10:13). Relaunched 10:47 as
 `sq-unit-{armC,armB,unified}-resume3` from the last saves (arm C 1,600, arm
 B 800, unified 1,500). Cumulative loss to external kills: ≈ 4 GPU-hours.
 
+## Finished 2026-09-15 (verified)
+
+| Job | Exit | Checkpoint | Metrics | Registry |
+|---|---|---|---|---|
+| `sq-unit-armB-resume3` (arm B, + merger) | train DONE 16:32, eval DONE 17:50 (exit 0) | `checkpoints/v3/grounding_vlm_r16_merger/adapter_best` (val 0.6875 @1,600; backed up tier 1) | `dior_rsvg_official_armB.json` n 7,500: Acc@0.5 **0.6736** (arm A 0.6877) — rejected | `grounding_vlm-…` done; `eval_grounding_lora_r16_merger-…` |
+
 ## Finished today (verified)
 
 | Job | Exit | Checkpoint | Metrics | Registry |

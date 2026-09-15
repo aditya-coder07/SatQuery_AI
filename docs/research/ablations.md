@@ -41,11 +41,17 @@ SAR is absent, which the tool's payload now makes possible.
 |---|---|---|---|---|
 | Phase 5 CNN (pretrained) | 6,359 expressions **of the test split**, 15% self-made holdout | ImageNet R50 + GRU, box regression | 0.160 (Category C) | `docs/assets/phase5/grounding_pre` |
 | Qwen2.5-VL-3B zero-shot | none | base | **0.3823** [0.371, 0.394] | `artifacts/benchmark_reports/dior_rsvg_official_zero_shot.json` |
-| + LoRA r16 (LLM only), official train, 1 epoch | 26,991 | adapter | *val 0.6375–0.6475 at steps 400–800; test pending* | night-1 queue |
+| **A**: + LoRA r16 (LLM only), official train, 1 epoch, batch 8×2 | 26,991 | adapter | **0.6877** [0.677, 0.699]; image-disjoint 0.805; small/medium/large 0.509 / 0.782 / 0.888 | `dior_rsvg_official_phase6.json` |
+| **B**: A's recipe + trainable visual merger, batch 2×8 (killed twice, resumed) | 26,991 | adapter + merger | 0.6736; image-disjoint 0.800; small/medium/large 0.491 / 0.770 / 0.878 — lower on every size bucket | `dior_rsvg_official_armB.json` |
+| **C**: A's adapter continued on DIOR-RSVG ×0.4 + VRSBench grounding (33,440, CC-BY-4.0), native resolution | 44,236 | adapter | running (mixed val 0.656 at step 2,400) | `dior_rsvg_official_armC.json` (pending) |
+| 4-bit deployed path (arm A) | — | — | 0.678 (−1.0 pt vs bf16) | `dior_rsvg_official_lora_r16_4bit.json` |
 
-Planned arms, in order of expected gain ÷ cost: + train the visual merger
-(`--train-merger`); + second epoch from `adapter_last`; + hard negatives
-(same image, other object of the same category) targeted at `wrong_object`;
+Reading of arm B: training the merger did not help at one epoch — the
+small-object bucket, the one it was meant to move, fell 1.8 pts; the run
+also used batch 2×8 instead of 8×2 (same effective batch) after the admin
+kills, so the two arms are not a perfectly controlled pair. Arm A stays
+selected. Remaining arms in order of expected gain ÷ cost: hard negatives
+targeted at `wrong_object` (390 items), a second epoch from `adapter_last`,
 7B base.
 
 ## Captioning (corpus BLEU-4, 5 references)
