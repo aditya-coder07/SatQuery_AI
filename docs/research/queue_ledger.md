@@ -113,6 +113,7 @@ B 800, unified 1,500). Cumulative loss to external kills: ≈ 4 GPU-hours.
 
 | Job | Exit | Checkpoint | Metrics | Registry |
 |---|---|---|---|---|
+| `sq-unit-unified-resume3` training | DONE 22:31 (exit 0); 6,243 steps (resumed twice) | `checkpoints/v3/unified_vlm/adapter_best` (val selection 0.638) | evals running: grounding DONE 01:09 → `dior_rsvg_official_unified.json` n 7,500: unified **0.6379** vs specialist 0.6896 (McNemar 661/273, χ² 160, significant — negative transfer on grounding); VQA / caption / change caption pending | `vlm_sft-…` done |
 | `sq-unit-armC-resume3` (arm C, + VRSBench) | train DONE 18:07, eval DONE 19:53 (exit 0) | `checkpoints/v3/grounding_vlm_vrs/adapter_best` (val 0.656 @2,400; backed up tier 1) | `dior_rsvg_official_armC.json` n 7,500 × 2 arms: lora_vrs **0.6880** vs lora_r16 0.6896, McNemar χ² 0.19 n.s. — no change; VRSBench val eval running (3 arms × 16,159) | `vlm_sft-…` done; `eval_grounding_*` |
 | `sq-unit-armD` (arm D, hard negatives; started 20:02 from arm A) | RUNNING | `checkpoints/v3/grounding_vlm_hard/` | ≈ 1,800 steps then `dior_rsvg_official_armD.json` (init vs lora_hard, paired) | `logs/queue_armD.log`, `logs/train_ground_hard.log` |
 | `sq-unit-armB-resume3` (arm B, + merger) | train DONE 16:32, eval DONE 17:50 (exit 0) | `checkpoints/v3/grounding_vlm_r16_merger/adapter_best` (val 0.6875 @1,600; backed up tier 1) | `dior_rsvg_official_armB.json` n 7,500: Acc@0.5 **0.6736** (arm A 0.6877) — rejected | `grounding_vlm-…` done; `eval_grounding_lora_r16_merger-…` |
