@@ -63,7 +63,13 @@ small-object bucket (0.491 vs 0.509) or anything else (0.6736 overall);
 the taxonomy is unchanged (wrong_box 1,099, scale_error 706, wrong_object
 404). Rejected.
 
-**What this directs (arm C running; hard negatives next):** keep native resolution (a 640-px
+**Arm D result (2026-09-16 05:25):** hard negatives (13,519 multi-instance
+train expressions oversampled, from arm A) → **0.6992** vs 0.6896, McNemar
+significant (216 lost / 288 gained); `wrong_object` 387 → 365, `wrong_box`
+1,099 → 1,043, small objects 0.510 → 0.526. The taxonomy predicted the
+lever correctly.
+
+**What this directed (arm C done; arm D done; arm D′ from arm C running):** keep native resolution (a 640-px
 cap was removed from arm C for this reason), add VRSBench's 33k
 discriminative expressions (arm C), try the trainable visual merger (arm
 B) for the small-object end, and build the hard-negative set from the

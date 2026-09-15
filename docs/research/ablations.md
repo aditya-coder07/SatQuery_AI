@@ -44,7 +44,8 @@ SAR is absent, which the tool's payload now makes possible.
 | **A**: + LoRA r16 (LLM only), official train, 1 epoch, batch 8×2 | 26,991 | adapter | **0.6877** [0.677, 0.699]; image-disjoint 0.805; small/medium/large 0.509 / 0.782 / 0.888 | `dior_rsvg_official_phase6.json` |
 | **B**: A's recipe + trainable visual merger, batch 2×8 (killed twice, resumed) | 26,991 | adapter + merger | 0.6736; image-disjoint 0.800; small/medium/large 0.491 / 0.770 / 0.878 — lower on every size bucket | `dior_rsvg_official_armB.json` |
 | **C**: A's adapter continued on DIOR-RSVG ×0.4 + VRSBench grounding (33,440, CC-BY-4.0), native resolution | 44,236 | adapter | DIOR-RSVG 0.6880 vs arm A 0.6896 (McNemar n.s.); **VRSBench val 0.6325 vs 0.5011** (clean subset 0.586 vs 0.446; DOTA-only 0.550 vs 0.395) | `dior_rsvg_official_armC.json`, `vrsbench_val_grounding{,_subsets}.json` |
-| **D**: arm A continued on the hard-negative subset (13,519 multi-instance train expressions ×1.0) + train ×0.2 + VRSBench ×0.3, lr 3e-5 | 29k | adapter | running (val 0.705 at step 800 — above arm A's 0.695) | `dior_rsvg_official_armD.json` (pending) |
+| **D**: arm A continued on the hard-negative subset (13,519 multi-instance train expressions ×1.0) + train ×0.2 + VRSBench ×0.3, lr 3e-5 | 29k | adapter | **0.6992** vs arm A 0.6896 in the same run — McNemar 216/288, χ² 10.0, **significant**; small objects 0.526 vs 0.510; wrong_object 365 vs 387, wrong_box 1,043 vs 1,099; val 0.72 | `dior_rsvg_official_armD.json` |
+| **D′**: the same recipe from arm C (deployed) | 29k | adapter | running (started 05:27) | `dior_rsvg_official_armD2.json` (pending) |
 | Unified multitask (grounding + VQA + caption + change caption, balanced) | 100k rows | one adapter | **0.6379** on DIOR-RSVG — −5.2 pts vs the specialist, McNemar 661/273 significant: negative transfer on grounding | `dior_rsvg_official_unified.json` |
 | 4-bit deployed path (arm A) | — | — | 0.678 (−1.0 pt vs bf16) | `dior_rsvg_official_lora_r16_4bit.json` |
 
@@ -56,9 +57,10 @@ changed nothing on DIOR-RSVG (±0.2 pt, n.s.) but lifted VRSBench val by
 +13 pts (+14 on the clean subset, +16 on DOTA imagery the DIOR-RSVG
 adapter never saw) — the same DIOR-RSVG score with far better
 generalisation to other phrases and imagery. **Arm C is selected for
-deployment** (tie on the official benchmark, dominant off it). Arm D (hard
-negatives) is the failure-directed retrain; a second epoch and the 7B base
-remain.
+deployment** (tie on the official benchmark, dominant off it). Arm D confirmed the failure-directed loop: oversampling the multi-instance
+expressions (the `wrong_object` teacher) gave +1.0 pt on the official test
+with the misses moving exactly where the taxonomy pointed. Arm D′ applies
+it to the deployed arm C. A second epoch and the 7B base remain.
 
 ## Unified multitask adapter vs specialists (official tests, 2026-09-16)
 
