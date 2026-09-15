@@ -43,18 +43,20 @@ SAR is absent, which the tool's payload now makes possible.
 | Qwen2.5-VL-3B zero-shot | none | base | **0.3823** [0.371, 0.394] | `artifacts/benchmark_reports/dior_rsvg_official_zero_shot.json` |
 | **A**: + LoRA r16 (LLM only), official train, 1 epoch, batch 8×2 | 26,991 | adapter | **0.6877** [0.677, 0.699]; image-disjoint 0.805; small/medium/large 0.509 / 0.782 / 0.888 | `dior_rsvg_official_phase6.json` |
 | **B**: A's recipe + trainable visual merger, batch 2×8 (killed twice, resumed) | 26,991 | adapter + merger | 0.6736; image-disjoint 0.800; small/medium/large 0.491 / 0.770 / 0.878 — lower on every size bucket | `dior_rsvg_official_armB.json` |
-| **C**: A's adapter continued on DIOR-RSVG ×0.4 + VRSBench grounding (33,440, CC-BY-4.0), native resolution | 44,236 | adapter | 0.6880 vs arm A re-scored in the same run 0.6896 — McNemar 324 / 312, χ² 0.19, **no difference**; image-disjoint 0.808 vs 0.813; small 0.508 vs 0.510 | `dior_rsvg_official_armC.json` (VRSBench val pending) |
-| **D**: arm A continued on the hard-negative subset (13,519 multi-instance train expressions ×1.0) + train ×0.2 + VRSBench ×0.3, lr 3e-5 | 29k | adapter | running (started 20:02) | `dior_rsvg_official_armD.json` (pending) |
+| **C**: A's adapter continued on DIOR-RSVG ×0.4 + VRSBench grounding (33,440, CC-BY-4.0), native resolution | 44,236 | adapter | DIOR-RSVG 0.6880 vs arm A 0.6896 (McNemar n.s.); **VRSBench val 0.6325 vs 0.5011** (clean subset 0.586 vs 0.446; DOTA-only 0.550 vs 0.395) | `dior_rsvg_official_armC.json`, `vrsbench_val_grounding{,_subsets}.json` |
+| **D**: arm A continued on the hard-negative subset (13,519 multi-instance train expressions ×1.0) + train ×0.2 + VRSBench ×0.3, lr 3e-5 | 29k | adapter | running (val 0.705 at step 800 — above arm A's 0.695) | `dior_rsvg_official_armD.json` (pending) |
+| Unified multitask (grounding + VQA + caption + change caption, balanced) | 100k rows | one adapter | **0.6379** on DIOR-RSVG — −5.2 pts vs the specialist, McNemar 661/273 significant: negative transfer on grounding | `dior_rsvg_official_unified.json` |
 | 4-bit deployed path (arm A) | — | — | 0.678 (−1.0 pt vs bf16) | `dior_rsvg_official_lora_r16_4bit.json` |
 
 Reading of arm B: training the merger did not help at one epoch — the
 small-object bucket, the one it was meant to move, fell 1.8 pts; the run
 also used batch 2×8 instead of 8×2 (same effective batch) after the admin
-kills, so the two arms are not a perfectly controlled pair. Arm A stays
-selected. Reading of arm C: 33k extra CC-BY-4.0 referring expressions at
-512 px changed nothing on DIOR-RSVG (±0.2 pt, n.s.); the benchmark is
-resolution- and phrase-bound, not data-bound at this scale — VRSBench's
-own val split will show whether arm C generalises better. Arm D (hard
+kills, so the two arms are not a perfectly controlled pair. Reading of arm C: 33k extra CC-BY-4.0 referring expressions at 512 px
+changed nothing on DIOR-RSVG (±0.2 pt, n.s.) but lifted VRSBench val by
++13 pts (+14 on the clean subset, +16 on DOTA imagery the DIOR-RSVG
+adapter never saw) — the same DIOR-RSVG score with far better
+generalisation to other phrases and imagery. **Arm C is selected for
+deployment** (tie on the official benchmark, dominant off it). Arm D (hard
 negatives) is the failure-directed retrain; a second epoch and the 7B base
 remain.
 
