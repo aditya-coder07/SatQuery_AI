@@ -148,7 +148,7 @@ def main() -> int:
                 continue
             r = base_row("train", name, "<GROUNDING>", f"vrs_train_{js.stem}_ref{o.get('obj_id')}")
             r.update({"question": sent.rstrip("."), "target": {"bbox_xyxy": [round(v, 2) for v in box], "label": o.get("obj_cls"),
-                                                             "category": o.get("obj_cls")}})
+                                                             "category": o.get("obj_cls"), "width": w, "height": h}})
             r["metadata"].update({"obj_cls": o.get("obj_cls"), "is_unique": o.get("is_unique"), "obj_size": o.get("obj_size")})
             rows.append(r)
         for q in d.get("qa_pairs", []):
@@ -180,7 +180,8 @@ def main() -> int:
                 w, h = size_of("val", name)
                 box = corner_to_hbb(e["obj_corner"], w, h)
                 r.update({"question": e["question"].strip().rstrip("."),
-                          "target": {"bbox_xyxy": [round(v, 2) for v in box], "label": e.get("obj_cls"), "category": e.get("obj_cls")}})
+                          "target": {"bbox_xyxy": [round(v, 2) for v in box], "label": e.get("obj_cls"), "category": e.get("obj_cls"),
+                                     "width": w, "height": h}})
                 r["metadata"].update({"obj_cls": e.get("obj_cls"), "is_unique": e.get("unique"), "size_group": e.get("size_group")})
             rows.append(r)
         evals[task] = rows

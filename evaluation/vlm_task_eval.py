@@ -96,7 +96,12 @@ def score(rows: list[dict], replies: list[str], grids) -> dict:
             iou = 0.0
             if box:
                 rh, rw = vg.resized_hw(grid)
-                w, h = r["target"]["width"], r["target"]["height"]
+                w, h = r["target"].get("width"), r["target"].get("height")
+                if w is None or h is None:  # VRSBench rows carry no size; read the image once
+                    from PIL import Image
+
+                    with Image.open(r["_images"][0]) as im:
+                        w, h = im.size
                 iou = vg.iou_xyxy(vg.scale_box(box, w / rw, h / rh), r["target"]["bbox_xyxy"])
             hits.append(iou >= 0.5)
             ious.append(iou)
