@@ -60,6 +60,30 @@ deployment** (tie on the official benchmark, dominant off it). Arm D (hard
 negatives) is the failure-directed retrain; a second epoch and the 7B base
 remain.
 
+## Unified multitask adapter vs specialists (official tests, 2026-09-16)
+
+One LoRA r16 on the shared Qwen2.5-VL-3B base over grounding + VQA +
+caption + change caption (≈100k rows/epoch, balanced weights 0.5/0.5/0.3/
+0.2/1.0/0.25/0.5/0.4 so no task exceeds ~35%; 6,243 steps; resumed twice
+after admin kills). Every task lost against its specialist; the loss is
+large only for grounding.
+
+| Task (official test) | Specialist | Unified | Δ | Test |
+|---|---|---|---|---|
+| DIOR-RSVG Acc@0.5 (n 7,500) | 0.6896 | **0.6379** | −5.2 pts | McNemar 661/273, χ² 160, significant |
+| RSVQA-LR published convention (n 7,057) | 0.9119 [0.905, 0.918] | 0.9053 [0.898, 0.912] | −0.7 pt | CIs overlap |
+| RSICD corpus BLEU-4 / CIDEr-D (n 1,093) | 0.2546 / 0.793 | 0.2349 / 0.745 | −2.0 pts | — |
+| LEVIR-CC corpus BLEU-4 all / changed (n 1,929) | 0.6045 / 0.322 | 0.5949 / 0.284 | −1.0 / −3.8 pts | — |
+
+Decision (charter §12): **specialists stay deployed** on the shared base;
+the unified adapter (`checkpoints/v3/unified_vlm/adapter_best`, backed up)
+is kept as the single-adapter fallback for a deployment that cannot
+afford four adapter switches. The grounding loss is the negative transfer
+the charter asked to measure: box-format outputs compete with free-text
+tasks for the same LoRA capacity at r16; a per-task rank or a
+grounding-only second stage would be the next arm if a unified model were
+required.
+
 ## Captioning (corpus BLEU-4, 5 references)
 
 | Task | Arm | BLEU-4 | CIDEr-D | Source |

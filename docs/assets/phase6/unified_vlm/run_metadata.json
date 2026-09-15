@@ -1,0 +1,100 @@
+{
+  "experiment_id": "vlm_sft-20260915-105203-0a378c",
+  "task": "vlm_sft",
+  "backbone": "Qwen2.5-VL + LoRA",
+  "n_train": 99892,
+  "tasks": {
+    "<CHANGE_CAPTION>": 13630,
+    "<GROUNDING>": 30216,
+    "<VQA>": 35918,
+    "<CAPTION>": 20128
+  },
+  "n_val_selection": 1200,
+  "quant": "none",
+  "manifests": {
+    "data/dior_rsvg_official/manifests/train.jsonl": "2cbc6e7e8a969f109a6c658d5402ea53c97cddc8f8feb9583a2ddb6b04663cd3",
+    "data/vrsbench/manifests/train_grounding.jsonl": "bc82fd58f398c0d476085ecff463af6e25674a5ce13c703c3f587a83b59181bb",
+    "data/rsvqa_lr_official/manifests/train.jsonl": "755cd50db76d72d01f0e5b1f7ae9d495a0eb6f80b375ae8390646938b3e7b605",
+    "data/vrsbench/manifests/train_vqa.jsonl": "844f56e833baf1ebd94906910d9f544457af50ccb2bef86c64ee2f4d184378fa",
+    "data/instruct_mix_v2/manifests/train_no_rsvqa.jsonl": "1982a7809f244802960f6ce83a8dfe2a3592747a03ac7f08448d5b9d4d8b94cf",
+    "data/rsicd/manifests/train.jsonl": "67c61c33f29a70c278e1c4766ace4da405f608232222291ac5e75252b73871ed",
+    "data/vrsbench/manifests/train_caption.jsonl": "b81647cc6c25b13a6aa8d81bdb4b6e8f693b2ba6961ea47906449c758e087f5e",
+    "data/levir_mci/manifests/train.jsonl": "2333113e2243d729fe63c7ae1b101cfc70ebc5c4e0a636626d0cc771f1781a76",
+    "data/dior_rsvg_official/manifests/val.jsonl": "d53652fa12959fdfd66a2ce9a3ddabe89c30452659799839864e2a1fddead00e",
+    "data/rsvqa_lr_official/manifests/val.jsonl": "fa1a51d24c8d169f6743a0f68de5f4df8d2e68e7a76f1c89aea7be87bd8ee609",
+    "data/rsicd/manifests/val.jsonl": "14dda0719a32621eb5fd967b97c6920d343c4eb02703581e3b8434dc642b6136",
+    "data/levir_mci/manifests/val.jsonl": "b2c4c482b5c2fbe962032d7ee7991d1aebba91e4dc46a630f28dc89f8669d677"
+  },
+  "hardware": {
+    "host": "compute01.node",
+    "python": "3.12.14",
+    "platform": "Linux-5.14.0-611.49.1.el9_7.x86_64-x86_64-with-glibc2.34",
+    "torch": "2.6.0+cu124",
+    "gpu": "NVIDIA L40S",
+    "gpu_total_gb": 44.4,
+    "gpu_free_at_start_gb": 20.7
+  },
+  "args": {
+    "model": "models/qwen25_vl_3b",
+    "train": [
+      "data/dior_rsvg_official/manifests/train.jsonl",
+      "data/vrsbench/manifests/train_grounding.jsonl",
+      "data/rsvqa_lr_official/manifests/train.jsonl",
+      "data/vrsbench/manifests/train_vqa.jsonl",
+      "data/instruct_mix_v2/manifests/train_no_rsvqa.jsonl",
+      "data/rsicd/manifests/train.jsonl",
+      "data/vrsbench/manifests/train_caption.jsonl",
+      "data/levir_mci/manifests/train.jsonl"
+    ],
+    "train_weight": [
+      "0.5",
+      "0.5",
+      "0.3",
+      "0.2",
+      "1.0",
+      "0.25",
+      "0.5",
+      "0.4"
+    ],
+    "val": [
+      "data/dior_rsvg_official/manifests/val.jsonl",
+      "data/rsvqa_lr_official/manifests/val.jsonl",
+      "data/rsicd/manifests/val.jsonl",
+      "data/levir_mci/manifests/val.jsonl"
+    ],
+    "val_limit": 300,
+    "ckpt_dir": "checkpoints/v3/unified_vlm",
+    "init_adapter": null,
+    "epochs": 1.0,
+    "batch_size": 2,
+    "grad_accum": 8,
+    "lr": 0.0001,
+    "weight_decay": 0.0,
+    "warmup_steps": 50,
+    "quant": "none",
+    "no_checkpointing": false,
+    "lora_r": 16,
+    "lora_alpha": 32,
+    "lora_dropout": 0.05,
+    "lora_targets": [
+      "q_proj",
+      "k_proj",
+      "v_proj",
+      "o_proj",
+      "gate_proj",
+      "up_proj",
+      "down_proj"
+    ],
+    "train_merger": false,
+    "max_pixels": 409600,
+    "limit_train": null,
+    "val_every": 1000,
+    "eval_batch": 8,
+    "save_every": 500,
+    "workers": 6,
+    "seed": 42,
+    "resume": true,
+    "notes": "unified multitask LoRA r16: grounding/VQA/caption/change-caption, balanced weights, 640px cap"
+  },
+  "total_steps": 6243
+}
