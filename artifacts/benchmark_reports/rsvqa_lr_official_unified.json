@@ -1,0 +1,182 @@
+{
+  "benchmark": "RSVQA-LR official test split",
+  "source": "Zenodo 10.5281/zenodo.6344334, CC-BY-4.0",
+  "n_questions": 10004,
+  "n_images": 100,
+  "type_counts": {
+    "rural_urban": 100,
+    "presence": 2955,
+    "count": 2947,
+    "comp": 4002
+  },
+  "constant_baseline": {
+    "answers": {
+      "comp": "no",
+      "count": "0",
+      "presence": "yes",
+      "rural_urban": "rural"
+    },
+    "all_types_accuracy": 0.5694722111155538,
+    "published_convention_accuracy": 0.7005809834207171
+  },
+  "arms": {
+    "v3_official": {
+      "all_types": {
+        "n": 10004,
+        "accuracy": 0.7229108356657337,
+        "ci95": [
+          0.7141,
+          0.7316
+        ]
+      },
+      "published_convention": {
+        "types": [
+          "presence",
+          "comp",
+          "rural_urban"
+        ],
+        "n": 7057,
+        "micro_accuracy": 0.9118605639790279,
+        "ci95": [
+          0.905,
+          0.9183
+        ],
+        "macro_average_accuracy": 0.9015781111136478
+      },
+      "by_type": {
+        "comp": {
+          "n": 4002,
+          "correct": 3650,
+          "accuracy": 0.9120439780109945,
+          "ci95": [
+            0.9029,
+            0.9204
+          ],
+          "constant_accuracy": 0.6674162918540729
+        },
+        "count": {
+          "n": 2947,
+          "correct": 797,
+          "accuracy": 0.2704445198506956,
+          "ci95": [
+            0.2547,
+            0.2868
+          ],
+          "constant_accuracy": 0.25551408211740756
+        },
+        "presence": {
+          "n": 2955,
+          "correct": 2697,
+          "accuracy": 0.9126903553299492,
+          "ci95": [
+            0.902,
+            0.9223
+          ],
+          "constant_accuracy": 0.750253807106599
+        },
+        "rural_urban": {
+          "n": 100,
+          "correct": 88,
+          "accuracy": 0.88,
+          "ci95": [
+            0.8019,
+            0.93
+          ],
+          "constant_accuracy": 0.56
+        }
+      },
+      "vs_constant": {
+        "both_correct": 5379,
+        "model_only_correct": 1853,
+        "constant_only_correct": 318,
+        "mcnemar_chi2_cc": 1083.904,
+        "significant_at_0.05": true
+      }
+    },
+    "unified": {
+      "all_types": {
+        "n": 10004,
+        "accuracy": 0.7172131147540983,
+        "ci95": [
+          0.7083,
+          0.726
+        ]
+      },
+      "published_convention": {
+        "types": [
+          "presence",
+          "comp",
+          "rural_urban"
+        ],
+        "n": 7057,
+        "micro_accuracy": 0.9053422134051297,
+        "ci95": [
+          0.8983,
+          0.912
+        ],
+        "macro_average_accuracy": 0.8935817962423188
+      },
+      "by_type": {
+        "comp": {
+          "n": 4002,
+          "correct": 3636,
+          "accuracy": 0.9085457271364318,
+          "ci95": [
+            0.8992,
+            0.9171
+          ],
+          "constant_accuracy": 0.6674162918540729
+        },
+        "count": {
+          "n": 2947,
+          "correct": 786,
+          "accuracy": 0.2667119104173736,
+          "ci95": [
+            0.2511,
+            0.283
+          ],
+          "constant_accuracy": 0.25551408211740756
+        },
+        "presence": {
+          "n": 2955,
+          "correct": 2666,
+          "accuracy": 0.9021996615905246,
+          "ci95": [
+            0.891,
+            0.9124
+          ],
+          "constant_accuracy": 0.750253807106599
+        },
+        "rural_urban": {
+          "n": 100,
+          "correct": 87,
+          "accuracy": 0.87,
+          "ci95": [
+            0.7902,
+            0.9224
+          ],
+          "constant_accuracy": 0.56
+        }
+      },
+      "vs_constant": {
+        "both_correct": 5356,
+        "model_only_correct": 1819,
+        "constant_only_correct": 341,
+        "mcnemar_chi2_cc": 1009.967,
+        "significant_at_0.05": true
+      }
+    }
+  },
+  "timing": {
+    "v3_official": {
+      "generate_s": 2930.3,
+      "s_per_question": 0.2929,
+      "adapter": "checkpoints/v3/vqa_official/adapter_best"
+    },
+    "unified": {
+      "generate_s": 2555.4,
+      "s_per_question": 0.2554,
+      "adapter": "checkpoints/v3/unified_vlm/adapter_best"
+    }
+  }
+}
