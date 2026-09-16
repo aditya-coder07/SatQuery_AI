@@ -12,10 +12,10 @@ tools:
     status: selected
     note: "RSVQA-LR official test (4-bit deployed path) published-convention 0.9119 [0.905, 0.918] vs v2 0.8947 [0.887, 0.902]; every type improved (presence 0.913, comp 0.912, rural/urban 0.88, count 0.270 vs 0.220); Phase 5 adapter kept at checkpoints/v2/track_b_vqa"
   grounding:
-    env: {SATQUERY_GROUNDING_ADAPTER: checkpoints/v3/grounding_vlm_vrs/adapter_best}
+    env: {SATQUERY_GROUNDING_ADAPTER: checkpoints/v3/grounding_vlm_hard_vrs/adapter_best}
     fallback_env: {SATQUERY_GROUNDING: checkpoints/v2/grounding_pre}
     status: selected
-    note: "arm C (2026-09-16) — DIOR-RSVG official 0.6880 (= arm A 0.6896, McNemar n.s.), VRSBench val 0.6325 vs arm A 0.501; arm A 4-bit parity −1.0 pt; arm D (hard negatives) may replace"
+    note: "arm D-prime (2026-09-16 13:10): arm C + hard-negative retrain — DIOR-RSVG official 0.7020 (arm C 0.6880, McNemar chi2 21.4 significant), VRSBench val 0.6396 (arm C 0.6325; clean subset 0.5946); arm A 4-bit parity −1.0 pt"
   change_mask:
     env: {SATQUERY_CHANGE_MASK: checkpoints/v3/change_mask/best.pt}
     status: selected

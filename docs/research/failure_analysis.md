@@ -69,7 +69,9 @@ significant (216 lost / 288 gained); `wrong_object` 387 → 365, `wrong_box`
 1,099 → 1,043, small objects 0.510 → 0.526. The taxonomy predicted the
 lever correctly.
 
-**What this directed (arm C done; arm D done; arm D′ from arm C running):** keep native resolution (a 640-px
+**Arm D′ (from arm C):** 0.7020 on DIOR-RSVG (McNemar χ² 21.4) and 0.6396 on VRSBench — the deployed adapter; `wrong_object` 407 → 377, `wrong_box` 1,063 → 1,027, small objects 0.508 → 0.529.
+
+**What this directed:** keep native resolution (a 640-px
 cap was removed from arm C for this reason), add VRSBench's 33k
 discriminative expressions (arm C), try the trainable visual merger (arm
 B) for the small-object end, and build the hard-negative set from the
