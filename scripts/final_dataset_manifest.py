@@ -142,7 +142,7 @@ def build(data: Path) -> list[dict]:
                                            "val_vqa", "val_grounding", "quarantine_train"))
         add("vrsbench", dataset="VRSBench", version="xiang709/VRSBench (per-image annotations; official EVAL files)",
             license="CC-BY-4.0", usable_for="train+eval", task="caption / VQA / grounding", provenance=st["source"],
-            preprocessing_version="training/prepare/vrsbench.py (unified manifest v1, precise boxes from obj_corner)",
+            preprocessing_version="training/prepare/vrsbench_manifests.py (unified manifest v1, precise boxes from obj_corner)",
             splits={k: v for k, v in splits.items() if not k.startswith("quarantine")}, valid=st["train"]["n"],
             quarantined=[{"n": st["quarantine_train"]["n"], "reason": st["quarantine_train"]["reason"]}],
             leakage=(f"{st['leakage']['dior_rsvg_val_test_source_images_blocked']} DIOR-RSVG val/test source images blocked from train; "
