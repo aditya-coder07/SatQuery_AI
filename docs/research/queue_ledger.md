@@ -109,6 +109,12 @@ qvit_pipeline.py` has been on the GPU since 10:13). Relaunched 10:47 as
 `sq-unit-{armC,armB,unified}-resume3` from the last saves (arm C 1,600, arm
 B 800, unified 1,500). Cumulative loss to external kills: ≈ 4 GPU-hours.
 
+## Post-programme arm (2026-09-16 13:50)
+
+| # | Unit | Command | Data | Config | Expected | Checkpoint | Log |
+|---|---|---|---|---|---|---|---|
+| 23 | `sq-unit-armE` | `scripts/cluster_unit_armE.sh`: `train_vlm_sft.py --init-adapter grounding_vlm_hard_vrs/adapter_best --min-pixels 1048576 --train train.jsonl train_hard.jsonl vrsbench/train_grounding.jsonl --train-weight 0.6 0.5 0.2 --lr 3e-5 --batch-size 2 --grad-accum 8`; then `grounding_official_eval.py --min-pixels 1048576` (single arm; paired vs D′ offline) | DIOR-RSVG train ×0.6 + hard ×0.5 + VRSBench ×0.2 ≈ 29.6k rows | resolution arm: 800-px DIOR upscaled to 1024 (≈1.7× visual tokens) | ≈ 1,850 steps × ~15 s ≈ 8 h + 1 h eval | `checkpoints/v3/grounding_vlm_hires/adapter_best` | `logs/queue_armE.log`, `logs/train_ground_hires.log` |
+
 ## Deployment verification (2026-09-16 06:55)
 
 `scripts/verify_deploy.py --map configs/deploy.v3.yaml` on compute01: **8/8 tools load** through their real loaders (rs_vqa, grounding, caption and change_caption as adapters on the shared base; ChangeMaskV3, FusionTriadV3, LandcoverV3; change_vqa held on v2). Every selected v3 checkpoint has a tier-1 backup entry in `artifacts/best_models/checksums.tsv`. The YAML had three unquoted notes with colons (would have failed to parse) — quoted.

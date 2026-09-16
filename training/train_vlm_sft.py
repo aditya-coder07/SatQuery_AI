@@ -238,9 +238,8 @@ def build_model(args, torch, peft):
         from transformers import AutoModelForVision2Seq as AutoVLM
 
     processor = AutoProcessor.from_pretrained(str(args.model), local_files_only=True)
-    if args.max_pixels:
-        processor.image_processor.size["longest_edge"] = args.max_pixels
-        processor.image_processor.max_pixels = args.max_pixels
+    if args.max_pixels or args.min_pixels:
+        vg.set_pixel_budget(processor, args.min_pixels, args.max_pixels)
     quant = choose_quant(args.quant, torch)
     kwargs = dict(device_map={"": 0}, local_files_only=True, trust_remote_code=False)
     if quant == "4bit":
@@ -310,6 +309,8 @@ def main() -> int:
     p.add_argument("--lora-targets", nargs="*", default=DEFAULT_LORA_TARGETS)
     p.add_argument("--train-merger", action="store_true")
     p.add_argument("--max-pixels", type=int, default=None)
+    p.add_argument("--min-pixels", type=int, default=None,
+                   help="upscale images below this many pixels (e.g. 1048576 = 1024x1024 for 800-px DIOR)")
     p.add_argument("--limit-train", type=int, default=None, help="per train manifest")
     p.add_argument("--val-every", type=int, default=500)
     p.add_argument("--eval-batch", type=int, default=32)

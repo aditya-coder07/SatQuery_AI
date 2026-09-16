@@ -34,6 +34,8 @@ from evaluation.metrics.caption_corpus import score_corpus  # noqa: E402
 from evaluation.metrics.vqa import normalise_answer  # noqa: E402
 from training.common import registry  # noqa: E402
 from training.common import vlm_grounding as vg  # noqa: E402
+
+PIXEL_BUDGET = [None, None]  # (min_pixels, max_pixels) applied to every loaded processor
 from training.train_vlm_sft import PUBLISHED_TYPES, generate_batch, load_manifest  # noqa: E402
 
 
@@ -53,6 +55,8 @@ def load_arm(base: Path, adapter: str, quant: str, torch):
         from transformers import AutoModelForVision2Seq as AutoVLM
 
     processor = AutoProcessor.from_pretrained(str(base), local_files_only=True)
+    if PIXEL_BUDGET[0] or PIXEL_BUDGET[1]:
+        vg.set_pixel_budget(processor, PIXEL_BUDGET[0], PIXEL_BUDGET[1])
     kwargs = dict(device_map={"": 0}, local_files_only=True, trust_remote_code=False)
     if quant == "4bit":
         # The deployed tools load the base in NF4; scoring in the same
@@ -131,9 +135,12 @@ def main() -> int:
     p.add_argument("--out", type=Path, required=True)
     p.add_argument("--quant", choices=["none", "4bit"], default="none")
     p.add_argument("--batch", type=int, default=16)
+    p.add_argument("--min-pixels", type=int, default=None, help="processor min_pixels (upscale), as trained")
+    p.add_argument("--max-pixels", type=int, default=None, help="processor max_pixels, as trained")
     p.add_argument("--max-new-tokens", type=int, default=48)
     p.add_argument("--limit", type=int, default=None, help="debug only; not a benchmark")
     args = p.parse_args()
+    PIXEL_BUDGET[0], PIXEL_BUDGET[1] = args.min_pixels, args.max_pixels
 
     import torch
     from PIL import Image

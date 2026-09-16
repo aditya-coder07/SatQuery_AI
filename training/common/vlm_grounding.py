@@ -116,6 +116,23 @@ def assistant_start(input_ids, marker_ids: list[int]) -> int:
     raise ValueError("assistant marker not found in input_ids")
 
 
+def set_pixel_budget(processor, min_pixels: int | None = None, max_pixels: int | None = None) -> None:
+    """Override the processor's resize budget. `min_pixels` above an image's
+    native size UPSCALES it (more visual tokens per object - the lever for
+    small objects); `max_pixels` caps it. Both keys are written in the two
+    places transformers versions read them from."""
+    ip = processor.image_processor
+    size = getattr(ip, "size", None)
+    if size is None:
+        size = ip.size = {}
+    if max_pixels:
+        size["longest_edge"] = max_pixels
+        ip.max_pixels = max_pixels
+    if min_pixels:
+        size["shortest_edge"] = min_pixels
+        ip.min_pixels = min_pixels
+
+
 def smart_resized_hw(processor, width: int, height: int) -> tuple[int, int]:
     """What the processor will resize (width, height) to, without running it."""
     from transformers.models.qwen2_vl.image_processing_qwen2_vl import smart_resize

@@ -41,7 +41,9 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from training.common import registry  # noqa: E402
-from training.common.vlm_grounding import iou_xyxy, predict_batch, size_bucket  # noqa: E402
+from training.common.vlm_grounding import iou_xyxy, predict_batch, set_pixel_budget, size_bucket  # noqa: E402
+
+PIXEL_BUDGET = [None, None]  # (min_pixels, max_pixels) applied to every loaded processor
 
 
 def bootstrap_ci(values: list[float], n_boot: int = 2000, seed: int = 0) -> list[float]:
@@ -133,6 +135,8 @@ def load_arm(base: Path, adapter: str, torch):
         from transformers import AutoModelForVision2Seq as AutoVLM
 
     processor = AutoProcessor.from_pretrained(str(base), local_files_only=True)
+    if PIXEL_BUDGET[0] or PIXEL_BUDGET[1]:
+        set_pixel_budget(processor, PIXEL_BUDGET[0], PIXEL_BUDGET[1])
     model = AutoVLM.from_pretrained(str(base), dtype=torch.bfloat16, device_map={"": 0},
                                     local_files_only=True, trust_remote_code=False)
     if adapter != "BASE":
@@ -152,7 +156,10 @@ def main() -> int:
     p.add_argument("--out", type=Path, required=True)
     p.add_argument("--limit", type=int, default=None, help="debug only; a limited run is NOT a benchmark")
     p.add_argument("--batch", type=int, default=16)
+    p.add_argument("--min-pixels", type=int, default=None, help="processor min_pixels (upscale), as trained")
+    p.add_argument("--max-pixels", type=int, default=None, help="processor max_pixels, as trained")
     args = p.parse_args()
+    PIXEL_BUDGET[0], PIXEL_BUDGET[1] = args.min_pixels, args.max_pixels
 
     import torch
 
