@@ -106,3 +106,34 @@ UniRS (arXiv 2412.20742), RingMo-Agent (2507.20776), RS-HyRe-R1
 (2501.06808), GEOBench-VLM (ICCV 2025), UHR RS MLLM benchmark (2512.17319),
 SSL4EO-S12 (2211.07044), Landsat-SCD (IJDE 2022; figshare 19946135),
 DIOR-RSVG (Zhan et al. 2023), WHU-OPT-SAR (Li et al. 2022).
+
+## 8. Completion checklist (charter §32) — 2026-09-16 08:00 IST
+
+Evidence paths are relative to the repository; weights live on
+`compute01:~/satquery/checkpoints/v3` with tier-1 copies under
+`/scratch/home/adi01/satquery_backup` (digests in
+`artifacts/best_models/checksums.tsv`).
+
+| Item | Status | Evidence |
+|---|---|---|
+| Audit before compute; findings documented, nothing deleted | done | `docs/research/dataset_audit.md` (G1, G2, F1, F2, L1 revised, S1, V1) |
+| Final dataset manifest (licence, counts, quarantine, hashes, leakage) | done | `artifacts/dataset_manifests/FINAL_DATASET_MANIFEST.json`, `docs/research/final_dataset_manifest.md` |
+| Licensing register; SECOND replaced by a licensed benchmark | done | `docs/research/licensing.md`; Landsat-SCD (CC BY 4.0) rows |
+| Every benchmark on its official split with n, metric definition, class | done | `docs/research/benchmark_audit.md`, `sota_matrix.md` |
+| Grounding: complete valid train, official test, > 0.65 | done — 0.6992 best / 0.6880 deployed (+VRSBench 0.6325) | `artifacts/benchmark_reports/dior_rsvg_official_{phase6,armB,armC,armD}.json`, `vrsbench_val_grounding*.json` |
+| VQA: complete official train, no regression vs 0.8947 | done — 0.9119 | `rsvqa_lr_official_phase6.json` |
+| Caption: complete RSICD train, corpus metrics | done — BLEU-4 0.2546 / CIDEr-D 0.793 (specialist 0.1744) | `rsicd_test_vlm.json` |
+| Change caption: complete LEVIR-CC train, images only, regression investigated | done — BLEU-4 0.6045 (v1 oracle-mask 0.384); no v2 regression | `levircc_test_vlm.json`, `rescoring/levircc_change_caption_v{1,2}.json` |
+| Change detection independently verified, frozen champion | done — 0.9038 / 0.8244 reproduced; scratch ablation | `levircd_test_independent_v3.json`, `docs/assets/phase6/change_mask_scratch` |
+| Land cover: p8 traced, valid holdout, full official split, strong encoder | done — micro 0.885 / macro 0.792 on 125,866 | `docs/assets/phase6/landcover_full/metrics.json`, audit L1 (revised) |
+| WHU-OPT-SAR corrected alignment, all arms, complementarity | done — fused +0.021, CI excludes 0 | `docs/assets/phase6/optsar_fusion` |
+| Unified multitask adapter after specialist baselines; negative transfer measured | done — specialists kept | `docs/research/ablations.md` §Unified |
+| Hard-negative / failure-directed retraining | done — arm D +1.0 pt significant; arm D′ running | `dior_rsvg_official_armD.json` |
+| Robustness suites | done for change mask, land cover, grounding; fusion via modality-drop arms | `levircd_robustness_v3.json`, `ben_robustness_landcover_v3.json`, `dior_rsvg_robustness_lora_r16.json` |
+| Calibration on val, thresholds re-derived | done — change_mask ECE 0.0011, landcover 0.0030; threshold 0.69 | `configs/calibration.v3.json`, `configs/thresholds.v3.yaml` |
+| Deployed-path parity (4-bit) | done for VQA (all runs 4-bit) and grounding (−1.0 pt) | `dior_rsvg_official_lora_r16_4bit.json` |
+| Every serious run: config, commit, manifest hash, env, seed, hardware, checkpoint, val, eval command, logs, checksum | done | `artifacts/experiment_registry/registry.jsonl`, `docs/research/training_summary.md`, `queue_ledger.md` |
+| Never overwrite the only checkpoint; verified loadability + backup | done — `verify_deploy` 8/8; tier-1 backups for every selected v3 checkpoint | `scripts/verify_deploy.py`, `artifacts/best_models/checksums.tsv` |
+| Regression tests | done — 1,491 passed, 60 skipped (one test needs checkpoints in the tree) | `tests/` |
+| STATUS blocks at milestones | done | conversation log; `queue_ledger.md` |
+| Not done | HPO beyond defaults; 7B base; seed variance; commercial-licence release of NC-trained adapters | listed under §6 |
