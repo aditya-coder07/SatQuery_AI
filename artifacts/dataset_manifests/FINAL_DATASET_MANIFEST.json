@@ -1,5 +1,5 @@
 {
- "generated": "2026-09-14T10:46:32",
+ "generated": "2026-09-16T06:47:27",
  "datasets": [
   {
    "key": "dior_rsvg_official",
@@ -27,9 +27,9 @@
     "manifests/train.jsonl": "2cbc6e7e8a969f109a6c658d5402ea53c97cddc8f8feb9583a2ddb6b04663cd3",
     "manifests/val.jsonl": "d53652fa12959fdfd66a2ce9a3ddabe89c30452659799839864e2a1fddead00e",
     "manifests/test.jsonl": "ed017203714631dfedd6c9712ae130604eeda5db7b4c7265ca19dc37b441c80e",
-    "manifests/stats.json": "79ab75564d3a77d2537d3f606cec529fa30f2b346ef1e524eb7b06d17abdeaaa"
+    "manifests/stats.json": "9fc898ddab671a25af7fd3d257ece6c056e511b039bbe32b67b97093424a2b49"
    },
-   "manifest_hash": "d4283fc73daa74fd9fcab9a33947f426c0748bfb183c1b7f21bc0e4479676b32"
+   "manifest_hash": "b0446929d0d960ad087fa2c62f1944ac125b4691db1229afaabb0708792625cc"
   },
   {
    "key": "dior_rsvg",

@@ -1,6 +1,6 @@
 # SatQuery AI — Phase 6 SOTA programme: final report
 
-**Status: IN PROGRESS — 2026-09-12 22:00 (full-valid-data phase started).** Rows marked *pending* have a
+**Status: CONSOLIDATING — 2026-09-16 07:00 IST.** All specialist arms and the unified study are measured; one run (grounding arm D′) is still training. Rows marked *pending* have a
 run queued or running on `compute01`; every other number is measured and
 its artefact is named. This document is regenerated as results land; the
 per-benchmark ledger is `docs/research/sota_matrix.md`, the run ledger is
@@ -18,6 +18,8 @@ per-benchmark ledger is `docs/research/sota_matrix.md`, the run ledger is
 | LEVIR-CC test | corpus BLEU-4 (5 refs) | 0.384 / changed 0.222 (v1, oracle mask; v2 0.388 / 0.231 — no regression) | **0.6045 / changed 0.322** (VLM, images only) | 65.5 SAGE-CC / 65.3 KCFI | +0.22 (and the oracle mask is gone) | +57% | **A** (images only, official split, 5-ref corpus BLEU-4) | 1,929 pairs; CIDEr-D 1.29 |
 | BigEarthNet-19 (S2 v1.0) official test | micro mAP / macro mAP / 4-band retention | 0.315 macro on a geographic subset shard (Category B under shift; L1 revised) | **0.885 micro / 0.792 macro / retention 0.94** (SSL4EO-S12 trunk, complete official split, val-selected) | 88.5 SeaMo (micro), ~88.2 SpectralGPT | +0.48 macro vs Phase 5 (not comparable: different test) | — | **A** (official split, micro mAP) | 125,866 test patches; calibration ECE 0.0085 → 0.0030 on val; assertion threshold 0.69 at precision 0.90 / recall 0.61 |
 | Landsat-SCD test (CC BY 4.0) | change-type mIoU / SeK / Score | none (SECOND unlicensed) | **0.623 / 0.509 / 0.553** (80 ep; binary change F1 0.870) | no comparable published number on this split (GSTM-SCD-class methods report SeK ~20–30 on SECOND with a different decomposition) | — | — | B | 477 test pairs; val-selected |
+| VRSBench val, grounding (16,159 refs) | Acc@0.5 | — | **0.6325** [0.625, 0.640] arm C; clean subset (no DIOR-RSVG-train source images, 11,316) 0.586; arm A 0.501 | LLaVA-1.5-ft 51.2 / EarthDial 55.6 | +7 (clean) / +11 | — | A (official val) | bootstrap CI |
+| Unified multitask adapter (all four VLM tasks) | vs specialist | — | −5.2 / −0.7 / −2.0 / −1.0 pts on DIOR-RSVG / RSVQA-LR / RSICD / LEVIR-CC | — | — | — | A | McNemar on grounding significant; specialists kept |
 | CDVQA test1 | overall acc | 0.6061 | unchanged | — | — | — | A | — |
 
 ## 2. What changed and why (chronological, evidence-first)
@@ -83,9 +85,15 @@ per run are in the registry; Phase 6 day 1: ≈ 12 GPU-h measured so far.
   compressed, sha256-verified) was pulled the same evening and every
   land-cover number from here on is on it.
 * Everything is one seed (42). Seed variance has not been measured; CIs
-  are over test items, not over training runs.
-* The unified (shared-adapter) study, HPO beyond defaults, hard-negative
-  loops and the 7B base are not yet run; see `ablations.md` for the queue.
+  are over test items, not over training runs. Arm A vs its re-score in
+  a later run differ by 0.2 pt (0.6877 vs 0.6896) from bf16 batch
+  non-determinism — the floor below which arm differences are noise.
+* Three admin SIGKILLs and one node reboot (2026-09-14/15) interrupted
+  the grounding arms and the unified run; every one resumed from its last
+  saved state, so the reported numbers are from complete schedules, but
+  arm B ran at batch 2×8 rather than 8×2 (same effective batch).
+* HPO beyond defaults and the 7B base are not run; the unified study and
+  the hard-negative loop are (see `ablations.md`).
 
 ## 7. References
 

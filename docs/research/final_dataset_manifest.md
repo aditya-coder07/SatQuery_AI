@@ -1,10 +1,10 @@
 # Final dataset manifest
 
-Generated 2026-09-14 10:46 by `scripts/final_dataset_manifest.py` on the data host. Machine-readable copy: `artifacts/dataset_manifests/FINAL_DATASET_MANIFEST.json`. Nothing in the *train* column may be used unless `usable_for` includes train.
+Generated 2026-09-16 06:47 by `scripts/final_dataset_manifest.py` on the data host. Machine-readable copy: `artifacts/dataset_manifests/FINAL_DATASET_MANIFEST.json`. Nothing in the *train* column may be used unless `usable_for` includes train.
 
 | key | dataset / version | licence | usable for | train | val | test | valid | quarantined | leakage | manifest hash |
 |---|---|---|---|---|---|---|---|---|---|---|
-| `dior_rsvg_official` | DIOR-RSVG — authors' Google Drive release, official train/val/test.txt | CC-BY-NC-4.0 | train+eval (non-commercial) | 26991 | 3829 | 7500 | 38320 | — | index files pairwise disjoint (enforced); 4,206 test images also in train BY THE OFFICIAL PROTOCOL (object-level split) - reported, not altered; 22 source-level | d4283fc73daa |
+| `dior_rsvg_official` | DIOR-RSVG — authors' Google Drive release, official train/val/test.txt | CC-BY-NC-4.0 | train+eval (non-commercial) | 26991 | 3829 | 7500 | 38320 | — | index files pairwise disjoint (enforced); 4,206 test images also in train BY THE OFFICIAL PROTOCOL (object-level split) - reported, not altered; 22 source-level | b0446929d0d9 |
 | `dior_rsvg` | DIOR-RSVG (HF parquet mirror) — test shards only | CC-BY-NC-4.0 | none (retired: holds only the official test split; finding G1) | — | — | 7500 | 0 | 7500 official test rows - must never be trained on | was the Phase 5 training source (Category C numbers) | 44136fa355b3 |
 | `rsvqa_lr_official` | RSVQA-LR — Zenodo 6344334 official lists | CC-BY-4.0 | train+eval | 57223 | 10005 | 10004 | 77232 | — | train/val/test images disjoint (0/0/0); selection on val only | 0a58c0fd2e0a |
 | `rsvqa_lr_2k` | RSVQA-LR (HF 2k redistribution of the VALIDATION split) — dmarsili/RSVQA-LR-2k | CC-BY-4.0 | none (retired: official train replaces it; it is official-val material) | — | — | — | 0 | validation-split material; no longer trained on | disjoint from official test | 44136fa355b3 |

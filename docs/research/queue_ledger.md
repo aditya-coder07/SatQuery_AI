@@ -109,6 +109,10 @@ qvit_pipeline.py` has been on the GPU since 10:13). Relaunched 10:47 as
 `sq-unit-{armC,armB,unified}-resume3` from the last saves (arm C 1,600, arm
 B 800, unified 1,500). Cumulative loss to external kills: ≈ 4 GPU-hours.
 
+## Deployment verification (2026-09-16 06:55)
+
+`scripts/verify_deploy.py --map configs/deploy.v3.yaml` on compute01: **8/8 tools load** through their real loaders (rs_vqa, grounding, caption and change_caption as adapters on the shared base; ChangeMaskV3, FusionTriadV3, LandcoverV3; change_vqa held on v2). Every selected v3 checkpoint has a tier-1 backup entry in `artifacts/best_models/checksums.tsv`. The YAML had three unquoted notes with colons (would have failed to parse) — quoted.
+
 ## Finished 2026-09-15 (verified)
 
 | Job | Exit | Checkpoint | Metrics | Registry |
