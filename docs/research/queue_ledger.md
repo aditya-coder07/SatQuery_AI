@@ -115,7 +115,7 @@ B 800, unified 1,500). Cumulative loss to external kills: ≈ 4 GPU-hours.
 |---|---|---|---|---|---|---|---|
 | 23 (DONE: train exit 0 23:26, eval exit 0 00:20 on 2026-09-17; 0.7323 vs D′ 0.7020, McNemar χ² 47.1; backed up tier 1) | `sq-unit-armE` | `scripts/cluster_unit_armE.sh`: `train_vlm_sft.py --init-adapter grounding_vlm_hard_vrs/adapter_best --min-pixels 1048576 --train train.jsonl train_hard.jsonl vrsbench/train_grounding.jsonl --train-weight 0.6 0.5 0.2 --lr 3e-5 --batch-size 2 --grad-accum 8`; then `grounding_official_eval.py --min-pixels 1048576` (single arm; paired vs D′ offline) | DIOR-RSVG train ×0.6 + hard ×0.5 + VRSBench ×0.2 ≈ 29.6k rows | resolution arm: 800-px DIOR upscaled to 1024 (≈1.7× visual tokens) | ≈ 1,850 steps × ~15 s ≈ 8 h + 1 h eval | `checkpoints/v3/grounding_vlm_hires/adapter_best` | `logs/queue_armE.log`, `logs/train_ground_hires.log` |
 
-| 24 | `sq-unit-vrsbench-eval3` (2026-09-17 21:40) | `scripts/cluster_unit_vrsbench_eval3.sh`: `vlm_task_eval.py --manifest vrsbench/val_grounding.jsonl --arms lora_hires=grounding_vlm_hires/adapter_best --min-pixels 1048576` | VRSBench val 16,159 | arm E at its training budget; paired offline vs D′ | ≈ 2.5 h | report | `logs/queue_vrsbench_eval3.log` |
+| 24 (DONE 2026-09-18 00:20, exit 0: 0.6594 all / 0.6237 clean — arm E deployed) | `sq-unit-vrsbench-eval3` (2026-09-17 21:40) | `scripts/cluster_unit_vrsbench_eval3.sh`: `vlm_task_eval.py --manifest vrsbench/val_grounding.jsonl --arms lora_hires=grounding_vlm_hires/adapter_best --min-pixels 1048576` | VRSBench val 16,159 | arm E at its training budget; paired offline vs D′ | ≈ 2.5 h | report | `logs/queue_vrsbench_eval3.log` |
 
 ## Deployment verification (2026-09-16 06:55)
 

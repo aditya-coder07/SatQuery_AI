@@ -3,7 +3,7 @@
 #   docker compose -f docker-compose.yml -f docker-compose.v3.yml up api
 #
 # Mirrors configs/deploy.v3.yaml (verified 8/8 by scripts/verify_deploy.py
-# on 2026-09-16 13:20). Every tool that has a Phase 6 winner points at it;
+# on 2026-09-18 00:30). Every tool that has a Phase 6 winner points at it;
 # change_vqa stays on v2 (SECOND licence unresolved; the licensed
 # Landsat-SCD model is a benchmark reference, not the CDVQA tool). The
 # VLM tools share one 4-bit Qwen2.5-VL-3B base and attach task adapters
@@ -12,7 +12,7 @@
 # registries fitted on official VALIDATION splits.
 #
 # Measured on the official tests (docs/research/sota_matrix.md):
-#   rs_vqa 0.9119 | grounding Acc@0.5 0.7020, VRSBench 0.6396 (arm D') | change_mask F1 0.9038
+#   rs_vqa 0.9119 | grounding Acc@0.5 0.7323, VRSBench 0.6594 (arm E, 1024-px input) | change_mask F1 0.9038
 #   landcover micro mAP 0.885 | caption BLEU-4 0.256 | change_caption BLEU-4 0.6045
 #   optsar_fusion fused mIoU 0.468 (+0.021 over optical)
 
@@ -21,7 +21,8 @@ services:
     environment:
       - SATQUERY_VQA_BASE=/app/models/qwen25_vl_3b
       - SATQUERY_VQA_ADAPTER=/app/checkpoints/v3/vqa_official/adapter_best
-      - SATQUERY_GROUNDING_ADAPTER=/app/checkpoints/v3/grounding_vlm_hard_vrs/adapter_best
+      - SATQUERY_GROUNDING_ADAPTER=/app/checkpoints/v3/grounding_vlm_hires/adapter_best
+      - SATQUERY_GROUNDING_MIN_PIXELS=1048576
       - SATQUERY_GROUNDING=/app/checkpoints/v2/grounding_pre
       - SATQUERY_CAPTION_ADAPTER=/app/checkpoints/v3/caption_vlm/adapter_best
       - SATQUERY_CAPTION=/app/checkpoints/v2/caption_pre

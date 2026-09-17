@@ -39,6 +39,11 @@ LOADERS = {
 def check_tool(tool: str, spec: dict, root: Path) -> tuple[bool, str]:
     env = dict(spec.get("env") or {})
     for k, v in env.items():
+        # Plain settings (numeric budgets, flags) are passed through; every
+        # other value is a checkpoint or registry path that must exist.
+        if str(v).strip().isdigit():
+            os.environ[k] = str(v).strip()
+            continue
         p = root / v
         if not p.exists():
             return False, f"{k}={v} does not exist"
