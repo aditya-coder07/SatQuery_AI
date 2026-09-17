@@ -113,3 +113,15 @@ def test_calibrate_landcover_logits_on_full_layout(corpus, tmp_path):
     assert r.returncode == 0, r.stderr[-2000:]
     logits, labels, note = landcover_logits(out, ckpt / "best.pt", 64, 2, split="val", limit=3)
     assert logits.shape == (3, 19) and labels.shape == (3, 19) and "official val split" in note
+
+
+def test_trainer_class_balanced_and_noise(corpus, tmp_path):
+    out, _ = corpus
+    ckpt = tmp_path / "ckb"
+    cmd = [sys.executable, str(ROOT / "training" / "train_landcover_v3.py"), "--data", str(out), "--ckpt-dir",
+           str(ckpt), "--epochs", "1", "--batch-size", "4", "--no-pretrained", "--val-limit", "4",
+           "--class-balanced", "5", "--noise-aug", "0.1"]
+    r = subprocess.run(cmd, capture_output=True, text=True, cwd=ROOT, timeout=600)
+    assert r.returncode == 0, r.stderr[-2000:]
+    assert "pos_weight" in r.stdout
+    assert (ckpt / "best.pt").exists()

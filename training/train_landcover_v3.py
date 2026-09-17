@@ -94,6 +94,10 @@ def main() -> int:
     p.add_argument("--lr", type=float, default=1e-3, help="head; the trunk uses --lr * --trunk-lr-scale")
     p.add_argument("--trunk-lr-scale", type=float, default=0.1)
     p.add_argument("--band-dropout", type=float, default=0.3)
+    p.add_argument("--class-balanced", type=float, default=None,
+                   help="BCE pos_weight per class = min(cap, sqrt(neg/pos)) from the train labels; targets the "
+                        "macro-mAP tail (beaches 0.52, coastal wetlands 0.59) without moving micro")
+    p.add_argument("--noise-aug", type=float, default=0.0, help="gaussian noise sigma (normalised units) on train batches")
     p.add_argument("--no-pretrained", action="store_true", help="ablation: same trunk from scratch")
     p.add_argument("--limit-train", type=int, default=None)
     p.add_argument("--val-limit", type=int, default=20000, help="full layout: validation subsample scored per epoch")
@@ -139,7 +143,16 @@ def main() -> int:
     base_lrs = [g["lr"] for g in opt.param_groups]
     steps_per_epoch = n_train // args.batch_size
     total = steps_per_epoch * args.epochs
-    crit = nn.BCEWithLogitsLoss()
+    if args.class_balanced:
+        pos = train_ds.labels[:n_train].sum(0) if hasattr(train_ds, "labels") and train_ds.labels is not None else None
+        if pos is None:
+            raise SystemExit("--class-balanced needs a dataset with in-memory labels")
+        neg = n_train - pos
+        pw = np.minimum(args.class_balanced, np.sqrt(np.maximum(neg, 1) / np.maximum(pos, 1))).astype("float32")
+        print("pos_weight", np.round(pw, 2).tolist(), flush=True)
+        crit = nn.BCEWithLogitsLoss(pos_weight=torch.from_numpy(pw).to(device))
+    else:
+        crit = nn.BCEWithLogitsLoss()
 
     args.ckpt_dir.mkdir(parents=True, exist_ok=True)
     start_epoch, best_val, history = 0, -1.0, []
@@ -182,6 +195,8 @@ def main() -> int:
             if rng.random() < 0.5:
                 x = x[:, :, :, ::-1]
             x = np.ascontiguousarray(x)
+            if args.noise_aug > 0:
+                x = x + rng.normal(0, args.noise_aug, x.shape).astype("float32")
             mask = band_dropout_mask(x.shape[0], x.shape[1], args.band_dropout, rng).astype("float32")
             frac = step / max(1, total)
             warm = min(1.0, (step + 1) / max(1, steps_per_epoch))

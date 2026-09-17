@@ -117,6 +117,16 @@ B 800, unified 1,500). Cumulative loss to external kills: ≈ 4 GPU-hours.
 
 | 24 (DONE 2026-09-18 00:20, exit 0: 0.6594 all / 0.6237 clean — arm E deployed) | `sq-unit-vrsbench-eval3` (2026-09-17 21:40) | `scripts/cluster_unit_vrsbench_eval3.sh`: `vlm_task_eval.py --manifest vrsbench/val_grounding.jsonl --arms lora_hires=grounding_vlm_hires/adapter_best --min-pixels 1048576` | VRSBench val 16,159 | arm E at its training budget; paired offline vs D′ | ≈ 2.5 h | report | `logs/queue_vrsbench_eval3.log` |
 
+## Post-programme queue 2 (2026-09-18 03:47) — remaining optional arms
+
+| # | Unit | Steps | Data / config | Expected | Checkpoint | Log |
+|---|---|---|---|---|---|---|
+| 25 | `sq-unit-post1` (`scripts/cluster_unit_post1.sh`) | L1 land cover class-balanced (pos_weight ≤ 5) + noise aug 0.15, full split, 30 ep → F grounding arm E continued at 1280² (`min_pixels` 1638400, batch 1×16, lr 2e-5) → official test at 1280² → S seed-43 repeat of the arm-D′ recipe → official test | `data/ben_v1_full`; DIOR-RSVG train/hard + VRSBench | L1 ≈ 2.5 h; F ≈ 14 h + 1.5 h; S ≈ 4 h + 1 h | `landcover_full_balanced/best.pt`, `grounding_vlm_hires1280/adapter_best`, `grounding_vlm_hard_vrs_s43/adapter_best` | `logs/queue_post1.log`, `logs/train_landcover_v3_balanced.log`, `logs/train_ground_hires1280.log`, `logs/train_ground_hard_vrs_s43.log` |
+| 26 | `sq-unit-7b` (`scripts/cluster_unit_7b.sh`) | download Qwen2.5-VL-7B-Instruct (Apache-2.0, 16.6 GB) → QLoRA r16 (4-bit base) on DIOR-RSVG train + hard + VRSBench at 1024², 1 epoch → official test (bf16 merge) | same manifests | download ≈ 15 min; train ≈ 16 h; eval ≈ 2 h | `models/qwen25_vl_7b`, `grounding_7b_hires/adapter_best` | `logs/queue_7b.log`, `logs/train_ground_7b.log` |
+
+Both units use the launch lock; they share the card when VRAM allows
+(landcover ≈ 8 GB beside the 7B QLoRA ≈ 14 GB).
+
 ## Deployment verification (2026-09-16 06:55)
 
 `scripts/verify_deploy.py --map configs/deploy.v3.yaml` on compute01: **8/8 tools load** through their real loaders (rs_vqa, grounding, caption and change_caption as adapters on the shared base; ChangeMaskV3, FusionTriadV3, LandcoverV3; change_vqa held on v2). Every selected v3 checkpoint has a tier-1 backup entry in `artifacts/best_models/checksums.tsv`. The YAML had three unquoted notes with colons (would have failed to parse) — quoted.
