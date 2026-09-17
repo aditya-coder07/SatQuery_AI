@@ -71,6 +71,8 @@ lever correctly.
 
 **Arm D′ (from arm C):** 0.7020 on DIOR-RSVG (McNemar χ² 21.4) and 0.6396 on VRSBench — the deployed adapter; `wrong_object` 407 → 377, `wrong_box` 1,063 → 1,027, small objects 0.508 → 0.529.
 
+**Arm E (from arm D′, 1024² input):** 0.7323 (McNemar vs D′ χ² 47, significant); small objects 0.529 → 0.578, `wrong_box` 1,027 → 887, `scale_error` 629 → 535 — resolution was the largest remaining lever, as predicted.
+
 **What this directed:** keep native resolution (a 640-px
 cap was removed from arm C for this reason), add VRSBench's 33k
 discriminative expressions (arm C), try the trainable visual merger (arm
