@@ -39,11 +39,15 @@ def main() -> int:
     p.add_argument("--predictions", type=Path, required=True)
     p.add_argument("--base", type=Path, required=True)
     p.add_argument("--out", type=Path, required=True)
+    p.add_argument("--min-pixels", type=int, default=None, help="processor min_pixels the predictions were made with")
+    p.add_argument("--max-pixels", type=int, default=None)
     args = p.parse_args()
     from PIL import Image
     from transformers import AutoProcessor
 
     processor = AutoProcessor.from_pretrained(str(args.base))
+    if args.min_pixels or args.max_pixels:
+        vg.set_pixel_budget(processor, args.min_pixels, args.max_pixels)
     root = args.manifest.parent.parent
     rows = {}
     for line in args.manifest.read_text(encoding="utf-8").splitlines():

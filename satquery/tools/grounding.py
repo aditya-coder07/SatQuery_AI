@@ -54,6 +54,19 @@ ENV_CHECKPOINT = "SATQUERY_GROUNDING"
 # split; scored by evaluation/grounding_official_eval.py.
 ENV_VLM_ADAPTER = "SATQUERY_GROUNDING_ADAPTER"
 VLM_ADAPTER_NAME = "grounding"
+# Pixel budget the adapter was trained and benchmarked with. Arm E (Phase 6)
+# upscales inputs to 1024x1024 (`min_pixels` 1048576); serving it at the
+# processor default would put the model 3 points below its measured
+# number. Applied once, to the shared processor, before the first call.
+ENV_VLM_MIN_PIXELS = "SATQUERY_GROUNDING_MIN_PIXELS"
+ENV_VLM_MAX_PIXELS = "SATQUERY_GROUNDING_MAX_PIXELS"
+
+
+def pixel_budget() -> tuple[int | None, int | None]:
+    def _int(name: str) -> int | None:
+        v = os.getenv(name)
+        return int(v) if v and v.strip() else None
+    return _int(ENV_VLM_MIN_PIXELS), _int(ENV_VLM_MAX_PIXELS)
 
 
 class GroundingPayload(ToolPayload):
@@ -265,6 +278,12 @@ class GroundingTool(ToolProtocol):
         handle = rs_vqa._ModelHandle.get(base, Path(os.environ[rs_vqa.ENV_ADAPTER]))
         handle.ensure_adapter(VLM_ADAPTER_NAME, adapter)
         torch = handle.torch
+        min_px, max_px = pixel_budget()
+        if (min_px or max_px) and getattr(handle, "_grounding_pixel_budget", None) != (min_px, max_px):
+            from training.common.vlm_grounding import set_pixel_budget
+
+            set_pixel_budget(handle.processor, min_px, max_px)
+            handle._grounding_pixel_budget = (min_px, max_px)
 
         meta = manifest.images[0]
         image, _ = to_rgb_preview(meta, max_edge=1024)

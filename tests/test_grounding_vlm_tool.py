@@ -141,3 +141,15 @@ def test_availability_prefers_vlm_when_configured(env, monkeypatch):
     monkeypatch.delenv(g.ENV_VLM_ADAPTER)
     monkeypatch.delenv(g.ENV_CHECKPOINT, raising=False)
     assert g.is_available() == (False, f"{g.ENV_CHECKPOINT} is not set")
+
+
+def test_pixel_budget_env_is_read(monkeypatch):
+    from satquery.tools import grounding as g
+
+    monkeypatch.delenv(g.ENV_VLM_MIN_PIXELS, raising=False)
+    monkeypatch.delenv(g.ENV_VLM_MAX_PIXELS, raising=False)
+    assert g.pixel_budget() == (None, None)
+    monkeypatch.setenv(g.ENV_VLM_MIN_PIXELS, "1048576")
+    assert g.pixel_budget() == (1048576, None)
+    monkeypatch.setenv(g.ENV_VLM_MAX_PIXELS, " ")
+    assert g.pixel_budget() == (1048576, None)
