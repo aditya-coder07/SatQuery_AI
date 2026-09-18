@@ -56,14 +56,17 @@ export default function Home() {
 
           <div className="home-hero-copy">
             <h1 className="display-xl">
-              <Words text="Ask the imagery. Watch it reason." now delay={600} />
+              <Words text="Ask the imagery. Watch it reason." now delay={600} stagger={160} />
             </h1>
             <p className="home-sub">
-              A vision-language assistant for remote sensing. One question in plain language,
-              routed to the right specialist model - and answered with its evidence, its
-              checks and its calibrated doubt attached.
+              <Words
+                text="A vision-language assistant for remote sensing. One question in plain language, routed to the right specialist model - and answered with its evidence, its checks and its calibrated doubt attached."
+                now
+                delay={1700}
+                stagger={55}
+              />
             </p>
-            <div className="home-ctas">
+            <div className="home-ctas hero-late" style={{ animationDelay: '3900ms' }}>
               <Link href="/query" className="pill pill-solid">
                 open the query console
               </Link>
@@ -71,7 +74,7 @@ export default function Home() {
                 see the benchmarks
               </Link>
             </div>
-            <p className="home-stats">
+            <p className="home-stats hero-late" style={{ animationDelay: '4300ms' }}>
               <span>9 specialist tools</span>
               <span>8 official benchmarks</span>
               <span>RSVQA-LR 91.2 %</span>

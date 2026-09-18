@@ -4198,3 +4198,20 @@
   from { transform: translateX(-100%); }
   to { transform: translateX(350%); }
 }
+
+
+/* Hero rows that follow the word reveals: fade up on their own delay. */
+.hero-late {
+  animation: herolate 900ms var(--ease-out) both;
+}
+@keyframes herolate {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .hero-late {
+    animation: none;
+  }
+}
