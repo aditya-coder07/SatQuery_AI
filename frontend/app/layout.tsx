@@ -5,6 +5,7 @@ import { IBM_Plex_Sans, JetBrains_Mono, Manrope } from 'next/font/google';
 import Nav from './Nav';
 import DotField from './components/DotField';
 import CardHover from './components/CardHover';
+import NavProgress from './components/NavProgress';
 import SmoothScroll from './components/SmoothScroll';
 
 /**
@@ -60,6 +61,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <DotField />
         <SmoothScroll />
         <CardHover />
+        <NavProgress />
 
         {/* One navigation for every route. Without it /models and
             /benchmarks - the two pages that carry the measured evidence -
