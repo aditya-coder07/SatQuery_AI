@@ -30,8 +30,8 @@ const QUESTIONS: [string, number][] = [
 
 // Ring positions (% of the section), leaving the middle for the copy.
 const SLOTS: [number, number][] = [
-  [4, 8], [58, 5], [78, 16], [8, 26], [40, 12], [72, 32],
-  [14, 82], [46, 90], [80, 72], [24, 66], [62, 84], [86, 50],
+  [4, 8], [58, 5], [78, 16], [6, 28], [40, 12], [76, 34],
+  [12, 84], [46, 92], [80, 76], [8, 60], [64, 88], [86, 54],
 ];
 
 export default function QuestionCloud({ heading, sub }: { heading: string; sub: string }) {
@@ -39,6 +39,8 @@ export default function QuestionCloud({ heading, sub }: { heading: string; sub: 
   const [on, setOn] = useState(false);
   const [lit, setLit] = useState(-1);
   const [counts, setCounts] = useState<number[]>(() => QUESTIONS.map(() => 0));
+  const [typed, setTyped] = useState('');
+  const [typing, setTyping] = useState(false);
 
   useEffect(() => {
     const el = ref.current;
@@ -53,8 +55,16 @@ export default function QuestionCloud({ heading, sub }: { heading: string; sub: 
         io.disconnect();
         if (reduced) {
           setCounts(QUESTIONS.map(([, n]) => n));
+          setTyped(sub);
           return;
         }
+        // The sub line types itself once the headline's words have landed.
+        const headStart = 200 + heading.split(' ').length * 260 + 500;
+        timers.push(window.setTimeout(() => setTyping(true), headStart));
+        for (let i = 1; i <= sub.length; i++) {
+          timers.push(window.setTimeout(() => setTyped(sub.slice(0, i)), headStart + i * 26));
+        }
+        timers.push(window.setTimeout(() => setTyping(false), headStart + sub.length * 26 + 600));
         // Counts tick up from zero, each on its own start.
         QUESTIONS.forEach(([, n], i) => {
           const start = 300 + i * 90;
@@ -99,7 +109,7 @@ export default function QuestionCloud({ heading, sub }: { heading: string; sub: 
       window.clearTimeout(lightTimer);
       el.removeEventListener('pointermove', onMove);
     };
-  }, []);
+  }, [heading, sub]);
 
   return (
     <section ref={ref} className={`qcloud${on ? ' is-on' : ''}`} id="questions">
@@ -120,7 +130,7 @@ export default function QuestionCloud({ heading, sub }: { heading: string; sub: 
                 '--fx': `${fromX}px`,
                 '--fy': `${fromY}px`,
                 '--depth': depth,
-                '--dur': `${11 + (i % 4) * 2.5}s`,
+                '--dur': `${7 + (i % 4) * 1.6}s`,
                 animationDelay: `${-i * 1.7}s`,
                 transitionDelay: `${120 + i * 90}ms`,
               } as React.CSSProperties
@@ -135,9 +145,12 @@ export default function QuestionCloud({ heading, sub }: { heading: string; sub: 
       <div className="qcloud-copy">
         <span className="eyebrow">[ the questions ]</span>
         <h2 className="display-l">
-          <Words text={heading} stagger={110} />
+          <Words text={heading} stagger={260} delay={200} />
         </h2>
-        <p>{sub}</p>
+        <p className="qcloud-sub">
+          {typed}
+          {typing && <span className="qcloud-caret" />}
+        </p>
       </div>
     </section>
   );
