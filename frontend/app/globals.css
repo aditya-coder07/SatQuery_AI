@@ -3425,7 +3425,6 @@
   inset: -300px;
   filter: url(#ink-edge);
   will-change: transform;
-  contain: strict;
 }
 .ink-fill {
   position: absolute;
