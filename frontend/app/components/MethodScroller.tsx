@@ -2,6 +2,8 @@
 
 import { useEffect, useRef, useState } from 'react';
 
+import ParticleCloud from './ParticleCloud';
+
 /**
  * The pinned, horizontally scrolling method section.
  *
@@ -73,15 +75,24 @@ export default function MethodScroller({
   const pos = Math.min(n, seg + ease);
   const active = Math.min(n, Math.max(0, Math.round(pos)));
 
+  // The stretch starts light and darkens across the last three slides, so
+  // the final phase already sits on the page's own black and the section
+  // simply continues into the dark below - no second ink edge.
+  const dark = Math.min(1, Math.max(0, (pos - (n - 3)) / 2.4));
+  const mixc = (a: number, b: number) => Math.round(a + (b - a) * dark);
+  const bg = `rgb(${mixc(240, 23)}, ${mixc(240, 23)}, ${mixc(248, 23)})`;
+  const fg = `rgb(${mixc(23, 240)}, ${mixc(23, 240)}, ${mixc(23, 248)})`;
+
   return (
     <section
       ref={root}
       className={`method-stage${reduced ? ' is-static' : ''}`}
-      style={{ '--slides': n + 1 } as React.CSSProperties}
+      style={{ '--slides': n + 1, '--stage-bg': bg, '--stage-fg': fg, '--stage-dark': dark } as React.CSSProperties}
       id="method"
     >
       <div className="ink ink-top" aria-hidden="true" />
       <div className="method-pin">
+        <ParticleCloud tone="dark" count={700} className="method-cloud" />
         <div className="method-track" style={{ transform: `translate3d(${-pos * 100}vw, 0, 0)` }}>
           <div className="method-slide method-intro" style={{ opacity: 1 - Math.min(1, pos * 1.6) }}>
             <span className="eyebrow">[ {eyebrow} ]</span>
@@ -145,7 +156,6 @@ export default function MethodScroller({
           })}
         </div>
       </div>
-      <div className="ink ink-bottom" aria-hidden="true" />
     </section>
   );
 }

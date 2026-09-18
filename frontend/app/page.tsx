@@ -2,8 +2,11 @@ import dynamic from 'next/dynamic';
 import Link from 'next/link';
 
 import MethodScroller from './components/MethodScroller';
+import ParticleCloud from './components/ParticleCloud';
+import QuestionCloud from './components/QuestionCloud';
 import Reveal from './components/Reveal';
 import ScrollProgress from './components/ScrollProgress';
+import Words from './components/Words';
 import { BENCHMARKS, CAPABILITIES, CARRIES, METHOD, SENSORS } from './lib/site';
 
 /**
@@ -52,7 +55,9 @@ export default function Home() {
           <ParticleWorld status="online · imagery in, evidence out" />
 
           <div className="home-hero-copy">
-            <h1 className="display-xl">Ask the imagery. Watch it reason.</h1>
+            <h1 className="display-xl">
+              <Words text="Ask the imagery. Watch it reason." now delay={600} />
+            </h1>
             <p className="home-sub">
               A vision-language assistant for remote sensing. One question in plain language,
               routed to the right specialist model - and answered with its evidence, its
@@ -241,6 +246,12 @@ curl -F "query=What changed between these two scenes?" \\
           </div>
         </section>
 
+        {/* ----------------------------------------------------- questions */}
+        <QuestionCloud
+          heading="What can't you get out of your imagery yet?"
+          sub="Every one of these is a question the console answers today - with the checks, the confidence and the run id attached."
+        />
+
         {/* ------------------------------------------------------- marquee */}
         <section className="home-cta">
           <div className="marquee" aria-hidden="true">
@@ -270,15 +281,11 @@ curl -F "query=What changed between these two scenes?" \\
 
       <footer className="home-foot">
         <div className="home-foot-hero">
-          <div className="home-foot-world" aria-hidden="true">
-            <ParticleWorld variant="footer" />
-          </div>
+          <ParticleCloud tone="light" count={1100} className="home-foot-cloud" />
           <Reveal>
             <span className="eyebrow">[ the close ]</span>
             <h2 className="display-l">
-              And every reading
-              <br />
-              deserves to be <span className="accent">checked</span>.
+              <Words text="And every reading deserves to be checked." accent={['checked']} stagger={140} />
             </h2>
             <div className="home-ctas">
               <Link href="/query" className="pill pill-solid">

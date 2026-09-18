@@ -3174,13 +3174,29 @@
 .method-stage {
   position: relative;
   height: calc(var(--slides, 6) * 100vh);
-  background: #f0f0f8;
-  color: #171717;
-  --l-fg: #171717;
-  --l-fg-70: rgba(23, 23, 23, 0.7);
-  --l-fg-45: rgba(23, 23, 23, 0.45);
-  --l-fg-25: rgba(23, 23, 23, 0.25);
-  --l-border: rgba(0, 0, 0, 0.1);
+  background: var(--stage-bg, #f0f0f8);
+  color: var(--stage-fg, #171717);
+  --l-fg: var(--stage-fg, #171717);
+  --l-fg-70: color-mix(in srgb, var(--stage-fg, #171717) 70%, transparent);
+  --l-fg-45: color-mix(in srgb, var(--stage-fg, #171717) 45%, transparent);
+  --l-fg-25: color-mix(in srgb, var(--stage-fg, #171717) 25%, transparent);
+  --l-border: color-mix(in srgb, var(--stage-fg, #171717) 12%, transparent);
+}
+.method-ghost {
+  color: color-mix(in srgb, var(--stage-fg, #171717) 6%, transparent) !important;
+}
+.method-cloud {
+  position: absolute;
+  left: 50%;
+  top: 0;
+  width: min(900px, 100vw);
+  height: 60vh;
+  transform: translateX(-50%);
+  pointer-events: none;
+  opacity: calc(1 - var(--stage-dark, 0));
+}
+.pcloud {
+  display: block;
 }
 .method-stage.is-static {
   height: auto;
@@ -3385,10 +3401,6 @@
   top: 0;
   transform: translateY(-62%);
 }
-.ink-bottom {
-  bottom: 0;
-  transform: translateY(62%);
-}
 
 /* ---------------- progress tick ---------------- */
 .scroll-progress {
@@ -3517,8 +3529,9 @@
 .home-section:has(+ .method-stage) {
   padding-bottom: 28vh;
 }
-.method-stage + .home-section {
-  padding-top: 28vh;
+.method-stage + .home-section,
+.method-stage + .qcloud {
+  padding-top: 12vh;
 }
 /* Footer link colour must not bleed into the pills. */
 .home-foot a.pill-solid {
@@ -3526,4 +3539,98 @@
 }
 .home-foot a.pill-line {
   color: var(--ink);
+}
+
+
+/* ---------------- word reveal ---------------- */
+.words .word {
+  display: inline-block;
+  transition: opacity 700ms var(--ease-out), filter 700ms var(--ease-out), transform 700ms var(--ease-out);
+}
+.words .word.is-wait {
+  opacity: 0;
+  filter: blur(10px);
+  transform: translateY(0.15em);
+}
+.words .word.is-go,
+.words .word.is-ssr {
+  opacity: 1;
+  filter: blur(0);
+  transform: none;
+}
+
+/* ---------------- question cloud ---------------- */
+.qcloud {
+  position: relative;
+  min-height: 110vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  padding: 10vh 24px;
+}
+.qcloud-copy {
+  position: relative;
+  z-index: 1;
+  text-align: center;
+  max-width: 720px;
+}
+.qcloud-copy .display-l {
+  margin: 14px 0 18px;
+}
+.qcloud-copy p {
+  max-width: 480px;
+  margin: 0 auto;
+}
+.qcloud-item {
+  position: absolute;
+  font-family: var(--f-mono);
+  font-size: 11px;
+  letter-spacing: 0.02em;
+  color: var(--fg-45);
+  white-space: nowrap;
+  opacity: 0;
+  transition: opacity 900ms var(--ease-out);
+  animation: qdrift 14s ease-in-out infinite;
+  pointer-events: none;
+}
+.qcloud.is-on .qcloud-item {
+  opacity: 1;
+}
+.qcloud-item b {
+  font-weight: 400;
+  color: var(--fg-25);
+  margin-left: 6px;
+}
+.qcloud-item i {
+  font-style: normal;
+  color: var(--champ);
+  margin-left: 2px;
+}
+@keyframes qdrift {
+  0% { transform: translate(0, 0); }
+  25% { transform: translate(14px, -10px); }
+  50% { transform: translate(-8px, 8px); }
+  75% { transform: translate(10px, 14px); }
+  100% { transform: translate(0, 0); }
+}
+@media (max-width: 720px) {
+  .qcloud-item:nth-child(n + 7) {
+    display: none;
+  }
+}
+
+/* marquee: tilted like the reference */
+.marquee {
+  transform: rotate(-2deg) scale(1.04);
+}
+
+/* footer cloud in place of the sphere */
+.home-foot-cloud {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  opacity: 0.8;
 }
