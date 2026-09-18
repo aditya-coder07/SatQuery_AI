@@ -3171,32 +3171,23 @@
    ====================================================================== */
 
 /* ---------------- pinned method ---------------- */
+/* Everything here is a CSS expression of --pos (0..n), --dark (0..1), and
+   per-slide --d (distance from centre, in slides) and --r (0..1 reveal),
+   written by MethodScroller in a frame callback. */
 .method-stage {
   position: relative;
   height: calc(var(--slides, 6) * 100vh);
-  background: var(--stage-bg, #f0f0f8);
-  color: var(--stage-fg, #171717);
-  --l-fg: var(--stage-fg, #171717);
-  --l-fg-70: color-mix(in srgb, var(--stage-fg, #171717) 70%, transparent);
-  --l-fg-45: color-mix(in srgb, var(--stage-fg, #171717) 45%, transparent);
-  --l-fg-25: color-mix(in srgb, var(--stage-fg, #171717) 25%, transparent);
-  --l-border: color-mix(in srgb, var(--stage-fg, #171717) 12%, transparent);
-}
-.method-ghost {
-  color: color-mix(in srgb, var(--stage-fg, #171717) 6%, transparent) !important;
-}
-.method-cloud {
-  position: absolute;
-  left: 50%;
-  top: 0;
-  width: min(900px, 100vw);
-  height: 60vh;
-  transform: translateX(-50%);
-  pointer-events: none;
-  opacity: calc(1 - var(--stage-dark, 0));
-}
-.pcloud {
-  display: block;
+  --pos: 0;
+  --dark: 0;
+  --stage-bg: color-mix(in srgb, #171717 calc(var(--dark) * 100%), #f0f0f8);
+  --stage-fg: color-mix(in srgb, #f0f0f8 calc(var(--dark) * 100%), #171717);
+  background: var(--stage-bg);
+  color: var(--stage-fg);
+  --l-fg: var(--stage-fg);
+  --l-fg-70: color-mix(in srgb, var(--stage-fg) 70%, transparent);
+  --l-fg-45: color-mix(in srgb, var(--stage-fg) 45%, transparent);
+  --l-fg-25: color-mix(in srgb, var(--stage-fg) 25%, transparent);
+  --l-border: color-mix(in srgb, var(--stage-fg) 12%, transparent);
 }
 .method-stage.is-static {
   height: auto;
@@ -3212,14 +3203,29 @@
   height: auto;
   overflow: visible;
 }
+.method-cloud {
+  position: absolute;
+  left: 50%;
+  top: 0;
+  width: min(900px, 100vw);
+  height: 60vh;
+  transform: translateX(-50%);
+  pointer-events: none;
+  /* Belongs to the intro: gone once the first phase has arrived. */
+  opacity: calc(1 - min(1, var(--pos) * 0.9));
+}
+.pcloud {
+  display: block;
+}
 .method-track {
   display: flex;
   height: 100%;
+  transform: translate3d(calc(var(--pos) * -100vw), 0, 0);
   will-change: transform;
 }
 .method-stage.is-static .method-track {
   flex-direction: column;
-  transform: none !important;
+  transform: none;
   height: auto;
 }
 .method-slide {
@@ -3231,22 +3237,25 @@
   align-items: center;
   justify-content: center;
   padding: 0 24px;
+  overflow: hidden;
 }
 .method-stage.is-static .method-slide {
   height: auto;
   min-height: 60vh;
   padding: 64px 24px;
-  opacity: 1 !important;
 }
 .method-intro {
   flex-direction: column;
   text-align: center;
   gap: 18px;
+  opacity: calc(1 - min(1, var(--pos) * 1.6));
+}
+.method-stage.is-static .method-intro {
+  opacity: 1;
 }
 .method-intro .display-l {
   color: var(--l-fg);
 }
-/* `.home p` sets a dark-page colour; these win on specificity. */
 .home .method-intro p {
   font-family: var(--f-mono);
   font-weight: 300;
@@ -3260,7 +3269,6 @@
   display: flex;
   flex-wrap: wrap;
   justify-content: center;
-  gap: 0;
   font-size: 10px !important;
   letter-spacing: 0.12em;
   text-transform: uppercase;
@@ -3275,26 +3283,31 @@
 }
 .method-ghost {
   position: absolute;
-  right: 6vw;
+  right: 3vw;
   top: 50%;
-  transform: translateY(-50%);
   font-family: var(--f-geist);
   font-weight: 800;
-  font-size: clamp(200px, 38vw, 520px);
+  font-size: clamp(160px, 30vw, 440px);
   line-height: 1;
   letter-spacing: -0.06em;
-  color: rgba(23, 23, 23, 0.06);
+  color: color-mix(in srgb, var(--stage-fg) 6%, transparent);
   pointer-events: none;
   user-select: none;
+  transform: translate3d(calc(var(--d, 0) * -18vw), -50%, 0);
   will-change: transform;
 }
 .method-body {
   position: relative;
   width: min(760px, 100%);
+  opacity: calc(0.35 + 0.65 * var(--r, 1));
 }
 .method-title {
   color: var(--l-fg);
   margin: 0 0 20px;
+}
+/* Letter k (0..1 along the word) lights when the slide's reveal passes it. */
+.method-title > span {
+  opacity: clamp(0.18, calc((var(--r, 1) - var(--k, 0)) * 30 + 0.18), 1);
 }
 .home .method-line {
   font-family: var(--f-mono);
@@ -3353,10 +3366,6 @@
   color: var(--l-fg-25);
   transition: color 300ms ease;
 }
-.rail-step.done b,
-.rail-step.on b {
-  color: var(--l-fg);
-}
 .rail-step:last-child b {
   color: var(--champ);
 }
@@ -3370,6 +3379,8 @@
   text-transform: uppercase;
   color: var(--l-fg-45);
   white-space: nowrap;
+  opacity: 0;
+  transition: opacity 300ms ease;
 }
 .rail-step + .rail-step::before {
   content: '';
@@ -3379,27 +3390,69 @@
   width: 32px;
   height: 0.5px;
   background: var(--l-border);
+  transition: background 300ms ease;
 }
-.rail-step.done + .rail-step::before,
-.rail-step.on::before {
+/* Reached steps show their initial; the current one shows its label. */
+[data-active='1'] .rail-step:nth-child(-n + 1) b,
+[data-active='2'] .rail-step:nth-child(-n + 2) b,
+[data-active='3'] .rail-step:nth-child(-n + 3) b,
+[data-active='4'] .rail-step:nth-child(-n + 4) b,
+[data-active='5'] .rail-step:nth-child(-n + 5) b {
+  color: var(--l-fg);
+  font-size: 0;
+}
+[data-active='1'] .rail-step:nth-child(-n + 1) b::after,
+[data-active='2'] .rail-step:nth-child(-n + 2) b::after,
+[data-active='3'] .rail-step:nth-child(-n + 3) b::after,
+[data-active='4'] .rail-step:nth-child(-n + 4) b::after,
+[data-active='5'] .rail-step:nth-child(-n + 5) b::after {
+  content: attr(data-initial);
+  font-size: 12px;
+}
+[data-active='1'] .rail-step:nth-child(-n + 1)::before,
+[data-active='2'] .rail-step:nth-child(-n + 2)::before,
+[data-active='3'] .rail-step:nth-child(-n + 3)::before,
+[data-active='4'] .rail-step:nth-child(-n + 4)::before,
+[data-active='5'] .rail-step:nth-child(-n + 5)::before {
   background: var(--l-fg);
 }
+[data-active='1'] .rail-step:nth-child(1) em,
+[data-active='2'] .rail-step:nth-child(2) em,
+[data-active='3'] .rail-step:nth-child(3) em,
+[data-active='4'] .rail-step:nth-child(4) em,
+[data-active='5'] .rail-step:nth-child(5) em {
+  opacity: 1;
+}
 
-/* ink edges: the light stretch bleeds into the dark page above and below
-   through the turbulence filter. */
-.ink {
+/* ---------------- ink reveal ---------------- */
+/* A viewport-tall well over the bottom of the dark half; inside it an
+   oversized wrapper carries the filter so the displaced edge never meets
+   the wrapper's own edge; inside that, the fill scales up from the bottom. */
+.ink-well {
   position: absolute;
   left: 0;
   right: 0;
-  height: 26vh;
-  background: #f0f0f8;
-  filter: url(#ink-edge);
+  bottom: 0;
+  height: 100vh;
+  z-index: 40;
+  overflow: hidden;
   pointer-events: none;
-  z-index: 1;
 }
-.ink-top {
-  top: 0;
-  transform: translateY(-62%);
+.ink-filter {
+  position: absolute;
+  inset: -300px;
+  filter: url(#ink-edge);
+  will-change: transform;
+}
+.ink-fill {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 100%;
+  height: 100%;
+  transform: scaleY(0);
+  transform-origin: bottom;
+  will-change: transform;
 }
 
 /* ---------------- progress tick ---------------- */
@@ -3526,12 +3579,10 @@
   margin: 0;
 }
 /* Room for the ink edges, so they bleed into space rather than over text. */
-.home-section:has(+ .method-stage) {
-  padding-bottom: 28vh;
-}
-.method-stage + .home-section,
-.method-stage + .qcloud {
-  padding-top: 12vh;
+/* The last dark section before the flood keeps room under its text so the
+   ink rises over space, not words. */
+.ink-before {
+  padding-bottom: 40vh;
 }
 /* Footer link colour must not bleed into the pills. */
 .home-foot a.pill-solid {

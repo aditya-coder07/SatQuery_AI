@@ -1,6 +1,7 @@
 import dynamic from 'next/dynamic';
 import Link from 'next/link';
 
+import InkReveal from './components/InkReveal';
 import MethodScroller from './components/MethodScroller';
 import ParticleCloud from './components/ParticleCloud';
 import QuestionCloud from './components/QuestionCloud';
@@ -50,6 +51,9 @@ export default function Home() {
       <ScrollProgress />
 
       <main className="home">
+        <InkReveal
+          before={
+            <>
         {/* ---------------------------------------------------------- hero */}
         <section className="home-hero" id="top">
           <ParticleWorld status="online · imagery in, evidence out" />
@@ -136,7 +140,7 @@ export default function Home() {
         </section>
 
         {/* ---------------------------------------------------- benchmarks */}
-        <section className="home-section" id="evidence">
+        <section className="home-section ink-before" id="evidence">
           <Reveal>
             <div className="home-section-head">
               <span className="eyebrow">evidence</span>
@@ -170,6 +174,10 @@ export default function Home() {
           </Reveal>
         </section>
 
+            </>
+          }
+          after={
+            <>
         {/* -------------------------------------------------------- method */}
         <MethodScroller
           eyebrow="the run"
@@ -277,6 +285,9 @@ curl -F "query=What changed between these two scenes?" \\
             </div>
           </Reveal>
         </section>
+            </>
+          }
+        />
       </main>
 
       <footer className="home-foot">
