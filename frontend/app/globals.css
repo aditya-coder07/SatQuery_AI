@@ -4041,3 +4041,76 @@
   line-height: 1.55;
   color: var(--fg-45);
 }
+
+
+/* ---------------- card hover: stretch, lift, cursor highlight ---------------- */
+.cap-card,
+.bench-card,
+.carry-card,
+.talk-card,
+.official-row,
+.deployed-row,
+.liverun {
+  position: relative;
+  overflow: hidden;
+  transform-origin: center;
+  transition:
+    transform 420ms cubic-bezier(0.22, 1, 0.36, 1),
+    border-color 300ms ease,
+    box-shadow 420ms cubic-bezier(0.22, 1, 0.36, 1);
+  will-change: transform;
+}
+.cap-card::before,
+.bench-card::before,
+.carry-card::before,
+.talk-card::before,
+.official-row::before,
+.deployed-row::before,
+.liverun::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  border-radius: inherit;
+  background: radial-gradient(
+    260px circle at var(--mx, 50%) var(--my, 50%),
+    rgba(240, 240, 248, 0.07),
+    rgba(228, 0, 124, 0.05) 40%,
+    transparent 70%
+  );
+  opacity: 0;
+  transition: opacity 300ms ease;
+  z-index: 0;
+}
+.cap-card > *,
+.bench-card > *,
+.carry-card > *,
+.talk-card > *,
+.official-row > *,
+.deployed-row > *,
+.liverun > * {
+  position: relative;
+  z-index: 1;
+}
+@media (hover: hover) {
+  .cap-card:hover,
+  .bench-card:hover,
+  .carry-card:hover,
+  .talk-card:hover,
+  .official-row:hover,
+  .deployed-row:hover,
+  .liverun:hover {
+    transform: translateY(-5px) scale(1.025);
+    border-color: var(--border-strong);
+    box-shadow: 0 24px 60px rgba(0, 0, 0, 0.45), 0 0 0 0.5px rgba(228, 0, 124, 0.25);
+  }
+  .cap-card:hover::before,
+  .bench-card:hover::before,
+  .carry-card:hover::before,
+  .talk-card:hover::before,
+  .official-row:hover::before,
+  .deployed-row:hover::before,
+  .liverun:hover::before {
+    opacity: 1;
+  }
+}

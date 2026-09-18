@@ -4,6 +4,7 @@ import { IBM_Plex_Sans, JetBrains_Mono, Manrope } from 'next/font/google';
 
 import Nav from './Nav';
 import DotField from './components/DotField';
+import CardHover from './components/CardHover';
 import SmoothScroll from './components/SmoothScroll';
 
 /**
@@ -58,6 +59,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             trace does not scroll the field with it. */}
         <DotField />
         <SmoothScroll />
+        <CardHover />
 
         {/* One navigation for every route. Without it /models and
             /benchmarks - the two pages that carry the measured evidence -
