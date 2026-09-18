@@ -3417,22 +3417,25 @@
 .ink-mover {
   position: absolute;
   inset: 0;
-  transform: translate3d(0, 100%, 0);
-  will-change: transform;
 }
-/* The filter is on a static element; only the unfiltered mover animates,
-   so the displaced edge is rasterised once and then composited. */
+/* The noise is fixed to the screen and the fill rises through it, so the
+   edge keeps re-forming as it climbs - the brushed look. */
 .ink-filter {
   position: absolute;
   inset: -300px;
   filter: url(#ink-edge);
+  will-change: transform;
+  contain: strict;
 }
 .ink-fill {
   position: absolute;
   left: 0;
-  right: 0;
-  top: 300px;
-  bottom: -100vh;
+  bottom: 0;
+  width: 100%;
+  height: 100%;
+  transform: scaleY(0);
+  transform-origin: bottom;
+  will-change: transform;
 }
 
 /* ---------------- progress tick ---------------- */

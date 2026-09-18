@@ -15,11 +15,11 @@ import { useEffect, useRef, type ReactNode } from 'react';
  * is displaced into blots and the displacement never reaches the wrapper's
  * own edges. Same construction as the reference.
  *
- * The filter sits on a static element and only its unfiltered parent
- * moves, so the displaced edge is rasterised once and then composited -
- * re-running turbulence over a viewport every frame is what lags. The
- * transform is written straight to the element in a frame callback;
- * nothing re-renders on scroll.
+ * The fill scales inside the filtered wrapper, so the noise stays fixed to
+ * the screen and the edge re-forms as it rises - moving a pre-filtered
+ * layer instead is cheaper but the edge then just slides, which reads as a
+ * cut-out rather than a brush. The transform is written straight to the
+ * element in a frame callback; nothing re-renders on scroll.
  */
 export default function InkReveal({
   before,
@@ -46,7 +46,7 @@ export default function InkReveal({
       // 1 when it is 25 % of a viewport above the top.
       const p = Math.min(1, Math.max(0, (vh - top) / (vh * 1.25)));
       const s = p < 0.02 ? (p / 0.02) * 0.18 : 0.18 + ((p - 0.02) / 0.98) * 0.82;
-      f.style.transform = `translate3d(0, ${((1 - s) * 100).toFixed(2)}%, 0)`;
+      f.style.transform = `scaleY(${s.toFixed(4)})`;
     };
     const onScroll = () => {
       if (!raf) raf = requestAnimationFrame(update);
@@ -66,9 +66,9 @@ export default function InkReveal({
       <div style={{ position: 'relative' }}>
         {before}
         <div className="ink-well" aria-hidden="true">
-          <div ref={fill} className="ink-mover">
+          <div className="ink-mover">
             <div className="ink-filter">
-              <div className="ink-fill" style={{ background: color }} />
+              <div ref={fill} className="ink-fill" style={{ background: color }} />
             </div>
           </div>
         </div>
