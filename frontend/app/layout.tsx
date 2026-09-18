@@ -4,6 +4,7 @@ import { IBM_Plex_Sans, JetBrains_Mono, Manrope } from 'next/font/google';
 
 import Nav from './Nav';
 import DotField from './components/DotField';
+import SmoothScroll from './components/SmoothScroll';
 
 /**
  * Three faces, three jobs.
@@ -56,6 +57,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         {/* The dot grid sits behind every route, fixed, so scrolling a long
             trace does not scroll the field with it. */}
         <DotField />
+        <SmoothScroll />
 
         {/* One navigation for every route. Without it /models and
             /benchmarks - the two pages that carry the measured evidence -

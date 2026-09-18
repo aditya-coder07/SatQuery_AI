@@ -3223,7 +3223,7 @@
 .method-intro {
   flex-direction: column;
   text-align: center;
-  gap: 18px;
+  gap: 22px;
   opacity: calc(1 - min(1, var(--pos) * 1.6));
 }
 .method-stage.is-static .method-intro {
@@ -3235,18 +3235,18 @@
 .home .method-intro p {
   font-family: var(--f-mono);
   font-weight: 300;
-  font-size: 13px;
+  font-size: clamp(15px, 1.25vw, 18px);
   line-height: 1.7;
   color: var(--l-fg-70);
-  max-width: 520px;
+  max-width: 640px;
   margin: 0;
 }
 .method-list {
   display: flex;
   flex-wrap: wrap;
   justify-content: center;
-  font-size: 10px !important;
-  letter-spacing: 0.12em;
+  font-size: 12px !important;
+  letter-spacing: 0.14em;
   text-transform: uppercase;
   color: var(--l-fg-45) !important;
 }
@@ -3256,6 +3256,7 @@
 }
 .method-stage .eyebrow {
   color: var(--l-fg-45);
+  font-size: 12px;
 }
 .method-ghost {
   position: absolute;
@@ -3274,12 +3275,12 @@
 }
 .method-body {
   position: relative;
-  width: min(760px, 100%);
+  width: min(860px, 100%);
   opacity: calc(0.35 + 0.65 * var(--r, 1));
 }
 .method-title {
   color: var(--l-fg);
-  margin: 0 0 20px;
+  margin: 0 0 24px !important;
 }
 /* Letter k (0..1 along the word) lights when the slide's reveal passes it. */
 .method-title > span {
@@ -3287,10 +3288,10 @@
 }
 .home .method-line {
   font-family: var(--f-mono);
-  font-size: 13px;
+  font-size: clamp(15px, 1.3vw, 19px);
   line-height: 1.7;
   color: var(--l-fg-70);
-  margin: 0 0 24px;
+  margin: 0 0 28px;
 }
 .method-body ul {
   list-style: none;
@@ -3301,9 +3302,9 @@
 }
 .home .method-body li {
   font-family: var(--f-mono);
-  font-size: 12px;
+  font-size: clamp(13.5px, 1.1vw, 16px);
   font-weight: 300;
-  line-height: 1.6;
+  line-height: 1.65;
   color: var(--l-fg-70);
   padding-left: 20px;
   position: relative;
@@ -3559,8 +3560,8 @@
   margin: 0;
   font-family: var(--f-geist);
   font-weight: 800;
-  font-size: clamp(48px, 6.5vw, 80px);
-  line-height: 1.05;
+  font-size: clamp(56px, 8.5vw, 112px);
+  line-height: 1;
   letter-spacing: -0.04em;
 }
 /* Room for the ink edges, so they bleed into space rather than over text. */
