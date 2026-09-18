@@ -3729,7 +3729,7 @@
   height: min(46vw, 560px);
   transform: translate(-46%, -52%) rotate(-14deg);
   pointer-events: none;
-  opacity: 0.9;
+  opacity: 1;
 }
 .home-foot-cloud {
   width: 100%;

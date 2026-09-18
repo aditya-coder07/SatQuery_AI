@@ -279,7 +279,7 @@ export default function Home() {
       <footer className="home-foot">
         <div className="home-foot-hero">
           <div className="home-foot-disc" aria-hidden="true">
-            <ParticleCloud tone="light" count={1400} shape="disc" className="home-foot-cloud" />
+            <ParticleCloud tone="light" count={3400} shape="disc" tilt={-14} className="home-foot-cloud" />
           </div>
           <Reveal>
             <span className="eyebrow">[ the close ]</span>

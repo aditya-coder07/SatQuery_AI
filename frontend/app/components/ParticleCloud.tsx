@@ -13,6 +13,7 @@ export default function ParticleCloud({
   tone = 'light',
   count = 900,
   shape = 'cloud',
+  tilt = 0,
   className,
 }: {
   tone?: 'light' | 'dark';
@@ -20,6 +21,8 @@ export default function ParticleCloud({
   /** `disc`: a thin elliptical ring of dots that slowly orbits, dense at the rim.
    *  `wave`: a band of dots streaming left to right on a slow sine swell. */
   shape?: 'cloud' | 'disc' | 'wave';
+  /** Degrees the canvas is rotated by CSS (so pointer positions can be mapped back). */
+  tilt?: number;
   className?: string;
 }) {
   const ref = useRef<HTMLCanvasElement>(null);
@@ -38,6 +41,20 @@ export default function ParticleCloud({
     let visible = true;
     let t = 0;
     const ps: P[] = [];
+    // Pointer in canvas space (the canvas may be rotated by CSS; undo it).
+    const ptr = { x: -1e4, y: -1e4, on: false };
+    const onMove = (e: PointerEvent) => {
+      const r = canvas.getBoundingClientRect();
+      const cx = r.left + r.width / 2, cy = r.top + r.height / 2;
+      const dx = e.clientX - cx, dy = e.clientY - cy;
+      const a = (-tilt * Math.PI) / 180;
+      const rx = dx * Math.cos(a) - dy * Math.sin(a);
+      const ry = dx * Math.sin(a) + dy * Math.cos(a);
+      ptr.x = w / 2 + rx;
+      ptr.y = h / 2 + ry;
+      ptr.on = true;
+    };
+    const onLeave = () => { ptr.on = false; ptr.x = -1e4; ptr.y = -1e4; };
 
     const spawn = (p: P, initial = false) => {
       if (shape === 'wave') {
@@ -61,7 +78,7 @@ export default function ParticleCloud({
         // keeps its own angle and orbits slowly.
         p.a = Math.random() * Math.PI * 2;
         const u = Math.random();
-        p.rad = u < 0.7 ? 0.82 + Math.random() * 0.2 : 0.35 + Math.random() * 0.5;
+        p.rad = u < 0.65 ? 0.78 + Math.random() * 0.24 : 0.3 + Math.random() * 0.55;
         p.max = 12 + Math.random() * 10;
         p.life = initial ? Math.random() * p.max : 0;
         p.r = 0.5 + Math.random() * 1.0;
@@ -133,10 +150,27 @@ export default function ParticleCloud({
           const rx = w * 0.46, ry = h * 0.46;
           const x = w * 0.5 + Math.cos(p.a) * (p.rad + wob) * rx + p.vx * k * 6;
           const y = h * 0.5 + Math.sin(p.a) * (p.rad + wob) * ry + p.vy * k * 6;
-          const alpha = Math.sin(Math.PI * k) * (p.rad > 0.8 ? 0.7 : 0.35);
+          let alpha = Math.sin(Math.PI * k) * (p.rad > 0.8 ? 0.75 : 0.4);
+          let px = x, py = y, pr = p.r;
+          // Near the pointer the dots are pushed outward and brighten, so
+          // the disc parts around the cursor like a hand through smoke.
+          if (ptr.on) {
+            const ddx = x - ptr.x, ddy = y - ptr.y;
+            const d2 = ddx * ddx + ddy * ddy;
+            const R = Math.min(w, h) * 0.22;
+            if (d2 < R * R) {
+              const d = Math.sqrt(d2) || 1;
+              const f = 1 - d / R;
+              const push = f * f * R * 0.55;
+              px += (ddx / d) * push;
+              py += (ddy / d) * push;
+              alpha = Math.min(1, alpha + f * 0.6);
+              pr = p.r + f * 1.2;
+            }
+          }
           ctx.fillStyle = `rgba(${rgb}, ${alpha.toFixed(3)})`;
           ctx.beginPath();
-          ctx.arc(x, y, p.r, 0, Math.PI * 2);
+          ctx.arc(px, py, pr, 0, Math.PI * 2);
           ctx.fill();
           continue;
         }
@@ -177,6 +211,11 @@ export default function ParticleCloud({
     }
     const ro = new ResizeObserver(resize);
     ro.observe(canvas);
+    if (shape === 'disc' && !reduced) {
+      window.addEventListener('pointermove', onMove, { passive: true });
+      window.addEventListener('pointerleave', onLeave);
+      document.addEventListener('mouseleave', onLeave);
+    }
     const io = new IntersectionObserver((es) => {
       for (const e of es) {
         visible = e.isIntersecting;
@@ -190,8 +229,11 @@ export default function ParticleCloud({
       cancelAnimationFrame(raf);
       ro.disconnect();
       io.disconnect();
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerleave', onLeave);
+      document.removeEventListener('mouseleave', onLeave);
     };
-  }, [tone, count, shape]);
+  }, [tone, count, shape, tilt]);
 
   return <canvas ref={ref} className={`pcloud${className ? ` ${className}` : ''}`} aria-hidden="true" />;
 }
