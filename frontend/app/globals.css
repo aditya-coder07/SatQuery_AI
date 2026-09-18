@@ -2645,18 +2645,18 @@
 .home-sub {
   font-family: var(--f-mono);
   font-weight: 300;
-  font-size: 15px;
+  font-size: clamp(16px, 1.45vw, 21px);
   line-height: 1.7;
-  color: var(--ink);
-  max-width: 560px;
-  margin: 24px 0 0;
+  color: var(--fg-70);
+  max-width: 720px;
+  margin: 28px 0 0;
 }
 .home-ctas {
   display: flex;
   flex-wrap: wrap;
   justify-content: center;
-  gap: 10px;
-  margin-top: 36px;
+  gap: 12px;
+  margin-top: 40px;
 }
 .pill {
   font-family: var(--f-mono);
@@ -2695,13 +2695,15 @@
   display: flex;
   flex-wrap: wrap;
   justify-content: center;
-  gap: 6px 0;
+  gap: 8px 0;
   font-family: var(--f-mono);
-  font-size: 11px;
+  font-size: 12px;
+  line-height: 1.6;
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--fg-45);
-  margin: 48px 0 0;
+  margin: 56px 0 0;
+  padding: 0 16px;
 }
 .home-stats span + span::before {
   content: '·';
@@ -2711,7 +2713,7 @@
 
 /* Sensor strip: a slow marquee under the hero. */
 .home-strip {
-  margin: 64px auto 0;
+  margin: 96px auto 0;
   max-width: 1200px;
   width: 100%;
   overflow: hidden;
