@@ -3605,6 +3605,8 @@
   justify-content: center;
   overflow: hidden;
   padding: 10vh 24px;
+  --px: 0;
+  --py: 0;
 }
 .qcloud-copy {
   position: relative;
@@ -3619,44 +3621,89 @@
   max-width: 480px;
   margin: 0 auto;
 }
+/* Each phrase: an outer span that leans with the pointer and drifts on its
+   own orbit, holding the text, the count and the arrow. Enter = slide in
+   from off-stage with a blur; --fx/--fy are the start offset. */
 .qcloud-item {
   position: absolute;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   font-family: var(--f-mono);
   font-size: 11px;
   letter-spacing: 0.02em;
   color: var(--fg-45);
   white-space: nowrap;
   opacity: 0;
-  transition: opacity 900ms var(--ease-out);
-  animation: qdrift 14s ease-in-out infinite;
+  filter: blur(6px);
+  transform: translate(var(--fx), var(--fy));
+  transition: opacity 900ms var(--ease-out), filter 900ms var(--ease-out), transform 1100ms var(--ease-out);
   pointer-events: none;
+  will-change: transform;
 }
 .qcloud.is-on .qcloud-item {
   opacity: 1;
+  filter: blur(0);
+  transform: translate(calc(var(--px) * var(--depth) * -14px), calc(var(--py) * var(--depth) * -10px));
+  animation: qdrift var(--dur, 14s) ease-in-out infinite;
+}
+.qcloud-text {
+  transition: color 400ms ease;
 }
 .qcloud-item b {
   font-weight: 400;
   color: var(--fg-25);
-  margin-left: 6px;
+  font-variant-numeric: tabular-nums;
+  transition: color 400ms ease;
 }
 .qcloud-item i {
   font-style: normal;
   color: var(--champ);
-  margin-left: 2px;
+  transition: transform 400ms var(--ease-out);
+}
+/* A question that has "just been asked". */
+.qcloud-item.is-lit .qcloud-text {
+  color: var(--ink);
+}
+.qcloud-item.is-lit b {
+  color: var(--champ);
+}
+.qcloud-item.is-lit i {
+  transform: translate(2px, -2px) scale(1.25);
+}
+.qcloud-item.is-lit::after {
+  content: '';
+  position: absolute;
+  inset: -8px -10px;
+  border-radius: 999px;
+  border: 0.5px solid rgba(228, 0, 124, 0.35);
+  animation: qring 1.4s var(--ease-out) both;
+}
+@keyframes qring {
+  from {
+    opacity: 0;
+    transform: scale(0.85);
+  }
+  30% {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+    transform: scale(1.15);
+  }
 }
 @keyframes qdrift {
-  0% { transform: translate(0, 0); }
-  25% { transform: translate(14px, -10px); }
-  50% { transform: translate(-8px, 8px); }
-  75% { transform: translate(10px, 14px); }
-  100% { transform: translate(0, 0); }
+  0% { margin-left: 0; margin-top: 0; }
+  25% { margin-left: 16px; margin-top: -12px; }
+  50% { margin-left: -10px; margin-top: 8px; }
+  75% { margin-left: 12px; margin-top: 16px; }
+  100% { margin-left: 0; margin-top: 0; }
 }
 @media (max-width: 720px) {
   .qcloud-item:nth-child(n + 7) {
     display: none;
   }
 }
-
 
 /* footer: a tilted particle disc behind a left-aligned headline */
 .home-foot-disc {
