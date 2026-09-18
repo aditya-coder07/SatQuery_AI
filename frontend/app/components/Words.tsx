@@ -23,14 +23,26 @@ export default function Words({
   delay?: number;
 }) {
   const ref = useRef<HTMLSpanElement>(null);
-  const [state, setState] = useState<'ssr' | 'wait' | 'go'>('ssr');
+  // `now` words start hidden even in the server HTML: the hero is only
+  // ever seen with JavaScript (the globe needs it), and rendering the text
+  // visible first meant it flashed complete, vanished, and then replayed.
+  const [state, setState] = useState<'ssr' | 'wait' | 'go'>(now ? 'wait' : 'ssr');
 
   useEffect(() => {
-    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      setState('go');
+      return;
+    }
     if (now) {
-      setState('wait');
-      const id = window.setTimeout(() => setState('go'), 30);
-      return () => window.clearTimeout(id);
+      // Two frames so the hidden state is painted before the transition.
+      let id2 = 0;
+      const id = requestAnimationFrame(() => {
+        id2 = requestAnimationFrame(() => setState('go'));
+      });
+      return () => {
+        cancelAnimationFrame(id);
+        cancelAnimationFrame(id2);
+      };
     }
     const el = ref.current;
     if (!el) return;
