@@ -106,7 +106,7 @@ export default function MethodScroller({
         <div className="method-track">
           <div className="method-slide method-intro">
             <span className="eyebrow">[ {eyebrow} ]</span>
-            <h2 className="display-l">{heading}</h2>
+            <h2 className="display-l method-heading">{heading}</h2>
             <p>{intro}</p>
             <p className="method-list">
               {phases.map((ph, i) => (
