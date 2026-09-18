@@ -2931,22 +2931,11 @@
   border-color: var(--ink);
 }
 
-/* carries: a horizontally scrolling row of cards */
+/* carries: a wrapping grid, no horizontal scroll */
 .carry-row {
   display: grid;
-  grid-auto-flow: column;
-  grid-auto-columns: minmax(260px, 1fr);
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 10px;
-  overflow-x: auto;
-  padding-bottom: 8px;
-  scroll-snap-type: x proximity;
-  scrollbar-width: none;
-}
-.carry-row::-webkit-scrollbar {
-  display: none;
-}
-.carry-row > .reveal {
-  scroll-snap-align: start;
 }
 .carry-card {
   height: 100%;
@@ -3131,13 +3120,17 @@
   .deploy {
     grid-template-columns: 1fr;
   }
+  .carry-row {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
   .home-foot-grid {
     grid-template-columns: 1fr 1fr;
   }
 }
 @media (max-width: 720px) {
   .cap-cards,
-  .bench-grid {
+  .bench-grid,
+  .carry-row {
     grid-template-columns: 1fr;
   }
   .home-foot-grid {
