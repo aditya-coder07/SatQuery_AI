@@ -2931,66 +2931,6 @@
   border-color: var(--ink);
 }
 
-/* method */
-.method {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
-  gap: 24px;
-}
-.method-phase {
-  height: 100%;
-  padding-top: 20px;
-  border-top: 0.5px solid var(--border);
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-}
-.method-n {
-  font-family: var(--f-mono);
-  font-size: 10px;
-  letter-spacing: 0.12em;
-  color: var(--champ);
-}
-.method-phase h3 {
-  font-size: 22px;
-}
-.method-phase ul {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: grid;
-  gap: 8px;
-}
-.method-phase li {
-  font-family: var(--f-mono);
-  font-size: 12px;
-  font-weight: 300;
-  color: var(--fg-55);
-  line-height: 1.6;
-  padding-left: 14px;
-  position: relative;
-}
-.method-phase li::before {
-  content: '';
-  position: absolute;
-  left: 0;
-  top: 8px;
-  width: 4px;
-  height: 4px;
-  border-radius: 50%;
-  background: var(--fg-25);
-}
-.method-stat {
-  margin: 40px 0 0;
-}
-.method-stat b {
-  color: var(--ink);
-  font-weight: 500;
-}
-
 /* carries: a horizontally scrolling row of cards */
 .carry-row {
   display: grid;
@@ -3222,4 +3162,368 @@
   .home-foot-grid {
     grid-template-columns: 1fr;
   }
+}
+
+
+/* ======================================================================
+   Scrollytelling: the light method stretch, ink edges, progress tick,
+   talk cards, footer headline over the sphere.
+   ====================================================================== */
+
+/* ---------------- pinned method ---------------- */
+.method-stage {
+  position: relative;
+  height: calc(var(--slides, 6) * 100vh);
+  background: #f0f0f8;
+  color: #171717;
+  --l-fg: #171717;
+  --l-fg-70: rgba(23, 23, 23, 0.7);
+  --l-fg-45: rgba(23, 23, 23, 0.45);
+  --l-fg-25: rgba(23, 23, 23, 0.25);
+  --l-border: rgba(0, 0, 0, 0.1);
+}
+.method-stage.is-static {
+  height: auto;
+}
+.method-pin {
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  overflow: hidden;
+}
+.method-stage.is-static .method-pin {
+  position: static;
+  height: auto;
+  overflow: visible;
+}
+.method-track {
+  display: flex;
+  height: 100%;
+  will-change: transform;
+}
+.method-stage.is-static .method-track {
+  flex-direction: column;
+  transform: none !important;
+  height: auto;
+}
+.method-slide {
+  position: relative;
+  flex: 0 0 100vw;
+  width: 100vw;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 24px;
+}
+.method-stage.is-static .method-slide {
+  height: auto;
+  min-height: 60vh;
+  padding: 64px 24px;
+  opacity: 1 !important;
+}
+.method-intro {
+  flex-direction: column;
+  text-align: center;
+  gap: 18px;
+}
+.method-intro .display-l {
+  color: var(--l-fg);
+}
+/* `.home p` sets a dark-page colour; these win on specificity. */
+.home .method-intro p {
+  font-family: var(--f-mono);
+  font-weight: 300;
+  font-size: 13px;
+  line-height: 1.7;
+  color: var(--l-fg-70);
+  max-width: 520px;
+  margin: 0;
+}
+.method-list {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0;
+  font-size: 10px !important;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--l-fg-45) !important;
+}
+.method-list span + span::before {
+  content: '·';
+  margin: 0 10px;
+}
+.method-stage .eyebrow {
+  color: var(--l-fg-45);
+}
+.method-ghost {
+  position: absolute;
+  right: 6vw;
+  top: 50%;
+  transform: translateY(-50%);
+  font-family: var(--f-geist);
+  font-weight: 800;
+  font-size: clamp(200px, 38vw, 520px);
+  line-height: 1;
+  letter-spacing: -0.06em;
+  color: rgba(23, 23, 23, 0.06);
+  pointer-events: none;
+  user-select: none;
+  will-change: transform;
+}
+.method-body {
+  position: relative;
+  width: min(760px, 100%);
+}
+.method-title {
+  color: var(--l-fg);
+  margin: 0 0 20px;
+}
+.home .method-line {
+  font-family: var(--f-mono);
+  font-size: 13px;
+  line-height: 1.7;
+  color: var(--l-fg-70);
+  margin: 0 0 24px;
+}
+.method-body ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 10px;
+}
+.home .method-body li {
+  font-family: var(--f-mono);
+  font-size: 12px;
+  font-weight: 300;
+  line-height: 1.6;
+  color: var(--l-fg-70);
+  padding-left: 20px;
+  position: relative;
+}
+.method-body li::before {
+  content: '—';
+  position: absolute;
+  left: 0;
+  color: var(--l-fg-25);
+}
+.method-rail {
+  position: absolute;
+  left: 50%;
+  bottom: 40px;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: flex-start;
+  gap: 32px;
+}
+.method-stage.is-static .method-rail {
+  display: none;
+}
+.rail-step {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  width: 20px;
+}
+.rail-step b {
+  font-family: var(--f-geist);
+  font-weight: 800;
+  font-size: 12px;
+  line-height: 1;
+  color: var(--l-fg-25);
+  transition: color 300ms ease;
+}
+.rail-step.done b,
+.rail-step.on b {
+  color: var(--l-fg);
+}
+.rail-step:last-child b {
+  color: var(--champ);
+}
+.rail-step em {
+  position: absolute;
+  top: 18px;
+  font-style: normal;
+  font-family: var(--f-mono);
+  font-size: 9px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--l-fg-45);
+  white-space: nowrap;
+}
+.rail-step + .rail-step::before {
+  content: '';
+  position: absolute;
+  right: 100%;
+  top: 5px;
+  width: 32px;
+  height: 0.5px;
+  background: var(--l-border);
+}
+.rail-step.done + .rail-step::before,
+.rail-step.on::before {
+  background: var(--l-fg);
+}
+
+/* ink edges: the light stretch bleeds into the dark page above and below
+   through the turbulence filter. */
+.ink {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 26vh;
+  background: #f0f0f8;
+  filter: url(#ink-edge);
+  pointer-events: none;
+  z-index: 1;
+}
+.ink-top {
+  top: 0;
+  transform: translateY(-62%);
+}
+.ink-bottom {
+  bottom: 0;
+  transform: translateY(62%);
+}
+
+/* ---------------- progress tick ---------------- */
+.scroll-progress {
+  position: fixed;
+  right: 24px;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  pointer-events: none;
+  mix-blend-mode: difference;
+}
+.scroll-progress-line {
+  position: relative;
+  width: 1px;
+  height: 64px;
+  background: rgba(255, 255, 255, 0.2);
+}
+.scroll-progress-tick {
+  position: absolute;
+  left: 50%;
+  width: 1px;
+  height: 8px;
+  background: #fff;
+  transform: translate(-50%, -50%);
+}
+.scroll-progress-pct {
+  font-family: var(--f-mono);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  color: rgba(255, 255, 255, 0.6);
+  font-variant-numeric: tabular-nums;
+}
+@media (max-width: 900px) {
+  .scroll-progress {
+    display: none;
+  }
+}
+
+/* ---------------- talk cards ---------------- */
+.home-cta-inner .eyebrow {
+  margin-bottom: 20px;
+}
+.talk-cards {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  max-width: 900px;
+  margin: 0 auto;
+}
+.talk-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 22px 24px;
+  border: 0.5px solid var(--border);
+  border-radius: 14px;
+  background: var(--card);
+  text-decoration: none;
+  text-align: left;
+  transition: border-color 200ms ease, transform 300ms var(--ease-out);
+}
+.talk-card:hover {
+  border-color: var(--border-strong);
+  transform: translateY(-2px);
+}
+.talk-k {
+  font-family: var(--f-geist);
+  font-weight: 700;
+  font-size: 14px;
+  color: var(--ink);
+}
+.talk-v {
+  font-family: var(--f-mono);
+  font-size: 11px;
+  color: var(--fg-45);
+}
+@media (max-width: 720px) {
+  .talk-cards {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ---------------- footer headline over the sphere ---------------- */
+.home-foot-hero {
+  position: relative;
+  min-height: 80vh;
+  display: flex;
+  align-items: center;
+  overflow: hidden;
+  padding: 64px 24px;
+}
+.home-foot-world {
+  position: absolute;
+  inset: 0;
+  opacity: 0.55;
+  pointer-events: none;
+  -webkit-mask-image: linear-gradient(180deg, #000 60%, transparent 100%);
+  mask-image: linear-gradient(180deg, #000 60%, transparent 100%);
+}
+.home-foot-world .world {
+  height: 100%;
+}
+.home-foot-hero > .reveal {
+  position: relative;
+  z-index: 1;
+  max-width: 1400px;
+  width: 100%;
+  margin: 0 auto;
+}
+.home-foot-hero .display-l {
+  margin: 16px 0 28px;
+  max-width: 14ch;
+}
+.home-foot-hero .home-ctas {
+  justify-content: flex-start;
+  margin-top: 0;
+}
+
+.method-stage .display-l {
+  margin: 0;
+}
+/* Room for the ink edges, so they bleed into space rather than over text. */
+.home-section:has(+ .method-stage) {
+  padding-bottom: 28vh;
+}
+.method-stage + .home-section {
+  padding-top: 28vh;
+}
+/* Footer link colour must not bleed into the pills. */
+.home-foot a.pill-solid {
+  color: var(--void);
+}
+.home-foot a.pill-line {
+  color: var(--ink);
 }

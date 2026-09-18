@@ -126,6 +126,7 @@ export const BENCHMARKS = [
 export const METHOD = [
   {
     title: 'Ingest',
+    line: 'Nothing runs on a scene that has not been checked.',
     points: [
       'Reads GeoTIFF, JP2, PNG - a multi-band vendor product counts as one scene',
       'CRS, nodata, cloud, size, GSD ratio, footprint overlap and date order checked',
@@ -134,6 +135,7 @@ export const METHOD = [
   },
   {
     title: 'Route',
+    line: 'The question picks the plan; the inputs decide what is legal.',
     points: [
       'The capability matrix says what is legal for these inputs',
       'A classifier picks the task; a tie goes to the language model',
@@ -142,6 +144,7 @@ export const METHOD = [
   },
   {
     title: 'Execute',
+    line: 'Specialists, not one model asked to do everything.',
     points: [
       'Specialist tools run in plan order, streaming each step',
       'VLM tools share one base and attach adapters by name',
@@ -150,6 +153,7 @@ export const METHOD = [
   },
   {
     title: 'Verify',
+    line: 'If the payload cannot support a sentence, the sentence says so.',
     points: [
       'Every sentence is checked against the measured payload',
       'Flagged and unverifiable sentences are marked in the answer',
@@ -158,6 +162,7 @@ export const METHOD = [
   },
   {
     title: 'Calibrate',
+    line: 'A confidence you can act on, or an abstain with its reason.',
     points: [
       'Confidence from model score, agreement and input quality',
       'Registries fitted on official validation splits',

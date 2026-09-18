@@ -231,7 +231,14 @@ const RIM_FRAG = `
     gl_FragColor = vec4(uColor, rim * uIntensity);
   }`;
 
-export default function ParticleWorld({ status }: { status?: string }) {
+export default function ParticleWorld({
+  status,
+  variant = 'hero',
+}: {
+  status?: string;
+  /** `footer`: the formed globe, static and centred, behind a headline. */
+  variant?: 'hero' | 'footer';
+}) {
   const wrap = useRef<HTMLDivElement>(null);
   const canvas = useRef<HTMLCanvasElement>(null);
   const [ready, setReady] = useState(false);
@@ -243,6 +250,7 @@ export default function ParticleWorld({ status }: { status?: string }) {
     // ?static shows the formed globe without the intro or motion - the same
     // path reduced-motion takes - for screenshots and slow machines.
     const reduced =
+      variant === 'footer' ||
       window.matchMedia('(prefers-reduced-motion: reduce)').matches ||
       new URLSearchParams(window.location.search).has('static');
     const mobile = window.matchMedia('(max-width: 767px)').matches;
@@ -289,7 +297,7 @@ export default function ParticleWorld({ status }: { status?: string }) {
       camera.updateProjectionMatrix();
       const size = Math.min(512, 0.66 * Math.min(w, h));
       camZ = h / (HALF_FOV_TAN * size);
-      ndcY = 1 - (Math.max(0.38 * h, size / 2 + 120) / h) * 2;
+      ndcY = variant === 'footer' ? 0 : 1 - (Math.max(0.38 * h, size / 2 + 120) / h) * 2;
       U.uPixelRatio.value = dpr;
       U.uScale.value = (0.5 * h) / HALF_FOV_TAN;
     };
@@ -499,10 +507,10 @@ export default function ParticleWorld({ status }: { status?: string }) {
       for (const d of disposables) d.dispose();
       renderer.dispose();
     };
-  }, []);
+  }, [variant]);
 
   return (
-    <div ref={wrap} className="world" style={{ opacity: ready ? 1 : 0 }}>
+    <div ref={wrap} className={`world world-${variant}`} style={{ opacity: ready ? 1 : 0 }}>
       <canvas ref={canvas} className="world-canvas" aria-hidden="true" />
       {ready && status && (
         <div className="world-status-frame" aria-hidden="true">

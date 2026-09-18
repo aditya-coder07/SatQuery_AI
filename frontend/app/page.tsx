@@ -1,7 +1,9 @@
 import dynamic from 'next/dynamic';
 import Link from 'next/link';
 
+import MethodScroller from './components/MethodScroller';
 import Reveal from './components/Reveal';
+import ScrollProgress from './components/ScrollProgress';
 import { BENCHMARKS, CAPABILITIES, CARRIES, METHOD, SENSORS } from './lib/site';
 
 /**
@@ -27,6 +29,23 @@ const ParticleWorld = dynamic(() => import('./components/ParticleWorld'), {
 export default function Home() {
   return (
     <>
+      <svg width="0" height="0" aria-hidden="true" style={{ position: 'absolute', pointerEvents: 'none' }}>
+        <defs>
+          {/* The ink edge: turbulence displaces a straight edge into blots,
+              then the alpha is cut hard so it reads as ink, not fog. */}
+          <filter id="ink-edge" x="-10%" y="-10%" width="120%" height="120%">
+            <feTurbulence type="fractalNoise" baseFrequency="0.015 0.02" numOctaves="3" seed="7" result="noise" />
+            <feDisplacementMap in="SourceGraphic" in2="noise" scale="220" xChannelSelector="R" yChannelSelector="G" result="displaced" />
+            <feGaussianBlur in="displaced" stdDeviation="1.8" result="presmooth" />
+            <feComponentTransfer in="presmooth" result="cut">
+              <feFuncA type="discrete" tableValues="0 0 0 0 0 1 1 1 1 1" />
+            </feComponentTransfer>
+            <feGaussianBlur in="cut" stdDeviation="0.4" />
+          </filter>
+        </defs>
+      </svg>
+      <ScrollProgress />
+
       <main className="home">
         {/* ---------------------------------------------------------- hero */}
         <section className="home-hero" id="top">
@@ -147,39 +166,12 @@ export default function Home() {
         </section>
 
         {/* -------------------------------------------------------- method */}
-        <section className="home-section" id="method">
-          <Reveal>
-            <div className="home-section-head">
-              <span className="eyebrow">method</span>
-              <h2 className="display-m">The 5-phase run.</h2>
-              <p>
-                The same pipeline answers a one-line question and a two-scene change query.
-                What changes is which tools the plan calls - never whether the checks run.
-              </p>
-            </div>
-          </Reveal>
-          <ol className="method">
-            {METHOD.map((phase, i) => (
-              <Reveal key={phase.title} delay={i * 80}>
-                <li className="method-phase">
-                  <span className="method-n">0{i + 1}</span>
-                  <h3>{phase.title}</h3>
-                  <ul>
-                    {phase.points.map((p) => (
-                      <li key={p}>{p}</li>
-                    ))}
-                  </ul>
-                </li>
-              </Reveal>
-            ))}
-          </ol>
-          <Reveal>
-            <p className="method-stat">
-              <b>10-12 ingest checks</b> before any model runs · <b>every sentence</b> of the
-              answer passes the entailment gate or is flagged
-            </p>
-          </Reveal>
-        </section>
+        <MethodScroller
+          eyebrow="the run"
+          heading="The 5-phase run."
+          intro="The same pipeline answers a one-line question and a two-scene change query. What changes is which tools the plan calls - never whether the checks run."
+          phases={METHOD}
+        />
 
         {/* ------------------------------------------------------- carries */}
         <section className="home-section" id="answer">
@@ -260,14 +252,16 @@ curl -F "query=What changed between these two scenes?" \\
           </div>
           <Reveal>
             <div className="home-cta-inner">
-              <h2 className="display-m">Ready when your imagery is.</h2>
-              <div className="home-ctas">
-                <Link href="/query" className="pill pill-solid">
-                  ask the imagery
+              <span className="eyebrow">[ talk to it ]</span>
+              <div className="talk-cards">
+                <Link href="/query" className="talk-card">
+                  <span className="talk-k">query console</span>
+                  <span className="talk-v">attach a scene, ask in plain language →</span>
                 </Link>
-                <Link href="/models" className="pill pill-line">
-                  model registry
-                </Link>
+                <a href={`${process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000'}/docs`} className="talk-card" rel="noreferrer" target="_blank">
+                  <span className="talk-k">api</span>
+                  <span className="talk-v">POST /runs · stream over SSE →</span>
+                </a>
               </div>
             </div>
           </Reveal>
@@ -275,6 +269,27 @@ curl -F "query=What changed between these two scenes?" \\
       </main>
 
       <footer className="home-foot">
+        <div className="home-foot-hero">
+          <div className="home-foot-world" aria-hidden="true">
+            <ParticleWorld variant="footer" />
+          </div>
+          <Reveal>
+            <span className="eyebrow">[ the close ]</span>
+            <h2 className="display-l">
+              And every reading
+              <br />
+              deserves to be <span className="accent">checked</span>.
+            </h2>
+            <div className="home-ctas">
+              <Link href="/query" className="pill pill-solid">
+                ask the imagery
+              </Link>
+              <Link href="/benchmarks" className="pill pill-line">
+                see the evidence
+              </Link>
+            </div>
+          </Reveal>
+        </div>
         <div className="home-foot-grid">
           <div className="home-foot-brand">
             <span className="brand">
