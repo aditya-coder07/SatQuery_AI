@@ -135,8 +135,13 @@ Both units use the launch lock; they share the card when VRAM allows
 | #25 step 2 `train_ground_hires1280` | WAITING on the VRAM gate since 11:02: 12 GB free < 16 GB while the 7B QLoRA holds 30.1 GB (arm E at 1024² needed 16.8 GB, so the gate is right; nothing lighter can be reordered — s43 needs 15.7 GB) | starts when #26 training ends (≈ 05:00 2026-09-19) | | |
 | #26 `train_ground_7b` | RUNNING: step 940/3,154 at 11:44 (27–30 s/step, loss 0.36–0.38, 30.1 GB; VAL@400 Acc@0.5 0.6725) | `checkpoints/v3/grounding_7b_hires/` | ETA ≈ 05:00 2026-09-19 + ≈ 2 h eval | |
 
-Consequence: F, its eval, s43 and its eval shift behind the 7B job — all
-optional results now land ≈ 2026-09-20 midday instead of 2026-09-19 evening.
+Consequence: F, its eval, s43 and its eval would have shifted behind the 7B
+job (≈ 2026-09-20 midday). **13:14 — `sq-unit-post1` stopped by the operator**
+(user instruction: finish today and move to frontend + deployment). Arm F and
+the seed-43 repeat are deferred, not lost: `scripts/cluster_unit_post1.sh`
+steps 2–5 relaunch as-is when the card is free. Nothing deployed depends on
+them. The 7B run (#26) keeps going unattended; its official eval lands
+≈ 07:00 2026-09-19 and is folded into the docs afterwards.
 
 ## Deployment verification (2026-09-16 06:55)
 
