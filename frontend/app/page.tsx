@@ -2,6 +2,7 @@ import dynamic from 'next/dynamic';
 import Link from 'next/link';
 
 import InkReveal from './components/InkReveal';
+import LiveRun from './components/LiveRun';
 import MethodScroller from './components/MethodScroller';
 import ParticleCloud from './components/ParticleCloud';
 import QuestionCloud from './components/QuestionCloud';
@@ -241,15 +242,7 @@ export default function Home() {
               </div>
             </Reveal>
             <Reveal delay={120}>
-              <pre className="deploy-code">
-                <code>{`# start the stack
-docker compose -f docker-compose.yml -f docker-compose.v3.yml up
-
-# ask a question
-curl -F "query=What changed between these two scenes?" \\
-     -F "images=@t1.tif" -F "images=@t2.tif" \\
-     http://localhost:8000/runs`}</code>
-              </pre>
+              <LiveRun />
             </Reveal>
           </div>
         </section>

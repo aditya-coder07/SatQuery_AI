@@ -3685,3 +3685,124 @@
     font-size: clamp(40px, 11vw, 64px);
   }
 }
+
+
+/* ---------------- live run panel ---------------- */
+.liverun {
+  border: 0.5px solid var(--border);
+  border-radius: 14px;
+  background: var(--card);
+  overflow: hidden;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.35);
+}
+.liverun-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  border-bottom: 0.5px solid var(--border-soft);
+  font-family: var(--f-mono);
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--fg-45);
+}
+.liverun-dots {
+  display: inline-flex;
+  gap: 6px;
+}
+.liverun-dots i {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: rgba(240, 240, 248, 0.14);
+}
+.liverun-title {
+  flex: 1;
+}
+.liverun-state {
+  color: var(--champ);
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.liverun-state::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--champ);
+  animation: badge-pulse 1.6s infinite;
+}
+.liverun-state.is-done {
+  color: var(--fg-70);
+}
+.liverun-state.is-done::before {
+  background: #6fd39a;
+  animation: none;
+}
+.liverun-body {
+  margin: 0;
+  padding: 18px 20px 20px;
+  min-height: 380px;
+  font-family: var(--f-mono);
+  font-size: 12px;
+  line-height: 1.75;
+  color: var(--fg-70);
+  overflow-x: auto;
+  white-space: pre;
+}
+.liverun-body code {
+  display: block;
+  color: inherit;
+}
+.liverun .cmd {
+  display: block;
+  color: var(--ink);
+  margin-bottom: 14px;
+}
+.liverun .prompt {
+  color: var(--champ);
+}
+.liverun .line {
+  display: block;
+  animation: linein 260ms var(--ease-out) both;
+}
+.liverun .ev {
+  color: var(--fg-70);
+}
+.liverun .ok {
+  color: var(--fg-45);
+}
+.liverun .ans {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 0.5px solid var(--border-soft);
+  color: var(--ink);
+  white-space: pre-wrap;
+}
+.liverun .caret {
+  display: inline-block;
+  width: 7px;
+  height: 1em;
+  vertical-align: -0.15em;
+  background: var(--champ);
+  animation: blink 1s steps(2, start) infinite;
+}
+@keyframes blink {
+  to {
+    visibility: hidden;
+  }
+}
+@keyframes linein {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+}
+@media (max-width: 720px) {
+  .liverun-body {
+    min-height: 0;
+    font-size: 11px;
+  }
+}
