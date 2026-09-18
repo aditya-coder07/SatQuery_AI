@@ -1,0 +1,33 @@
+{
+  "experiment_id": "landcover_v3-20260918-034947-56478c",
+  "task": "landcover_v3",
+  "n_train": 269695,
+  "n_test": 125866,
+  "pretrained": true,
+  "args": {
+    "data": "data/ben_v1_full",
+    "ckpt_dir": "checkpoints/v3/landcover_full_balanced",
+    "epochs": "30",
+    "batch_size": "128",
+    "lr": "0.001",
+    "trunk_lr_scale": "0.1",
+    "band_dropout": "0.3",
+    "class_balanced": "5.0",
+    "noise_aug": "0.15",
+    "no_pretrained": "False",
+    "limit_train": "None",
+    "val_limit": "20000",
+    "resume": "False",
+    "notes": "full official split; class-balanced pos_weight (cap 5) + gaussian noise aug 0.15; targets macro mAP tail",
+    "seed": "42"
+  },
+  "hardware": {
+    "host": "compute01.node",
+    "python": "3.12.14",
+    "platform": "Linux-5.14.0-611.49.1.el9_7.x86_64-x86_64-with-glibc2.34",
+    "torch": "2.6.0+cu124",
+    "gpu": "NVIDIA L40S",
+    "gpu_total_gb": 44.4,
+    "gpu_free_at_start_gb": 43.9
+  }
+}

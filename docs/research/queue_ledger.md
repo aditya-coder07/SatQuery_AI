@@ -127,6 +127,17 @@ B 800, unified 1,500). Cumulative loss to external kills: ≈ 4 GPU-hours.
 Both units use the launch lock; they share the card when VRAM allows
 (landcover ≈ 8 GB beside the 7B QLoRA ≈ 14 GB).
 
+## Post-programme queue 2 — progress (2026-09-18 11:50)
+
+| Job | Exit | Checkpoint | Metrics | Registry |
+|---|---|---|---|---|
+| #25 step 1 `train_landcover_v3_balanced` | DONE 11:02 (exit 0), 7.2 GPU-h | `checkpoints/v3/landcover_full_balanced/best.pt` (sha256 a4f0929d…) | official test n 125,866: macro 0.7879 / micro 0.8726 / retention 0.937 at best-val epoch 15 (val micro 0.8727) — **rejected**, 17/19 classes below `landcover_full` (0.7923 / 0.8850) | `landcover_v3-…` record present |
+| #25 step 2 `train_ground_hires1280` | WAITING on the VRAM gate since 11:02: 12 GB free < 16 GB while the 7B QLoRA holds 30.1 GB (arm E at 1024² needed 16.8 GB, so the gate is right; nothing lighter can be reordered — s43 needs 15.7 GB) | starts when #26 training ends (≈ 05:00 2026-09-19) | | |
+| #26 `train_ground_7b` | RUNNING: step 940/3,154 at 11:44 (27–30 s/step, loss 0.36–0.38, 30.1 GB; VAL@400 Acc@0.5 0.6725) | `checkpoints/v3/grounding_7b_hires/` | ETA ≈ 05:00 2026-09-19 + ≈ 2 h eval | |
+
+Consequence: F, its eval, s43 and its eval shift behind the 7B job — all
+optional results now land ≈ 2026-09-20 midday instead of 2026-09-19 evening.
+
 ## Deployment verification (2026-09-16 06:55)
 
 `scripts/verify_deploy.py --map configs/deploy.v3.yaml` on compute01: **8/8 tools load** through their real loaders (rs_vqa, grounding, caption and change_caption as adapters on the shared base; ChangeMaskV3, FusionTriadV3, LandcoverV3; change_vqa held on v2). Every selected v3 checkpoint has a tier-1 backup entry in `artifacts/best_models/checksums.tsv`. The YAML had three unquoted notes with colons (would have failed to parse) — quoted.

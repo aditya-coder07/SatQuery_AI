@@ -111,6 +111,7 @@ required.
 | v3, in-subset holdout | SSL4EO-S12 | train p0–p2 (45,000) → test p3 (15,000; one acquisition shared) | 0.536 (micro 0.685) | 0.886 | `docs/assets/phase6/landcover_holdout` — Category B; p3 is 3 acquisitions p0–p2 barely cover |
 | v2 rescored on p3 | Phase 5 v2 | trained on p0–p3, so p3 is **in its training set** | 0.900 | 0.625 | `artifacts/benchmark_reports/rescoring/track_a_v2_on_holdout_p3.json` — **not a holdout for v2**; kept only as evidence that the shard's labels are learnable (contradicts the first L1 reading) |
 | v3, full official split | SSL4EO-S12 | 269,695 train / 20,000-item val subsample / 125,866 test | **0.792 macro / 0.885 micro** (best-val epoch 13; final epoch 0.792 / 0.878) | 0.94 | `docs/assets/phase6/landcover_full` — the only Category A row in this table; 2.05 GPU-h |
+| v3, full split, class-balanced (`--class-balanced 5 --noise-aug 0.15`; pos_weight = min(5, sqrt(neg/pos))) | SSL4EO-S12 | same full split, 30 ep | 0.7879 macro / 0.8726 micro (best-val epoch 15; val micro 0.8727 vs 0.8850 unweighted) | 0.937 | `docs/assets/phase6/landcover_full_balanced` — **rejected** 2026-09-18: 17 of 19 classes lose AP; only the two rarest gain (+0.090, +0.023), not enough to lift the macro |
 
 The subset rows above disagree with each other by 0.2–0.6 mAP for one
 reason: which acquisitions the shards happen to contain. The full split

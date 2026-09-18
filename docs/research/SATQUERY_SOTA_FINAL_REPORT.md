@@ -126,6 +126,7 @@ Evidence paths are relative to the repository; weights live on
 | Change caption: complete LEVIR-CC train, images only, regression investigated | done — BLEU-4 0.6045 (v1 oracle-mask 0.384); no v2 regression | `levircc_test_vlm.json`, `rescoring/levircc_change_caption_v{1,2}.json` |
 | Change detection independently verified, frozen champion | done — 0.9038 / 0.8244 reproduced; scratch ablation | `levircd_test_independent_v3.json`, `docs/assets/phase6/change_mask_scratch` |
 | Land cover: p8 traced, valid holdout, full official split, strong encoder | done — micro 0.885 / macro 0.792 on 125,866 | `docs/assets/phase6/landcover_full/metrics.json`, audit L1 (revised) |
+| Land cover: class-balanced loss arm (post-programme) | done — rejected: macro 0.7879 / micro 0.8726, 17/19 classes down | `docs/assets/phase6/landcover_full_balanced/metrics.json`, ablations §Land cover |
 | WHU-OPT-SAR corrected alignment, all arms, complementarity | done — fused +0.021, CI excludes 0 | `docs/assets/phase6/optsar_fusion` |
 | Unified multitask adapter after specialist baselines; negative transfer measured | done — specialists kept | `docs/research/ablations.md` §Unified |
 | Hard-negative / failure-directed retraining | done — arm D +1.0 pt, arm D′ +1.4 pt (both significant), deployed | `dior_rsvg_official_armD.json` |
