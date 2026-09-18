@@ -1,6 +1,6 @@
-import dynamic from 'next/dynamic';
 import Link from 'next/link';
 
+import HeroWorld from './components/HeroWorld';
 import InkReveal from './components/InkReveal';
 import LiveRun from './components/LiveRun';
 import MethodScroller from './components/MethodScroller';
@@ -25,11 +25,6 @@ import { BENCHMARKS, CAPABILITIES, CARRIES, METHOD, SENSORS } from './lib/site';
  * wrappers run on the client.
  */
 
-// WebGL cannot render on the server and must not block the first paint.
-const ParticleWorld = dynamic(() => import('./components/ParticleWorld'), {
-  ssr: false,
-  loading: () => <div className="world" />,
-});
 
 export default function Home() {
   return (
@@ -57,7 +52,7 @@ export default function Home() {
             <>
         {/* ---------------------------------------------------------- hero */}
         <section className="home-hero" id="top">
-          <ParticleWorld status="online · imagery in, evidence out" />
+          <HeroWorld />
 
           <div className="home-hero-copy">
             <h1 className="display-xl">
@@ -221,8 +216,9 @@ export default function Home() {
                 <h2 className="display-m">One container, one GPU, no cloud dependency.</h2>
                 <p>
                   The API and the web console ship as two Docker images. Weights are mounted,
-                  not downloaded; fonts and basemaps are self-hosted; the whole thing answers
-                  with the network cable pulled. A 6 GB card is enough for every tool.
+                  not downloaded; fonts are self-hosted; the API answers with the network cable
+                  pulled, and the map falls back to the scene footprint when no basemap is
+                  reachable. A 6 GB card runs every tool - this page was tested on one.
                 </p>
                 <ul className="deploy-list">
                   <li>

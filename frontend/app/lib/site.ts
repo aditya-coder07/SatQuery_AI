@@ -7,7 +7,7 @@
 export const SENSORS = [
   { name: 'Cartosat-2E MX', kind: 'optical · 4-band · 1.6 m' },
   { name: 'EOS-04 FRS-1', kind: 'SAR · C-band · HH' },
-  { name: 'Sentinel-2', kind: 'multispectral · 12-band' },
+  { name: 'Sentinel-2', kind: 'multispectral · 12 bands used' },
   { name: 'Landsat 8/9', kind: 'multispectral · 30 m' },
   { name: 'DIOR / DOTA', kind: 'aerial · object grounding' },
   { name: 'BigEarthNet', kind: '19-class land cover' },

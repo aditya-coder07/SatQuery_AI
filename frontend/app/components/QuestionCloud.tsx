@@ -6,26 +6,29 @@ import Words from './Words';
 
 /**
  * Floating questions around a headline: the things people actually ask
- * of imagery, scattered in a ring around the copy (never over it) with a
- * ticket-style count and an arrow. When the section arrives each phrase
- * drifts in from off-stage with a blur, its count ticks up from zero, and
- * from then on it keeps floating on its own slow orbit, leans a little
+ * of imagery, scattered in a ring around the copy (never over it), each
+ * tagged with the tool that answers it. When the section arrives each
+ * phrase drifts in from off-stage with a blur, its tag types in, and from
+ * then on it keeps floating on its own slow orbit, leans a little
  * toward the pointer, and now and then one lights up as if it had just
  * been asked. The headline reveals word by word.
  */
-const QUESTIONS: [string, number][] = [
-  ['what changed here since the monsoon?', 41],
-  ['is the new bypass finished?', 17],
-  ['how many buildings are in this tile?', 63],
-  ['cloud is hiding the site again', 28],
-  ['which fields flooded last week?', 35],
-  ["the SAR scene and the optical don't line up", 12],
-  ['is that water or shadow?', 22],
-  ['where exactly is the second ship?', 9],
-  ['how much of this is built-up now?', 54],
-  ['can I trust this number?', 77],
-  ['describe this scene for the report', 31],
-  ['did the reservoir shrink?', 19],
+// Each question with the tool the router sends it to (see
+// satquery/controller and the capability matrix) - the tag is what actually
+// answers it, not a decoration.
+const QUESTIONS: [string, string][] = [
+  ['what changed here since the monsoon?', 'change_caption'],
+  ['is the new bypass finished?', 'change_mask'],
+  ['how many buildings are in this tile?', 'rs_vqa'],
+  ['cloud is hiding the site again', 'optsar_fusion'],
+  ['which fields flooded last week?', 'change_mask'],
+  ["the SAR scene and the optical don't line up", 'ingest checks'],
+  ['is that water or shadow?', 'index_engine'],
+  ['where exactly is the second ship?', 'grounding'],
+  ['how much of this is built-up now?', 'landcover'],
+  ['can I trust this number?', 'confidence'],
+  ['describe this scene for the report', 'caption'],
+  ['did the reservoir shrink?', 'index_engine'],
 ];
 
 // Ring positions (% of the section), leaving the middle for the copy.
@@ -38,7 +41,7 @@ export default function QuestionCloud({ heading, sub }: { heading: string; sub: 
   const ref = useRef<HTMLElement>(null);
   const [on, setOn] = useState(false);
   const [lit, setLit] = useState(-1);
-  const [counts, setCounts] = useState<number[]>(() => QUESTIONS.map(() => 0));
+  const [tags, setTags] = useState<string[]>(() => QUESTIONS.map(() => ''));
   const [typed, setTyped] = useState('');
   const [typing, setTyping] = useState(false);
 
@@ -54,7 +57,7 @@ export default function QuestionCloud({ heading, sub }: { heading: string; sub: 
         setOn(true);
         io.disconnect();
         if (reduced) {
-          setCounts(QUESTIONS.map(([, n]) => n));
+          setTags(QUESTIONS.map(([, tool]) => tool));
           setTyped(sub);
           return;
         }
@@ -65,18 +68,18 @@ export default function QuestionCloud({ heading, sub }: { heading: string; sub: 
           timers.push(window.setTimeout(() => setTyped(sub.slice(0, i)), headStart + i * 26));
         }
         timers.push(window.setTimeout(() => setTyping(false), headStart + sub.length * 26 + 600));
-        // Counts tick up from zero, each on its own start.
-        QUESTIONS.forEach(([, n], i) => {
-          const start = 300 + i * 90;
-          for (let k = 1; k <= 14; k++) {
+        // Each tool tag types in after its phrase has landed.
+        QUESTIONS.forEach(([, tool], i) => {
+          const start = 700 + i * 90;
+          for (let k = 1; k <= tool.length; k++) {
             timers.push(
               window.setTimeout(() => {
-                setCounts((c) => {
+                setTags((c) => {
                   const next = c.slice();
-                  next[i] = Math.round((n * k) / 14);
+                  next[i] = tool.slice(0, k);
                   return next;
                 });
-              }, start + k * 55),
+              }, start + k * 40),
             );
           }
         });
@@ -113,7 +116,7 @@ export default function QuestionCloud({ heading, sub }: { heading: string; sub: 
 
   return (
     <section ref={ref} className={`qcloud${on ? ' is-on' : ''}`} id="questions">
-      {QUESTIONS.map(([q, n], i) => {
+      {QUESTIONS.map(([q], i) => {
         const [x, y] = SLOTS[i % SLOTS.length];
         // Enter from the side the slot is nearest to.
         const fromX = x < 50 ? -60 : 60;
@@ -137,7 +140,7 @@ export default function QuestionCloud({ heading, sub }: { heading: string; sub: 
             }
           >
             <span className="qcloud-text">{q}</span>
-            <b>{counts[i]}</b>
+            <b>{tags[i]}</b>
             <i>↗</i>
           </span>
         );
