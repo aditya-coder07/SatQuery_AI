@@ -292,10 +292,12 @@ curl -F "query=What changed between these two scenes?" \\
 
       <footer className="home-foot">
         <div className="home-foot-hero">
-          <ParticleCloud tone="light" count={1100} className="home-foot-cloud" />
+          <div className="home-foot-disc" aria-hidden="true">
+            <ParticleCloud tone="light" count={1400} shape="disc" className="home-foot-cloud" />
+          </div>
           <Reveal>
             <span className="eyebrow">[ the close ]</span>
-            <h2 className="display-l">
+            <h2 className="display-xl home-foot-title">
               <Words text="And every reading deserves to be checked." accent={['checked']} stagger={140} />
             </h2>
             <div className="home-ctas">

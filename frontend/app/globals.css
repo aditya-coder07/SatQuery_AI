@@ -3566,10 +3566,6 @@
   width: 100%;
   margin: 0 auto;
 }
-.home-foot-hero .display-l {
-  margin: 16px 0 28px;
-  max-width: 14ch;
-}
 .home-foot-hero .home-ctas {
   justify-content: flex-start;
   margin-top: 0;
@@ -3676,12 +3672,30 @@
   transform: rotate(-2deg) scale(1.04);
 }
 
-/* footer cloud in place of the sphere */
-.home-foot-cloud {
+/* footer: a tilted particle disc behind a left-aligned headline */
+.home-foot-disc {
   position: absolute;
-  inset: 0;
+  left: 50%;
+  top: 50%;
+  width: min(72vw, 900px);
+  height: min(46vw, 560px);
+  transform: translate(-46%, -52%) rotate(-14deg);
+  pointer-events: none;
+  opacity: 0.9;
+}
+.home-foot-cloud {
   width: 100%;
   height: 100%;
-  pointer-events: none;
-  opacity: 0.8;
+}
+.home-foot-hero {
+  min-height: 90vh;
+}
+.home-foot-hero .home-foot-title {
+  margin: 20px 0 36px;
+  max-width: 16ch;
+}
+@media (max-width: 720px) {
+  .home-foot-hero .home-foot-title {
+    font-size: clamp(40px, 11vw, 64px);
+  }
 }

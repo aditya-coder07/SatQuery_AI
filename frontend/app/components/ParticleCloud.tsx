@@ -12,10 +12,13 @@ import { useEffect, useRef } from 'react';
 export default function ParticleCloud({
   tone = 'light',
   count = 900,
+  shape = 'cloud',
   className,
 }: {
   tone?: 'light' | 'dark';
   count?: number;
+  /** `disc`: a thin elliptical ring of dots that slowly orbits, dense at the rim. */
+  shape?: 'cloud' | 'disc';
   className?: string;
 }) {
   const ref = useRef<HTMLCanvasElement>(null);
@@ -27,7 +30,7 @@ export default function ParticleCloud({
     if (!ctx) return;
     const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     const rgb = tone === 'light' ? '240, 240, 248' : '23, 23, 23';
-    type P = { x: number; y: number; vx: number; vy: number; life: number; max: number; r: number; seed: number };
+    type P = { x: number; y: number; vx: number; vy: number; life: number; max: number; r: number; seed: number; a: number; rad: number };
     let w = 0, h = 0, dpr = 1;
     let raf = 0;
     let running = false;
@@ -36,6 +39,20 @@ export default function ParticleCloud({
     const ps: P[] = [];
 
     const spawn = (p: P, initial = false) => {
+      if (shape === 'disc') {
+        // Ring: radius peaks near the rim with a soft inner fill; each dot
+        // keeps its own angle and orbits slowly.
+        p.a = Math.random() * Math.PI * 2;
+        const u = Math.random();
+        p.rad = u < 0.7 ? 0.82 + Math.random() * 0.2 : 0.35 + Math.random() * 0.5;
+        p.max = 12 + Math.random() * 10;
+        p.life = initial ? Math.random() * p.max : 0;
+        p.r = 0.5 + Math.random() * 1.0;
+        p.seed = Math.random() * 1000;
+        p.vx = (Math.random() - 0.5) * 4;
+        p.vy = (Math.random() - 0.5) * 4;
+        return;
+      }
       // Spawn in a soft ellipse around the centre, biased upward.
       const a = Math.random() * Math.PI * 2;
       const rr = Math.pow(Math.random(), 0.6);
@@ -59,7 +76,7 @@ export default function ParticleCloud({
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       if (ps.length === 0) {
         for (let i = 0; i < count; i++) {
-          const p = { x: 0, y: 0, vx: 0, vy: 0, life: 0, max: 1, r: 1, seed: 0 };
+          const p = { x: 0, y: 0, vx: 0, vy: 0, life: 0, max: 1, r: 1, seed: 0, a: 0, rad: 0 };
           spawn(p, true);
           ps.push(p);
         }
@@ -72,6 +89,19 @@ export default function ParticleCloud({
         p.life += dt;
         if (p.life > p.max) spawn(p);
         const k = p.life / p.max;
+        if (shape === 'disc') {
+          p.a += dt * 0.06;
+          const wob = Math.sin(t * 0.4 + p.seed) * 0.02;
+          const rx = w * 0.46, ry = h * 0.46;
+          const x = w * 0.5 + Math.cos(p.a) * (p.rad + wob) * rx + p.vx * k * 6;
+          const y = h * 0.5 + Math.sin(p.a) * (p.rad + wob) * ry + p.vy * k * 6;
+          const alpha = Math.sin(Math.PI * k) * (p.rad > 0.8 ? 0.7 : 0.35);
+          ctx.fillStyle = `rgba(${rgb}, ${alpha.toFixed(3)})`;
+          ctx.beginPath();
+          ctx.arc(x, y, p.r, 0, Math.PI * 2);
+          ctx.fill();
+          continue;
+        }
         // Curl-ish wander from two sines; cheap and organic enough.
         const nx = Math.sin(t * 0.35 + p.seed) * 9;
         const ny = Math.cos(t * 0.27 + p.seed * 1.7) * 9;
@@ -114,7 +144,7 @@ export default function ParticleCloud({
       ro.disconnect();
       io.disconnect();
     };
-  }, [tone, count]);
+  }, [tone, count, shape]);
 
   return <canvas ref={ref} className={`pcloud${className ? ` ${className}` : ''}`} aria-hidden="true" />;
 }
