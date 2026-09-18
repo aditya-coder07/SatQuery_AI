@@ -1,0 +1,169 @@
+{
+  "best_val": {
+    "n": 1533,
+    "<VQA>": {
+      "n": 1533,
+      "acc_all": 0.6236138290932811,
+      "acc_published": 0.9330484330484331,
+      "by_type": {
+        "comp": 0.9333,
+        "count": 0.255,
+        "presence": 0.9315,
+        "refusal": 0.4348,
+        "rural_urban": 1.0,
+        "vqa": 0.4216
+      }
+    },
+    "selection": 0.9330484330484331,
+    "step": 3500
+  },
+  "history": [
+    {
+      "n": 1533,
+      "<VQA>": {
+        "n": 1533,
+        "acc_all": 0.5962165688193085,
+        "acc_published": 0.9131054131054132,
+        "by_type": {
+          "comp": 0.9062,
+          "count": 0.245,
+          "presence": 0.9212,
+          "refusal": 0.0,
+          "rural_urban": 1.0,
+          "vqa": 0.3922
+        }
+      },
+      "selection": 0.9131054131054132,
+      "step": 500
+    },
+    {
+      "n": 1533,
+      "<VQA>": {
+        "n": 1533,
+        "acc_all": 0.5994781474233529,
+        "acc_published": 0.9259259259259259,
+        "by_type": {
+          "comp": 0.9309,
+          "count": 0.2383,
+          "presence": 0.9178,
+          "refusal": 0.0435,
+          "rural_urban": 1.0,
+          "vqa": 0.3863
+        }
+      },
+      "selection": 0.9259259259259259,
+      "step": 1000
+    },
+    {
+      "n": 1533,
+      "<VQA>": {
+        "n": 1533,
+        "acc_all": 0.5962165688193085,
+        "acc_published": 0.9259259259259259,
+        "by_type": {
+          "comp": 0.9284,
+          "count": 0.2651,
+          "presence": 0.9212,
+          "refusal": 0.2609,
+          "rural_urban": 1.0,
+          "vqa": 0.351
+        }
+      },
+      "selection": 0.9259259259259259,
+      "step": 1500
+    },
+    {
+      "n": 1533,
+      "<VQA>": {
+        "n": 1533,
+        "acc_all": 0.6151337247227658,
+        "acc_published": 0.9259259259259259,
+        "by_type": {
+          "comp": 0.9259,
+          "count": 0.2517,
+          "presence": 0.9247,
+          "refusal": 0.3913,
+          "rural_urban": 1.0,
+          "vqa": 0.4098
+        }
+      },
+      "selection": 0.9259259259259259,
+      "step": 2000
+    },
+    {
+      "n": 1533,
+      "<VQA>": {
+        "n": 1533,
+        "acc_all": 0.6223091976516634,
+        "acc_published": 0.9301994301994302,
+        "by_type": {
+          "comp": 0.9309,
+          "count": 0.2584,
+          "presence": 0.9281,
+          "refusal": 0.4348,
+          "rural_urban": 1.0,
+          "vqa": 0.4196
+        }
+      },
+      "selection": 0.9301994301994302,
+      "step": 2500
+    },
+    {
+      "n": 1533,
+      "<VQA>": {
+        "n": 1533,
+        "acc_all": 0.6210045662100456,
+        "acc_published": 0.9273504273504274,
+        "by_type": {
+          "comp": 0.9284,
+          "count": 0.245,
+          "presence": 0.9247,
+          "refusal": 0.4783,
+          "rural_urban": 1.0,
+          "vqa": 0.4255
+        }
+      },
+      "selection": 0.9273504273504274,
+      "step": 3000
+    },
+    {
+      "n": 1533,
+      "<VQA>": {
+        "n": 1533,
+        "acc_all": 0.6236138290932811,
+        "acc_published": 0.9330484330484331,
+        "by_type": {
+          "comp": 0.9333,
+          "count": 0.255,
+          "presence": 0.9315,
+          "refusal": 0.4348,
+          "rural_urban": 1.0,
+          "vqa": 0.4216
+        }
+      },
+      "selection": 0.9330484330484331,
+      "step": 3500
+    },
+    {
+      "n": 1533,
+      "<VQA>": {
+        "n": 1533,
+        "acc_all": 0.6216568819308546,
+        "acc_published": 0.9330484330484331,
+        "by_type": {
+          "comp": 0.9333,
+          "count": 0.2383,
+          "presence": 0.9315,
+          "refusal": 0.4348,
+          "rural_urban": 1.0,
+          "vqa": 0.4255
+        }
+      },
+      "selection": 0.9330484330484331,
+      "step": 3764
+    }
+  ],
+  "step": 3764,
+  "elapsed_s": 13080.409004211426,
+  "gpu_hours": 3.633446945614285
+}

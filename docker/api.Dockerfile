@@ -49,7 +49,10 @@ RUN pip install --no-cache-dir \
     peft==0.20.0 \
     bitsandbytes==0.50.2 \
     accelerate==1.14.0 \
+    timm==1.0.29 \
     --extra-index-url https://download.pytorch.org/whl/cu126
+# timm: the landcover v3 trunk (training/v3/landcover.py) is a timm ResNet-50
+# rebuilt from the checkpoint at load time; no weights are fetched.
 
 # Pre-warm the ImageNet ResNet-18 the change-VQA head's encoder is built from.
 # Without this the FIRST bi-temporal query in a FRESH container reaches out to

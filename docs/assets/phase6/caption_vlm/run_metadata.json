@@ -1,0 +1,68 @@
+{
+  "experiment_id": "vlm_sft-20260913-052822-1d5938",
+  "task": "vlm_sft",
+  "backbone": "Qwen2.5-VL + LoRA",
+  "n_train": 43670,
+  "tasks": {
+    "<CAPTION>": 43670
+  },
+  "n_val_selection": 300,
+  "quant": "none",
+  "manifests": {
+    "data/rsicd/manifests/train.jsonl": "67c61c33f29a70c278e1c4766ace4da405f608232222291ac5e75252b73871ed",
+    "data/rsicd/manifests/val.jsonl": "14dda0719a32621eb5fd967b97c6920d343c4eb02703581e3b8434dc642b6136"
+  },
+  "hardware": {
+    "host": "compute01.node",
+    "python": "3.12.14",
+    "platform": "Linux-5.14.0-611.49.1.el9_7.x86_64-x86_64-with-glibc2.34",
+    "torch": "2.6.0+cu124",
+    "gpu": "NVIDIA L40S",
+    "gpu_total_gb": 44.4,
+    "gpu_free_at_start_gb": 36.7
+  },
+  "args": {
+    "model": "models/qwen25_vl_3b",
+    "train": [
+      "data/rsicd/manifests/train.jsonl"
+    ],
+    "train_weight": null,
+    "val": [
+      "data/rsicd/manifests/val.jsonl"
+    ],
+    "val_limit": 300,
+    "ckpt_dir": "checkpoints/v3/caption_vlm",
+    "init_adapter": null,
+    "epochs": 1.0,
+    "batch_size": 16,
+    "grad_accum": 1,
+    "lr": 0.0001,
+    "weight_decay": 0.0,
+    "warmup_steps": 50,
+    "quant": "none",
+    "no_checkpointing": false,
+    "lora_r": 16,
+    "lora_alpha": 32,
+    "lora_dropout": 0.05,
+    "lora_targets": [
+      "q_proj",
+      "k_proj",
+      "v_proj",
+      "o_proj",
+      "gate_proj",
+      "up_proj",
+      "down_proj"
+    ],
+    "train_merger": false,
+    "max_pixels": null,
+    "limit_train": null,
+    "val_every": 400,
+    "eval_batch": 32,
+    "save_every": 200,
+    "workers": 8,
+    "seed": 42,
+    "resume": false,
+    "notes": "caption arm: RSICD 5 refs/image, fresh LoRA r16"
+  },
+  "total_steps": 2729
+}

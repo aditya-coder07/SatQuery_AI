@@ -25,6 +25,7 @@ from __future__ import annotations
 import os
 import threading
 import time
+from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
 
@@ -64,6 +65,7 @@ class _ModelHandle:
 
     _instance: "_ModelHandle | None" = None
     _lock = threading.Lock()
+    DEFAULT_ADAPTER = "rs_vqa"
 
     def __init__(self, base: Path, adapter: Path):
         import torch
@@ -94,10 +96,16 @@ class _ModelHandle:
         )
         # The adapter is ours, produced by training/track_b_vlm_qlora.py, so
         # loading it is not the third-party-code risk that trust_remote_code is.
-        self.model = PeftModel.from_pretrained(model, str(adapter))
+        self.model = PeftModel.from_pretrained(model, str(adapter), adapter_name=self.DEFAULT_ADAPTER)
         self.model.eval()
         self.adapter_path = str(adapter)
         self.base_path = str(base)
+        # One base, several task adapters (Phase 6): grounding and the
+        # captioners share these 4-bit weights instead of each loading their
+        # own copy. `using()` switches the active adapter under a lock so two
+        # request threads cannot interleave a switch and a generate.
+        self.adapters: dict[str, str] = {self.DEFAULT_ADAPTER: str(adapter)}
+        self.gen_lock = threading.Lock()
         # The adapter only, not the base. The adapter is what this project
         # trained and what changes between runs; the base is gigabytes of
         # third-party weights whose digest is already recorded in
@@ -113,6 +121,26 @@ class _ModelHandle:
                 if cls._instance is None:
                     cls._instance = cls(base, adapter)
         return cls._instance
+
+    def ensure_adapter(self, name: str, path: Path) -> None:
+        """Load a second task adapter onto the shared base, once."""
+        with self.gen_lock:
+            if name not in self.adapters:
+                self.model.load_adapter(str(path), adapter_name=name)
+                self.model.eval()
+                self.adapters[name] = str(path)
+
+    @contextmanager
+    def using(self, name: str):
+        """Generate with `name` active; the VQA adapter is restored after."""
+        with self.gen_lock:
+            if name != self.DEFAULT_ADAPTER:
+                self.model.set_adapter(name)
+            try:
+                yield self.model
+            finally:
+                if name != self.DEFAULT_ADAPTER:
+                    self.model.set_adapter(self.DEFAULT_ADAPTER)
 
 
 def is_available() -> tuple[bool, str]:
@@ -177,8 +205,8 @@ class RSVQATool(ToolProtocol):
             text=[text], images=[image], return_tensors="pt"
         ).to(handle.model.device)
 
-        with torch.no_grad():
-            generated = handle.model.generate(
+        with torch.no_grad(), handle.using(handle.DEFAULT_ADAPTER) as model:
+            generated = model.generate(
                 **batch,
                 max_new_tokens=int(params.get("max_new_tokens", DEFAULT_MAX_NEW_TOKENS)),
                 do_sample=False,               # deterministic: same input, same answer

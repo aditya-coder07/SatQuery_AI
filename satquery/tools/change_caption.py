@@ -48,15 +48,30 @@ from satquery.tools.sidecars import readable_json
 from satquery.tools.imaging import to_rgb_preview
 
 TOOL_NAME = "change_caption"
-TOOL_VERSION = "1.0.0"
+TOOL_VERSION = "1.1.0"
 ENV_CHECKPOINT = "SATQUERY_CHANGE_CAPTION"
+# Phase 6: a two-image LoRA adapter for the shared Qwen2.5-VL base. When
+# set, it takes precedence over the mask-conditioned specialist and needs
+# no change mask at all - the fair, images-only setting the papers use.
+ENV_VLM_ADAPTER = "SATQUERY_CHANGE_CAPTION_ADAPTER"
+VLM_ADAPTER_NAME = "change_caption"
 
 
 class ChangeCaptionPayload(ToolPayload):
     data: dict[str, Any]
 
 
+def vlm_configured() -> bool:
+    from satquery.tools import vlm_text
+
+    return vlm_text.configured(ENV_VLM_ADAPTER)
+
+
 def is_available() -> tuple[bool, str]:
+    if vlm_configured():
+        from satquery.tools import vlm_text
+
+        return vlm_text.available(ENV_VLM_ADAPTER, "change_caption")
     path = os.getenv(ENV_CHECKPOINT)
     if not path:
         return False, f"{ENV_CHECKPOINT} is not set"
@@ -161,6 +176,8 @@ class ChangeCaptionTool(ToolProtocol):
     version = TOOL_VERSION
 
     def run(self, manifest: InputManifest, params: dict) -> ToolResult:
+        if vlm_configured():
+            return self._run_vlm(manifest)
         started = time.perf_counter()
         handle = _Handle.get(Path(os.environ[ENV_CHECKPOINT]))
         torch = handle.torch
@@ -220,6 +237,29 @@ class ChangeCaptionTool(ToolProtocol):
             model_card=f"mask-conditioned change captioner ({Path(handle.path).name})",
             runtime_ms=int((time.perf_counter() - started) * 1000),
             warnings=warnings,
+        )
+
+    def _run_vlm(self, manifest: InputManifest) -> ToolResult:
+        """Change caption through the shared Qwen2.5-VL base + the two-image
+        adapter: both dates go in as images, no mask is needed."""
+        from satquery.tools import vlm_text
+
+        started = time.perf_counter()
+        if len(manifest.images) < 2:
+            raise ValueError(f"change_caption needs a bi-temporal pair; got {len(manifest.images)} image(s)")
+        images = [to_rgb_preview(m, max_edge=1024)[0] for m in manifest.images[:2]]
+        caption, confidence, card = vlm_text.generate(ENV_VLM_ADAPTER, VLM_ADAPTER_NAME, images,
+                                                      vlm_text.CHANGE_QUESTION)
+        warnings: list[str] = []
+        if not caption:
+            caption = "No change description could be generated."
+            warnings.append("captioner produced no tokens")
+        return ToolResult(
+            tool=TOOL_NAME, version=TOOL_VERSION,
+            payload=ChangeCaptionPayload(data={"caption": caption, "n_tokens": len(caption.split()),
+                                               "mask_source": "none (images-only VLM arm)"}),
+            artifacts=[], confidence=confidence, confidence_method="logprob", model_card=card,
+            runtime_ms=int((time.perf_counter() - started) * 1000), warnings=warnings,
         )
 
     def run_batch(self, manifests, params):

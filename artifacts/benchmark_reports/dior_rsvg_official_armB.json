@@ -1,0 +1,99 @@
+{
+  "benchmark": "DIOR-RSVG official test split",
+  "n": 7500,
+  "limited_debug_run": false,
+  "manifest_hashes": {
+    "train.jsonl": "2cbc6e7e8a969f109a6c658d5402ea53c97cddc8f8feb9583a2ddb6b04663cd3",
+    "val.jsonl": "d53652fa12959fdfd66a2ce9a3ddabe89c30452659799839864e2a1fddead00e",
+    "test.jsonl": "ed017203714631dfedd6c9712ae130604eeda5db7b4c7265ca19dc37b441c80e"
+  },
+  "image_overlap_train_test": 4206,
+  "arms": {
+    "lora_r16_merger": {
+      "n": 7500,
+      "acc@0.25": 0.7647,
+      "acc@0.5": 0.6736,
+      "acc@0.5_ci95": [
+        0.6625,
+        0.6844
+      ],
+      "acc@0.7": 0.5308,
+      "miou": 0.5938,
+      "miou_ci95": [
+        0.5854,
+        0.6019
+      ],
+      "parse_rate": 1.0,
+      "image_disjoint_subset": {
+        "n": 2223,
+        "acc@0.5": 0.7998,
+        "acc@0.5_ci95": [
+          0.7823,
+          0.816
+        ],
+        "miou": 0.7042
+      },
+      "per_category_acc@0.5": {
+        "Expressway-Service-area": 0.7163,
+        "Expressway-toll-station": 0.6667,
+        "airplane": 0.8436,
+        "airport": 0.8491,
+        "baseballfield": 0.8024,
+        "basketballcourt": 0.6345,
+        "bridge": 0.3319,
+        "chimney": 0.81,
+        "dam": 0.6045,
+        "golffield": 0.8333,
+        "groundtrackfield": 0.772,
+        "harbor": 0.4,
+        "overpass": 0.447,
+        "ship": 0.7363,
+        "stadium": 0.9144,
+        "storagetank": 0.8088,
+        "tenniscourt": 0.7492,
+        "trainstation": 0.6111,
+        "vehicle": 0.6092,
+        "windmill": 0.6633
+      },
+      "per_size_acc@0.5": {
+        "large(>10%)": {
+          "n": 1547,
+          "acc": 0.8778
+        },
+        "medium(1-10%)": {
+          "n": 2766,
+          "acc": 0.7697
+        },
+        "small(<1%)": {
+          "n": 3187,
+          "acc": 0.4911
+        }
+      },
+      "failure_taxonomy": {
+        "wrong_object": 404,
+        "scale_error": 706,
+        "wrong_box": 1099,
+        "localisation_drift": 239
+      },
+      "iou_histogram": {
+        "0.0-0.1": 1503,
+        "0.1-0.2": 156,
+        "0.2-0.3": 186,
+        "0.3-0.4": 233,
+        "0.4-0.5": 370,
+        "0.5-0.6": 439,
+        "0.6-0.7": 632,
+        "0.7-0.8": 905,
+        "0.8-0.9": 1291,
+        "0.9-1.0": 1785
+      },
+      "timing": {
+        "generate_s": 4672.2,
+        "s_per_question": 0.623,
+        "peak_vram_gb": 9.65
+      },
+      "adapter": "checkpoints/v3/grounding_vlm_r16_merger/adapter_best"
+    }
+  },
+  "paired_tests": {}
+}

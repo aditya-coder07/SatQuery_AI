@@ -27,8 +27,18 @@ frontend/tsconfig.tsbuildinfo
 *.tsbuildinfo
 
 # Runtime output: index rasters, evidence packs, the SQLite run store
-artifacts/
+artifacts/*
 *.db
+# ... except the research ledgers (2026-09-12): registry, benchmark reports,
+# dataset manifests and the best-model checksum index are tracked. Weights
+# themselves never are - only their sha256 in best_models/.
+!artifacts/experiment_registry/
+!artifacts/benchmark_reports/
+!artifacts/dataset_manifests/
+!artifacts/best_models/
+artifacts/best_models/**/*.pt
+artifacts/best_models/**/*.safetensors
+artifacts/best_models/**/*.bin
 
 # Stray rasters dropped at the repository root by manual API probing. Only the
 # root: real imagery lives under data/ (already ignored) and test fixtures are
@@ -62,3 +72,4 @@ configs/data_manifest.json
 
 # Bootstrap creates a per-checkout venv on the training server.
 .venv/
+artifacts/experiment_registry/.cluster_registry.jsonl

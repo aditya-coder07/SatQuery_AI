@@ -1,0 +1,68 @@
+{
+  "experiment_id": "vlm_sft-20260914-101409-c5da98",
+  "task": "vlm_sft",
+  "backbone": "Qwen2.5-VL + LoRA",
+  "n_train": 34075,
+  "tasks": {
+    "<CHANGE_CAPTION>": 34075
+  },
+  "n_val_selection": 300,
+  "quant": "none",
+  "manifests": {
+    "data/levir_mci/manifests/train.jsonl": "2333113e2243d729fe63c7ae1b101cfc70ebc5c4e0a636626d0cc771f1781a76",
+    "data/levir_mci/manifests/val.jsonl": "b2c4c482b5c2fbe962032d7ee7991d1aebba91e4dc46a630f28dc89f8669d677"
+  },
+  "hardware": {
+    "host": "compute01.node",
+    "python": "3.12.14",
+    "platform": "Linux-5.14.0-611.49.1.el9_7.x86_64-x86_64-with-glibc2.34",
+    "torch": "2.6.0+cu124",
+    "gpu": "NVIDIA L40S",
+    "gpu_total_gb": 44.4,
+    "gpu_free_at_start_gb": 2.6
+  },
+  "args": {
+    "model": "models/qwen25_vl_3b",
+    "train": [
+      "data/levir_mci/manifests/train.jsonl"
+    ],
+    "train_weight": null,
+    "val": [
+      "data/levir_mci/manifests/val.jsonl"
+    ],
+    "val_limit": 300,
+    "ckpt_dir": "checkpoints/v3/change_caption_vlm",
+    "init_adapter": null,
+    "epochs": 1.0,
+    "batch_size": 8,
+    "grad_accum": 2,
+    "lr": 0.0001,
+    "weight_decay": 0.0,
+    "warmup_steps": 50,
+    "quant": "none",
+    "no_checkpointing": false,
+    "lora_r": 16,
+    "lora_alpha": 32,
+    "lora_dropout": 0.05,
+    "lora_targets": [
+      "q_proj",
+      "k_proj",
+      "v_proj",
+      "o_proj",
+      "gate_proj",
+      "up_proj",
+      "down_proj"
+    ],
+    "train_merger": false,
+    "max_pixels": null,
+    "limit_train": null,
+    "val_every": 400,
+    "eval_batch": 32,
+    "save_every": 200,
+    "workers": 8,
+    "seed": 42,
+    "resume": true,
+    "notes": "change caption arm: LEVIR-CC 5 refs/pair, two images, fresh LoRA r16 (resumed after the 2026-09-14 reboot)"
+  },
+  "total_steps": 2129
+}

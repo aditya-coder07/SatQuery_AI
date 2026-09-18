@@ -1,0 +1,12 @@
+{
+  "a": "data/rsicd/manifests/train.jsonl",
+  "b": "data/dior_rsvg_official/manifests/test.jsonl",
+  "n_a": 8734,
+  "n_b": 6102,
+  "same_path": 0,
+  "exact_duplicates": 0,
+  "near_duplicates": 0,
+  "max_distance": 8,
+  "examples_exact": [],
+  "examples_near": []
+}

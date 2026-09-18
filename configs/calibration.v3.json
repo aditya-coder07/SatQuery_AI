@@ -1,0 +1,32 @@
+{
+  "version": 1,
+  "generated_utc": "2026-09-12T18:34:25.348648+00:00",
+  "heads": {
+    "SINGLE_LANDCOVER": {
+      "method": "affine",
+      "T": 1.1702084943653197,
+      "a": 0.8545485738781662,
+      "b": -0.0464487869236909,
+      "ece_before": 0.00853984618654235,
+      "ece_after": 0.0029691480070691955,
+      "n_fit": 10000,
+      "n_eval": 10000,
+      "dataset": "BigEarthNet-19",
+      "split_note": "BigEarthNet-S2 v1.0 official val split, 20000 of 123723 patches (random subsample, seed 1), all 12 bands at native 10 m, checkpoint best.pt"
+    },
+    "TEMPORAL_CHANGE_MAP": {
+      "method": "affine",
+      "T": 1.6641080739418268,
+      "a": 0.6009225095767173,
+      "b": -1.1794165743472411,
+      "ece_before": 0.005338489740048745,
+      "ece_after": 0.0010973587071027547,
+      "n_fit": 512,
+      "n_eval": 512,
+      "dataset": "LEVIR-CD",
+      "split_note": "LEVIR-CD official val split, 1024 tiles, 1024 pixels sampled per tile, checkpoint best.pt. Split for fitting is by TILE, not by pixel, because pixels within a tile are spatially correlated and a pixel-wise split would leak. The head was trained with pos_weight=10.1, so its logits carry a deliberate positive-class offset that temperature scaling alone cannot remove."
+    }
+  },
+  "rejected": {},
+  "note": "Heads under `rejected` are deliberately left uncalibrated at runtime and keep reporting ece_after = -1.0. A fitted parameter that did not survive its own held-out check is worse than none."
+}

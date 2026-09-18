@@ -55,6 +55,11 @@ def build_model(dim: int = 32, arch: str = "v1"):
 
         return build_optsar_fusion(dim=dim, n_classes=N_WHU_CLASSES,
                                    n_optical=4, n_sar=1)
+    if arch == "v3":
+        from training.v3.optsar_fusion import build_optsar_fusion_v3
+
+        # Per-pixel triad; weights come from the checkpoint.
+        return build_optsar_fusion_v3(dim=dim, weights=None)
 
     import torch
     import torch.nn as nn

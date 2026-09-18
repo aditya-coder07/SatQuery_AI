@@ -1,0 +1,26 @@
+{
+  "map_all_bands": 0.9001841314715183,
+  "map_cartosat_4band": 0.5624722668713418,
+  "retention": 0.6248413487936921,
+  "per_class_ap": {
+    "class_0": 0.805213,
+    "class_1": 0.848053,
+    "class_2": 0.941824,
+    "class_3": null,
+    "class_4": null,
+    "class_5": null,
+    "class_6": 0.93854,
+    "class_7": null,
+    "class_8": 0.886044,
+    "class_9": 0.995569,
+    "class_10": 0.991432,
+    "class_11": null,
+    "class_12": null,
+    "class_13": 0.955974,
+    "class_14": null,
+    "class_15": 0.829728,
+    "class_16": 0.882496,
+    "class_17": 0.990069,
+    "class_18": 0.737268
+  }
+}

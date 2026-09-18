@@ -1,0 +1,42 @@
+{
+  "manifest": "data/vrsbench/manifests/val_grounding.jsonl",
+  "manifest_hash": "d38df23e953dc1b3d57ea3616e8eafa464acfc19306e0bbe83d65976844728a2",
+  "n": 16159,
+  "quant": "none",
+  "limited_debug_run": false,
+  "task": "<GROUNDING>",
+  "arms": {
+    "lora_vrs": {
+      "n": 16159,
+      "acc@0.5": 0.6325267652701281,
+      "miou": 0.5388013511232742,
+      "acc@0.5_ci95": [
+        0.625,
+        0.64
+      ],
+      "headline": 0.6325267652701281,
+      "adapter": "checkpoints/v3/grounding_vlm_vrs/adapter_best",
+      "timing": {
+        "generate_s": 4304.4,
+        "s_per_item": 0.2664,
+        "peak_vram_gb": 8.03
+      }
+    },
+    "lora_hard_vrs": {
+      "n": 16159,
+      "acc@0.5": 0.6395816572807723,
+      "miou": 0.545858236616057,
+      "acc@0.5_ci95": [
+        0.6317,
+        0.647
+      ],
+      "headline": 0.6395816572807723,
+      "adapter": "checkpoints/v3/grounding_vlm_hard_vrs/adapter_best",
+      "timing": {
+        "generate_s": 2944.1,
+        "s_per_item": 0.1822,
+        "peak_vram_gb": 8.03
+      }
+    }
+  }
+}

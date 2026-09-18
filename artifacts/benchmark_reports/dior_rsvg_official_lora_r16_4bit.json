@@ -1,0 +1,26 @@
+{
+  "manifest": "data/dior_rsvg_official/manifests/test.jsonl",
+  "manifest_hash": "ed017203714631dfedd6c9712ae130604eeda5db7b4c7265ca19dc37b441c80e",
+  "n": 7500,
+  "quant": "4bit",
+  "limited_debug_run": false,
+  "task": "<GROUNDING>",
+  "arms": {
+    "lora_r16": {
+      "n": 7500,
+      "acc@0.5": 0.678,
+      "miou": 0.5959243523927096,
+      "acc@0.5_ci95": [
+        0.6669,
+        0.6887
+      ],
+      "headline": 0.678,
+      "adapter": "checkpoints/v3/grounding_vlm_r16/adapter_best",
+      "timing": {
+        "generate_s": 6742.9,
+        "s_per_item": 0.8991,
+        "peak_vram_gb": 5.32
+      }
+    }
+  }
+}

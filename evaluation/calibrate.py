@@ -87,32 +87,69 @@ HEAD_SPEC: dict[str, dict] = {
 # --- Logit producers --------------------------------------------------------
 
 
-def landcover_logits(data_dir: Path, checkpoint: Path, dim: int, batch_size: int):
-    """Track A land-cover head over the official BigEarthNet test shard."""
+def landcover_logits(data_dir: Path, checkpoint: Path, dim: int, batch_size: int,
+                     split: str = "test", limit: int | None = 20000, seed: int = 1):
+    """Land-cover head logits.
+
+    Two layouts: the Phase 1-6 HDF5 shards (`*test*.hdf5`; only a test
+    shard exists, which is why the v1/v2 fits were on test) and the complete
+    official split written by `training/prepare/bigearthnet_v1_full.py`,
+    where the fit is on the official **validation** split (`--ben-split
+    val`, a `limit`-item random subsample at `seed`, never test). Band
+    statistics are read from `band_stats.json` beside the weights when it
+    exists, so the head sees exactly the normalisation it was trained with.
+    """
     import torch
 
-    from training.track_a_full import (
-        BEN_GSD_M,
-        ShardedBigEarthNet,
-        batches,
-        compute_stats,
-    )
     from evaluation.splits.multires import load_model
-
-    test_paths = sorted(Path(x) for x in glob.glob(str(data_dir / "*test*.hdf5")))
-    if not test_paths:
-        raise SystemExit(f"no test shards in {data_dir}")
-    train_paths = sorted(Path(x) for x in glob.glob(str(data_dir / "*train*.hdf5")))
-
-    # Normalisation statistics must come from the same place training took
-    # them, or the logits are produced under inputs the model never saw.
-    raw = ShardedBigEarthNet(train_paths or test_paths)
-    stats = compute_stats(raw)
-    raw.close()
+    from training.track_a_full import BEN_GSD_M
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
     model, latest, has_gsd = load_model(checkpoint, torch, device, dim)
-    dataset = ShardedBigEarthNet(test_paths, stats)
+    stats_file = (latest.parent if latest.is_file() else latest) / "band_stats.json"
+    stats = None
+    if stats_file.exists():
+        blob = json.loads(stats_file.read_text(encoding="utf-8"))
+        stats = (np.asarray(blob["mean"], dtype="float32"), np.asarray(blob["std"], dtype="float32"))
+
+    if (data_dir / f"{split}_images.u16.npy").exists():
+        from training.v3.ben_memmap import MemmapBigEarthNet
+
+        if stats is None:
+            from training.track_a_full import compute_stats
+
+            stats = compute_stats(MemmapBigEarthNet(data_dir, "train"))
+        n_all = np.load(data_dir / f"{split}_labels19.npy", mmap_mode="r").shape[0]
+        picks = None
+        if limit and limit < n_all:
+            picks = np.random.default_rng(seed).choice(n_all, size=limit, replace=False)
+        dataset = MemmapBigEarthNet(data_dir, split, stats, subset=picks)
+        note = (f"BigEarthNet-S2 v1.0 official {split} split, {len(dataset)} of {n_all} patches "
+                f"(random subsample, seed {seed}), all 12 bands at native 10 m, checkpoint {latest.name}")
+
+        def batches(ds, bs, rng, shuffle=False):
+            for s in range(0, len(ds), bs):
+                yield ds.batch(np.arange(s, min(len(ds), s + bs)))
+    else:
+        from training.track_a_full import ShardedBigEarthNet, batches, compute_stats
+
+        test_paths = sorted(Path(x) for x in glob.glob(str(data_dir / f"*{split}*.hdf5")))
+        if not test_paths:
+            raise SystemExit(f"no {split} shards in {data_dir}")
+        train_paths = sorted(Path(x) for x in glob.glob(str(data_dir / "*train*.hdf5")))
+        if stats is None:
+            # Normalisation statistics must come from the same place training
+            # took them, or the logits are produced under inputs the model
+            # never saw.
+            raw = ShardedBigEarthNet(train_paths or test_paths)
+            stats = compute_stats(raw)
+            raw.close()
+        dataset = ShardedBigEarthNet(test_paths, stats)
+        note = (f"BigEarthNet official {split} shard ({', '.join(p.name for p in test_paths)}), "
+                f"all 12 bands at native 10 m, checkpoint {latest.name} "
+                f"(gsd_conditioning={has_gsd}). Uniformly 10 m, so this split measures "
+                f"the head at its training resolution; cross-resolution behaviour is the "
+                f"multi-resolution split.")
 
     logits, labels = [], []
     rng = np.random.default_rng(0)
@@ -120,131 +157,29 @@ def landcover_logits(data_dir: Path, checkpoint: Path, dim: int, batch_size: int
         for x, y in batches(dataset, batch_size, rng, shuffle=False):
             mask = np.ones((x.shape[0], x.shape[1]), dtype="float32")
             out = model(
-                torch.from_numpy(x).to(device),
+                torch.from_numpy(np.ascontiguousarray(x)).to(device),
                 torch.from_numpy(mask).to(device),
                 torch.full((x.shape[0],), BEN_GSD_M, device=device),
             )
-            logits.append(out.cpu().numpy())
+            logits.append(out.float().cpu().numpy())
             labels.append(y)
     dataset.close()
-
-    return (
-        np.concatenate(logits),
-        np.concatenate(labels),
-        f"BigEarthNet official test shard ({', '.join(p.name for p in test_paths)}), "
-        f"all 12 bands at native 10 m, checkpoint {latest.name} "
-        f"(gsd_conditioning={has_gsd}). Uniformly 10 m, so this split measures "
-        f"calibration at native resolution ONLY and cannot show whether "
-        f"confidence stays honest as resolution coarsens - that needs the "
-        f"multi-resolution split.",
-    )
-
-
-def intent_logits():
-    """Tier-1 router head over the clean, never-tuned-on holdout."""
-    from satquery.controller.intent import IntentClassifier
-    from satquery.synth.holdout import CLEAN_HOLDOUT
-
-    clf = IntentClassifier()
-    texts = [t for t, _ in CLEAN_HOLDOUT]
-    truth = [label for _, label in CLEAN_HOLDOUT]
-
-    # decision_function is the pre-softmax score; for a binary problem
-    # sklearn returns one column, which is not the shape this expects.
-    scores = clf.pipeline.decision_function(texts)
-    scores = np.asarray(scores, dtype="float64")
-    if scores.ndim == 1:
-        raise SystemExit("intent head is binary; multiclass calibration expects >2")
-
-    classes = list(clf.classes_)
-    labels = np.array([classes.index(t) for t in truth], dtype="int64")
-    return (
-        scores,
-        labels,
-        f"CLEAN_HOLDOUT from satquery/synth/holdout.py, n={len(texts)}, "
-        f"hand-written and never used to tune the templates. The synthetic "
-        f"bank's own held-out split was NOT used: it measures template "
-        f"memorisation, so a temperature fitted there would be calibrated to "
-        f"a distribution the router never meets.",
-    )
-
-
-def change_mask_logits(
-    index_path: Path, checkpoint: Path, dim: int, batch_size: int,
-    pixels_per_image: int, limit: int | None,
-):
-    """Change head over LEVIR-CD test, subsampled by pixel within each image.
-
-    Pixels inside one 256x256 tile are heavily correlated, so the fit/eval
-    split must be made across IMAGES, not across pixels. Sampling a fixed
-    number of pixels per image and keeping the image as the row does exactly
-    that - `calibrate_head` then splits on axis 0, which is the image axis.
-    """
-    import torch
-
-    from training.common.checkpointing import find_latest_checkpoint, load_checkpoint
-    from training.train_change_mask import LevirCD, batches, build_model
-
-    index = json.loads(index_path.read_text(encoding="utf-8"))
-    rows = index["splits"].get("test", [])
-    if limit:
-        rows = rows[:limit]
-    if not rows:
-        raise SystemExit(f"no test rows in {index_path}")
-
-    latest = find_latest_checkpoint(checkpoint)
-    if latest is None:
-        raise SystemExit(f"no checkpoint in {checkpoint}")
-    device = "cuda" if torch.cuda.is_available() else "cpu"
-    # As in evaluation/splits/multires.py: the checkpoint says which
-    # architecture wrote it. Absent means v1, so v1 checkpoints are unchanged.
-    from training.common.checkpointing import safe_torch_load
-
-    extra = safe_torch_load(latest).get("extra") or {}
-    model = build_model(extra.get("dim", dim), arch=extra.get("arch", "v1"))
-    load_checkpoint(latest, model, map_location="cpu")
-    model = model.to(device).eval()
-
-    dataset = LevirCD(rows)
-    rng = np.random.default_rng(0)
-    sampler = np.random.default_rng(7)
-    logits, labels = [], []
-    with torch.no_grad():
-        for a, b, m in batches(dataset, batch_size, rng, shuffle=False):
-            out = model(
-                torch.from_numpy(a).to(device), torch.from_numpy(b).to(device)
-            ).cpu().numpy()
-            flat_logit = out.reshape(out.shape[0], -1)
-            flat_label = m.reshape(m.shape[0], -1)
-            idx = sampler.choice(
-                flat_logit.shape[1], size=pixels_per_image, replace=False
-            )
-            logits.append(flat_logit[:, idx])
-            labels.append(flat_label[:, idx])
-
-    return (
-        np.concatenate(logits),
-        np.concatenate(labels),
-        f"LEVIR-CD official test split, {len(rows)} tiles, {pixels_per_image} "
-        f"pixels sampled per tile, checkpoint {latest.name}. Split for "
-        f"fitting is by TILE, not by pixel, because pixels within a tile are "
-        f"spatially correlated and a pixel-wise split would leak. The head was "
-        f"trained with pos_weight=10.1, so its logits carry a deliberate "
-        f"positive-class offset that temperature scaling alone cannot remove.",
-    )
+    return np.concatenate(logits), np.concatenate(labels), note
 
 
 def produce_logits(head: str, args):
     """Dispatch to the right logit producer for `head`."""
     if head == "landcover":
         return landcover_logits(
-            args.ben_data, args.track_a_ckpt, args.dim, args.batch_size
+            args.ben_data, args.track_a_ckpt, args.dim, args.batch_size,
+            split=args.ben_split, limit=args.ben_limit,
         )
     if head == "intent":
         return intent_logits()
     return change_mask_logits(
         args.levir_index, args.change_ckpt, args.change_dim,
         args.batch_size, args.pixels_per_image, args.limit_change,
+        split=args.levir_split,
     )
 
 
@@ -321,12 +256,17 @@ def main() -> int:
     p.add_argument("--heads", nargs="+", default=["landcover", "intent"],
                    choices=sorted(HEAD_TASK_ID))
     p.add_argument("--ben-data", type=Path, default=Path("data/ben_full"))
+    p.add_argument("--ben-split", default="test", choices=["test", "val"],
+                   help="full layout only: fit on the official val split (Phase 6)")
+    p.add_argument("--ben-limit", type=int, default=20000, help="full layout: val subsample size")
     p.add_argument("--track-a-ckpt", type=Path,
                    default=Path("checkpoints/track_a_full_base"))
     p.add_argument("--levir-index", type=Path, default=Path("data/levircd/index.json"))
     p.add_argument("--change-ckpt", type=Path, default=Path("checkpoints/change_mask"))
     p.add_argument("--dim", type=int, default=64)
     p.add_argument("--change-dim", type=int, default=16)
+    p.add_argument("--levir-split", default="test", choices=["test", "val"],
+                   help="which LEVIR-CD split the change head is fitted on (Phase 6: val)")
     p.add_argument("--batch-size", type=int, default=32)
     p.add_argument("--pixels-per-image", type=int, default=1024)
     p.add_argument("--limit-change", type=int)
@@ -382,6 +322,17 @@ def main() -> int:
 
     if not args.no_write_registry:
         registry = build_registry(reports)
+        # Merge with the registry on disk: heads fitted in an earlier run
+        # (e.g. change_mask on LEVIR-CD val) survive a run that only refits
+        # landcover; a head refitted here replaces its old entry (and leaves
+        # `rejected` if it now passes, or `heads` if it now fails).
+        if args.registry.exists():
+            old = json.loads(args.registry.read_text(encoding="utf-8"))
+            touched = set(registry["heads"]) | set(registry["rejected"])
+            for section in ("heads", "rejected"):
+                for key, entry in (old.get(section) or {}).items():
+                    if key not in touched:
+                        registry[section][key] = entry
         args.registry.parent.mkdir(parents=True, exist_ok=True)
         args.registry.write_text(json.dumps(registry, indent=2), encoding="utf-8")
         print(f"Wrote {args.registry}  "

@@ -1,0 +1,70 @@
+{
+  "manifest": "data/rsicd/manifests/test.jsonl",
+  "manifest_hash": "977e3c2f5254cee23b27fbf7d1c074c87b48713de1277a8b074b3c148a4522af",
+  "n": 1093,
+  "quant": "none",
+  "limited_debug_run": false,
+  "task": "<CAPTION>",
+  "arms": {
+    "base": {
+      "n": 1093,
+      "corpus": {
+        "bleu1": 0.3118910925539318,
+        "bleu2": 0.13056790003245328,
+        "bleu3": 0.05472319093262129,
+        "bleu4": 0.02234707534277537,
+        "brevity_penalty": 1.0,
+        "rouge_l": 0.2309228871302564,
+        "cider_d": 0.06486632339639406,
+        "meteor_exact": 0.23796450737706046,
+        "n": 1093
+      },
+      "bleu4_ci95": [
+        0.0187,
+        0.0256
+      ],
+      "cider_d_ci95": [
+        0.06,
+        0.0706
+      ],
+      "unique_fraction": 0.9762,
+      "headline": 0.02234707534277537,
+      "adapter": "BASE",
+      "timing": {
+        "generate_s": 414.9,
+        "s_per_item": 0.3796,
+        "peak_vram_gb": 7.48
+      }
+    },
+    "caption_lora": {
+      "n": 1093,
+      "corpus": {
+        "bleu1": 0.6426510658759417,
+        "bleu2": 0.45614063630582097,
+        "bleu3": 0.33793607815484966,
+        "bleu4": 0.25595267539412847,
+        "brevity_penalty": 1.0,
+        "rouge_l": 0.4861971799871444,
+        "cider_d": 0.7933667891621079,
+        "meteor_exact": 0.4839849428077134,
+        "n": 1093
+      },
+      "bleu4_ci95": [
+        0.2415,
+        0.271
+      ],
+      "cider_d_ci95": [
+        0.7619,
+        0.8324
+      ],
+      "unique_fraction": 0.6002,
+      "headline": 0.25595267539412847,
+      "adapter": "checkpoints/v3/caption_vlm/adapter_best",
+      "timing": {
+        "generate_s": 330.0,
+        "s_per_item": 0.3019,
+        "peak_vram_gb": 7.48
+      }
+    }
+  }
+}

@@ -1,0 +1,28 @@
+{
+  "experiment_id": "landcover_v3-20260912-184016-e485da",
+  "task": "landcover_v3",
+  "n_train": 60000,
+  "n_test": 5867,
+  "pretrained": true,
+  "args": {
+    "data": "data/ben_full",
+    "ckpt_dir": "checkpoints/v3/landcover",
+    "epochs": "30",
+    "batch_size": "128",
+    "lr": "0.001",
+    "trunk_lr_scale": "0.1",
+    "band_dropout": "0.3",
+    "no_pretrained": "False",
+    "limit_train": "None",
+    "seed": "42"
+  },
+  "hardware": {
+    "host": "compute01.node",
+    "python": "3.12.14",
+    "platform": "Linux-5.14.0-611.49.1.el9_7.x86_64-x86_64-with-glibc2.34",
+    "torch": "2.6.0+cu124",
+    "gpu": "NVIDIA L40S",
+    "gpu_total_gb": 44.4,
+    "gpu_free_at_start_gb": 9.0
+  }
+}

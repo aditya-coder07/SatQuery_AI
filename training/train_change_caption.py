@@ -38,7 +38,7 @@ from training.common.checkpointing import (  # noqa: E402
     TrainingState, maybe_resume, save_checkpoint, set_seed, write_run_metadata,
 )
 from training.common.eval_only import (  # noqa: E402
-    add_eval_only_args, epochs_for, resume_or_load_for_eval, vocab_for,
+    add_eval_only_args, epochs_for, is_eval_only, resume_or_load_for_eval, vocab_for,
     write_vocab_unless_eval,
     save_checkpoint_unless_eval, write_metrics, write_run_metadata_unless_eval,
 )
@@ -146,9 +146,11 @@ def build_model(vocab_size: int, dim: int = 128, arch: str = "v1"):
 
 
 class LevirCC:
-    def __init__(self, rows: list[dict], vocab: dict[str, int]):
+    def __init__(self, rows: list[dict], vocab: dict[str, int], multi_ref: bool = False, seed: int = 0):
         self.rows = rows
         self.vocab = vocab
+        self.multi_ref = multi_ref
+        self.rng = np.random.default_rng(seed)
 
     def __len__(self) -> int:
         return len(self.rows)
@@ -164,9 +166,15 @@ class LevirCC:
             m = (m > 127).astype("float32")
         else:
             m = np.zeros((PATCH, PATCH), dtype="float32")
+        caption = row["caption"]
+        if self.multi_ref and row.get("captions"):
+            # LEVIR-CC ships five references per pair; training on one of
+            # them per visit (multi-caption supervision) is the convention
+            # every published change captioner uses.
+            caption = row["captions"][int(self.rng.integers(len(row["captions"])))]
         return (
             a.transpose(2, 0, 1), b.transpose(2, 0, 1), m[None],
-            encode(row["caption"], self.vocab),
+            encode(caption, self.vocab),
         )
 
 
@@ -192,6 +200,8 @@ def main() -> int:
         "--arch", choices=["v1", "v2"], default="v1",
         help="v1 = the published architecture; v2 = training/v2/architectures.py",
     )
+    p.add_argument("--multi-ref", action="store_true",
+                   help="train on a random one of the five references per visit")
     p.add_argument("--seed", type=int, default=42)
     p.add_argument("--save-every", type=int, default=100)
     p.add_argument("--resume", action="store_true")
@@ -223,7 +233,7 @@ def main() -> int:
     inverse = {i: w for w, i in vocab.items()}
     print(f"train {len(train_rows)} | test {len(test_rows)} | vocab {len(vocab)}")
 
-    train_ds = LevirCC(train_rows, vocab)
+    train_ds = LevirCC(train_rows, vocab, multi_ref=args.multi_ref, seed=args.seed)
     test_ds = LevirCC(test_rows, vocab)
 
     model = build_model(len(vocab), args.dim, arch=args.arch).to(device)
@@ -300,7 +310,25 @@ def main() -> int:
         changed = [s for s, f in zip(scores, flags) if f]
         unchanged = [s for s, f in zip(scores, flags) if not f]
         value = float(np.mean(scores)) if scores else 0.0
+        # Corpus metrics against ALL FIVE references (Phase 6) - the
+        # published LEVIR-CC convention - for the whole test set and each half.
+        from evaluation.metrics.caption_corpus import score_corpus
+
+        refs5 = [r.get("captions") or [r["caption"]] for r in test_ds.rows[: len(hyps)]]
+        corpus = {
+            "all": score_corpus(hyps, refs5),
+            "changed": score_corpus([h for h, f in zip(hyps, flags) if f], [r for r, f in zip(refs5, flags) if f]),
+            "unchanged": score_corpus([h for h, f in zip(hyps, flags) if not f], [r for r, f in zip(refs5, flags) if not f]),
+        }
+        # Predictions go beside --out under --eval-only, which may not write
+        # into the checkpoint directory.
+        pred_dir = args.out.parent if is_eval_only(args) else args.ckpt_dir
+        pred_dir.mkdir(parents=True, exist_ok=True)
+        with (pred_dir / "predictions_test.jsonl").open("w", encoding="utf-8") as fh:
+            for row, hyp in zip(test_ds.rows, hyps):
+                fh.write(json.dumps({"id": row["id"], "pred": hyp, "changeflag": row.get("changeflag")}) + "\n")
         metrics = {
+            "corpus_5ref": corpus,
             "bleu4_changed": round(float(np.mean(changed)), 4) if changed else None,
             "bleu4_unchanged": round(float(np.mean(unchanged)), 4) if unchanged else None,
             "bleu4_aggregate": round(value, 4),
@@ -317,6 +345,8 @@ def main() -> int:
         print(f"LEVIR-CC test BLEU-4: changed {metrics['bleu4_changed']}  "
               f"(n={len(changed)})  unchanged {metrics['bleu4_unchanged']}  "
               f"(n={len(unchanged)})  aggregate {value:.4f}")
+        print(f"  corpus 5-ref: BLEU-4 all {corpus['all']['bleu4']:.4f} changed {corpus['changed']['bleu4']:.4f} "
+              f"| CIDEr-D all {corpus['all']['cider_d']:.4f} | ROUGE-L all {corpus['all']['rouge_l']:.4f}")
         for hyp, ref in samples:
             print(f"  pred: {hyp[:70]}")
             print(f"  ref : {ref[:70]}")

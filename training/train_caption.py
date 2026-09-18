@@ -38,7 +38,7 @@ from training.common.checkpointing import (  # noqa: E402
     TrainingState, maybe_resume, save_checkpoint, set_seed, write_run_metadata,
 )
 from training.common.eval_only import (  # noqa: E402
-    add_eval_only_args, epochs_for, resume_or_load_for_eval, vocab_for,
+    add_eval_only_args, epochs_for, is_eval_only, resume_or_load_for_eval, vocab_for,
     write_vocab_unless_eval,
     save_checkpoint_unless_eval, write_metrics, write_run_metadata_unless_eval,
 )
@@ -257,18 +257,34 @@ def main() -> int:
         bleu(hyp, row["captions"]) for hyp, row in zip(predictions, test_rows)
     ]
     unique = len(set(predictions))
+    # Corpus-level metrics (Phase 6): the convention papers report, so the
+    # RSICD comparison can be Category A. Sentence-mean BLEU stays as the
+    # continuity metric for every earlier number.
+    from evaluation.metrics.caption_corpus import score_corpus
+
+    corpus = score_corpus(predictions, [row["captions"] for row in test_rows])
     metrics = {
         "bleu4_sentence_mean": float(np.mean(scores)) if scores else 0.0,
         "n": len(scores),
         "unique_captions": unique,
         "unique_fraction": round(unique / max(len(predictions), 1), 4),
+        "corpus": corpus,
     }
+    # Predictions go beside --out under --eval-only, which may not write
+    # into the checkpoint directory.
+    pred_dir = args.out.parent if is_eval_only(args) else args.ckpt_dir
+    pred_dir.mkdir(parents=True, exist_ok=True)
+    with (pred_dir / "predictions_test.jsonl").open("w", encoding="utf-8") as fh:
+        for i, (hyp, row) in enumerate(zip(predictions, test_rows)):
+            fh.write(json.dumps({"i": i, "pred": hyp, "refs": row["captions"]}) + "\n")
     print(f"\nRSICD test BLEU-4 (sentence mean, 5 refs): "
           f"{metrics['bleu4_sentence_mean']:.4f}  n={metrics['n']}")
     # Caption diversity is reported alongside the score: a captioner that
     # emits one string for every image can still post a respectable BLEU on a
     # corpus with a dominant phrasing, and the count exposes that immediately.
     print(f"  unique captions: {unique} ({metrics['unique_fraction']:.1%})")
+    print(f"  corpus BLEU-4 {corpus['bleu4']:.4f}  ROUGE-L {corpus['rouge_l']:.4f}  "
+          f"CIDEr-D {corpus['cider_d']:.4f}")
     for hyp, row in list(zip(predictions, test_rows))[:3]:
         print(f"  pred: {hyp[:68]}")
         print(f"  ref : {row['captions'][0][:68]}")

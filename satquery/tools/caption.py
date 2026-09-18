@@ -44,8 +44,14 @@ from satquery.tools.sidecars import readable_json
 from satquery.tools.imaging import to_rgb_preview
 
 TOOL_NAME = "caption"
-TOOL_VERSION = "1.0.0"
+TOOL_VERSION = "1.1.0"
 ENV_CHECKPOINT = "SATQUERY_CAPTION"
+# Phase 6: a LoRA adapter for the shared Qwen2.5-VL base (the VQA tool's
+# SATQUERY_VQA_BASE). When set, it takes precedence over the specialist
+# checkpoint. Trained by training/train_vlm_sft.py on RSICD train; scored by
+# evaluation/vlm_task_eval.py (corpus BLEU-4 0.256 vs the specialist's 0.174).
+ENV_VLM_ADAPTER = "SATQUERY_CAPTION_ADAPTER"
+VLM_ADAPTER_NAME = "caption"
 
 def image_size() -> int:
     """The size the weights were fitted at, read from the training module.
@@ -67,7 +73,17 @@ class CaptionPayload(ToolPayload):
     data: dict[str, Any]
 
 
+def vlm_configured() -> bool:
+    from satquery.tools import vlm_text
+
+    return vlm_text.configured(ENV_VLM_ADAPTER)
+
+
 def is_available() -> tuple[bool, str]:
+    if vlm_configured():
+        from satquery.tools import vlm_text
+
+        return vlm_text.available(ENV_VLM_ADAPTER, "caption")
     path = os.getenv(ENV_CHECKPOINT)
     if not path:
         return False, f"{ENV_CHECKPOINT} is not set"
@@ -172,6 +188,8 @@ class CaptionTool(ToolProtocol):
     version = TOOL_VERSION
 
     def run(self, manifest: InputManifest, params: dict) -> ToolResult:
+        if vlm_configured():
+            return self._run_vlm(manifest)
         started = time.perf_counter()
         checkpoint = Path(os.environ[ENV_CHECKPOINT])
         handle = _Handle.get(checkpoint)
@@ -221,6 +239,26 @@ class CaptionTool(ToolProtocol):
             model_card=f"scene captioner ({Path(handle.path).name})",
             runtime_ms=int((time.perf_counter() - started) * 1000),
             warnings=warnings,
+        )
+
+    def _run_vlm(self, manifest: InputManifest) -> ToolResult:
+        """Caption through the shared Qwen2.5-VL base + the caption adapter,
+        under the prompt the adapter was trained with."""
+        from satquery.tools import vlm_text
+
+        started = time.perf_counter()
+        image, _ = to_rgb_preview(manifest.images[0], max_edge=1024)
+        caption, confidence, card = vlm_text.generate(ENV_VLM_ADAPTER, VLM_ADAPTER_NAME, [image],
+                                                      vlm_text.CAPTION_QUESTION)
+        warnings: list[str] = []
+        if not caption:
+            caption = "No caption could be generated for this image."
+            warnings.append("captioner produced no tokens")
+        return ToolResult(
+            tool=TOOL_NAME, version=TOOL_VERSION,
+            payload=CaptionPayload(data={"caption": caption, "n_tokens": len(caption.split()), "vocab_size": None}),
+            artifacts=[], confidence=confidence, confidence_method="logprob", model_card=card,
+            runtime_ms=int((time.perf_counter() - started) * 1000), warnings=warnings,
         )
 
     def run_batch(self, manifests, params):

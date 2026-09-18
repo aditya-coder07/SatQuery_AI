@@ -1,0 +1,77 @@
+{
+  "experiment_id": "vlm_sft-20260916-132953-709f5a",
+  "task": "vlm_sft",
+  "backbone": "Qwen2.5-VL + LoRA",
+  "n_train": 29643,
+  "tasks": {
+    "<GROUNDING>": 29643
+  },
+  "n_val_selection": 400,
+  "quant": "none",
+  "manifests": {
+    "data/dior_rsvg_official/manifests/train.jsonl": "2cbc6e7e8a969f109a6c658d5402ea53c97cddc8f8feb9583a2ddb6b04663cd3",
+    "data/dior_rsvg_official/manifests/train_hard.jsonl": "a07a3419eedc08f0c82ee03d416f70ee87100e69ea01806d1454fc42d39a7d30",
+    "data/vrsbench/manifests/train_grounding.jsonl": "bc82fd58f398c0d476085ecff463af6e25674a5ce13c703c3f587a83b59181bb",
+    "data/dior_rsvg_official/manifests/val.jsonl": "d53652fa12959fdfd66a2ce9a3ddabe89c30452659799839864e2a1fddead00e"
+  },
+  "hardware": {
+    "host": "compute01.node",
+    "python": "3.12.14",
+    "platform": "Linux-5.14.0-611.49.1.el9_7.x86_64-x86_64-with-glibc2.34",
+    "torch": "2.6.0+cu124",
+    "gpu": "NVIDIA L40S",
+    "gpu_total_gb": 44.4,
+    "gpu_free_at_start_gb": 33.9
+  },
+  "args": {
+    "model": "models/qwen25_vl_3b",
+    "train": [
+      "data/dior_rsvg_official/manifests/train.jsonl",
+      "data/dior_rsvg_official/manifests/train_hard.jsonl",
+      "data/vrsbench/manifests/train_grounding.jsonl"
+    ],
+    "train_weight": [
+      "0.6",
+      "0.5",
+      "0.2"
+    ],
+    "val": [
+      "data/dior_rsvg_official/manifests/val.jsonl"
+    ],
+    "val_limit": 400,
+    "ckpt_dir": "checkpoints/v3/grounding_vlm_hires",
+    "init_adapter": "checkpoints/v3/grounding_vlm_hard_vrs/adapter_best",
+    "epochs": 1.0,
+    "batch_size": 2,
+    "grad_accum": 8,
+    "lr": 3e-05,
+    "weight_decay": 0.0,
+    "warmup_steps": 50,
+    "quant": "none",
+    "no_checkpointing": false,
+    "lora_r": 16,
+    "lora_alpha": 32,
+    "lora_dropout": 0.05,
+    "lora_targets": [
+      "q_proj",
+      "k_proj",
+      "v_proj",
+      "o_proj",
+      "gate_proj",
+      "up_proj",
+      "down_proj"
+    ],
+    "train_merger": false,
+    "max_pixels": null,
+    "min_pixels": 1048576,
+    "limit_train": null,
+    "val_every": 400,
+    "eval_batch": 32,
+    "save_every": 200,
+    "workers": 6,
+    "seed": 42,
+    "resume": false,
+    "notes": "arm E: arm D' continued at min_pixels 1024x1024 (upscaled DIOR), train 0.6x + hard 0.5x + VRSBench 0.2x"
+  },
+  "total_steps": 1852
+}

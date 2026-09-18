@@ -1,0 +1,47 @@
+# Phase 6 deployment map: which checkpoint each tool loads, and why.
+# Read by scripts/verify_deploy.py (load test through the real tool loaders)
+# and mirrored into docker-compose.gpu.yml once every row is verified.
+#
+# status: selected  -> measured better than the Phase 5 artefact on the
+#                      official split and load-verified
+#         pending   -> run queued or not yet compared
+#         held      -> Phase 5 artefact kept (with the reason)
+tools:
+  rs_vqa:
+    env: {SATQUERY_VQA_BASE: models/qwen25_vl_3b, SATQUERY_VQA_ADAPTER: checkpoints/v3/vqa_official/adapter_best}
+    status: selected
+    note: "RSVQA-LR official test (4-bit deployed path) published-convention 0.9119 [0.905, 0.918] vs v2 0.8947 [0.887, 0.902]; every type improved (presence 0.913, comp 0.912, rural/urban 0.88, count 0.270 vs 0.220); Phase 5 adapter kept at checkpoints/v2/track_b_vqa"
+  grounding:
+    env: {SATQUERY_GROUNDING_ADAPTER: checkpoints/v3/grounding_vlm_hires/adapter_best, SATQUERY_GROUNDING_MIN_PIXELS: "1048576"}
+    fallback_env: {SATQUERY_GROUNDING: checkpoints/v2/grounding_pre}
+    status: selected
+    note: "arm E (2026-09-18 00:20): arm D-prime + 1024x1024 input — DIOR-RSVG official 0.7323 (D-prime 0.7020, McNemar chi2 47 significant), VRSBench val 0.6594 (D-prime 0.6396; clean 0.6237); served at min_pixels 1048576, the budget it was measured with"
+  change_mask:
+    env: {SATQUERY_CHANGE_MASK: checkpoints/v3/change_mask/best.pt}
+    status: selected
+    note: "LEVIR-CD test F1 0.9038 / IoU 0.8244 (Phase 5 0.855 / 0.747); independently verified 2026-09-12 (levircd_test_independent_v3.json); calibration v3 fitted on val"
+  optsar_fusion:
+    env: {SATQUERY_FUSION: checkpoints/v3/optsar_fusion/best.pt}
+    status: selected
+    note: "aligned labels, scene-disjoint; fused 0.468 vs optical 0.447 mIoU; tool v3 path added"
+  landcover:
+    env: {SATQUERY_LANDCOVER: checkpoints/v3/landcover_full/best.pt}
+    status: selected
+    note: "SSL4EO-S12 trunk on the complete official BigEarthNet-S2 v1.0 split; official test micro mAP 0.885 / macro 0.792 (v2 0.315 on a subset shard); 4-band retention 0.94; calibrated on val; verify_deploy OK 2026-09-13 00:04"
+  caption:
+    env: {SATQUERY_VQA_BASE: models/qwen25_vl_3b, SATQUERY_CAPTION_ADAPTER: checkpoints/v3/caption_vlm/adapter_best}
+    fallback_env: {SATQUERY_CAPTION: checkpoints/v2/caption_pre}
+    status: selected
+    note: "RSICD test corpus BLEU-4 0.256 / CIDEr-D 0.793 / ROUGE-L 0.486 (specialist 0.174 / 0.562 / 0.396); tool v1.1.0 VLM path"
+  change_caption:
+    env: {SATQUERY_VQA_BASE: models/qwen25_vl_3b, SATQUERY_CHANGE_CAPTION_ADAPTER: checkpoints/v3/change_caption_vlm/adapter_best}
+    fallback_env: {SATQUERY_CHANGE_CAPTION: checkpoints/change_caption}
+    status: selected
+    note: "LEVIR-CC official test, images only (no mask): corpus BLEU-4 0.6045 all / 0.322 changed half, CIDEr-D 1.29, ROUGE-L 0.712 (v1 with the GT mask 0.384 / 0.222); verify_deploy OK 2026-09-14 10:29"
+  change_vqa:
+    env: {SATQUERY_CHANGE_VQA: checkpoints/v2/change_vqa/best.pt}
+    status: held
+    note: "SECOND has no licence; Landsat-SCD (CC BY 4.0) benchmark run queued as the licensed replacement"
+registries:
+  SATQUERY_CALIBRATION: configs/calibration.v3.json   # change_mask fitted on official val (ECE 0.0053 -> 0.0011)
+  SATQUERY_THRESHOLDS: configs/thresholds.v3.yaml      # landcover 0.69 (precision 0.90, recall 0.61 on official val)

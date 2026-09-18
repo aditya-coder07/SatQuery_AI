@@ -1,0 +1,191 @@
+{
+  "benchmark": "DIOR-RSVG official test split",
+  "n": 7500,
+  "limited_debug_run": false,
+  "manifest_hashes": {
+    "train.jsonl": "2cbc6e7e8a969f109a6c658d5402ea53c97cddc8f8feb9583a2ddb6b04663cd3",
+    "val.jsonl": "d53652fa12959fdfd66a2ce9a3ddabe89c30452659799839864e2a1fddead00e",
+    "test.jsonl": "ed017203714631dfedd6c9712ae130604eeda5db7b4c7265ca19dc37b441c80e"
+  },
+  "image_overlap_train_test": 4206,
+  "arms": {
+    "lora_r16": {
+      "n": 7500,
+      "acc@0.25": 0.7683,
+      "acc@0.5": 0.6896,
+      "acc@0.5_ci95": [
+        0.6792,
+        0.6999
+      ],
+      "acc@0.7": 0.5447,
+      "miou": 0.6027,
+      "miou_ci95": [
+        0.5946,
+        0.6108
+      ],
+      "parse_rate": 1.0,
+      "image_disjoint_subset": {
+        "n": 2223,
+        "acc@0.5": 0.8129,
+        "acc@0.5_ci95": [
+          0.7962,
+          0.8282
+        ],
+        "miou": 0.7122
+      },
+      "per_category_acc@0.5": {
+        "Expressway-Service-area": 0.7543,
+        "Expressway-toll-station": 0.675,
+        "airplane": 0.8589,
+        "airport": 0.8774,
+        "baseballfield": 0.8278,
+        "basketballcourt": 0.6667,
+        "bridge": 0.3362,
+        "chimney": 0.81,
+        "dam": 0.6441,
+        "golffield": 0.8378,
+        "groundtrackfield": 0.8022,
+        "harbor": 0.432,
+        "overpass": 0.4657,
+        "ship": 0.7363,
+        "stadium": 0.9189,
+        "storagetank": 0.8008,
+        "tenniscourt": 0.7459,
+        "trainstation": 0.5833,
+        "vehicle": 0.6191,
+        "windmill": 0.7088
+      },
+      "per_size_acc@0.5": {
+        "large(>10%)": {
+          "n": 1547,
+          "acc": 0.8946
+        },
+        "medium(1-10%)": {
+          "n": 2766,
+          "acc": 0.7824
+        },
+        "small(<1%)": {
+          "n": 3187,
+          "acc": 0.5096
+        }
+      },
+      "failure_taxonomy": {
+        "wrong_object": 387,
+        "scale_error": 626,
+        "wrong_box": 1099,
+        "localisation_drift": 216
+      },
+      "iou_histogram": {
+        "0.0-0.1": 1486,
+        "0.1-0.2": 163,
+        "0.2-0.3": 161,
+        "0.3-0.4": 215,
+        "0.4-0.5": 303,
+        "0.5-0.6": 433,
+        "0.6-0.7": 654,
+        "0.7-0.8": 928,
+        "0.8-0.9": 1307,
+        "0.9-1.0": 1850
+      },
+      "timing": {
+        "generate_s": 3186.0,
+        "s_per_question": 0.4248,
+        "peak_vram_gb": 9.65
+      },
+      "adapter": "checkpoints/v3/grounding_vlm_r16/adapter_best"
+    },
+    "lora_vrs": {
+      "n": 7500,
+      "acc@0.25": 0.7711,
+      "acc@0.5": 0.688,
+      "acc@0.5_ci95": [
+        0.6773,
+        0.6987
+      ],
+      "acc@0.7": 0.548,
+      "miou": 0.6041,
+      "miou_ci95": [
+        0.5957,
+        0.6123
+      ],
+      "parse_rate": 1.0,
+      "image_disjoint_subset": {
+        "n": 2223,
+        "acc@0.5": 0.8084,
+        "acc@0.5_ci95": [
+          0.7922,
+          0.8237
+        ],
+        "miou": 0.7086
+      },
+      "per_category_acc@0.5": {
+        "Expressway-Service-area": 0.7405,
+        "Expressway-toll-station": 0.6708,
+        "airplane": 0.8558,
+        "airport": 0.8774,
+        "baseballfield": 0.8323,
+        "basketballcourt": 0.6787,
+        "bridge": 0.3235,
+        "chimney": 0.7873,
+        "dam": 0.5989,
+        "golffield": 0.8288,
+        "groundtrackfield": 0.8,
+        "harbor": 0.424,
+        "overpass": 0.4407,
+        "ship": 0.7363,
+        "stadium": 0.9144,
+        "storagetank": 0.8287,
+        "tenniscourt": 0.772,
+        "trainstation": 0.6278,
+        "vehicle": 0.6254,
+        "windmill": 0.6953
+      },
+      "per_size_acc@0.5": {
+        "large(>10%)": {
+          "n": 1547,
+          "acc": 0.8798
+        },
+        "medium(1-10%)": {
+          "n": 2766,
+          "acc": 0.7885
+        },
+        "small(<1%)": {
+          "n": 3187,
+          "acc": 0.5077
+        }
+      },
+      "failure_taxonomy": {
+        "wrong_object": 407,
+        "wrong_box": 1063,
+        "scale_error": 660,
+        "localisation_drift": 210
+      },
+      "iou_histogram": {
+        "0.0-0.1": 1470,
+        "0.1-0.2": 166,
+        "0.2-0.3": 167,
+        "0.3-0.4": 206,
+        "0.4-0.5": 331,
+        "0.5-0.6": 444,
+        "0.6-0.7": 606,
+        "0.7-0.8": 895,
+        "0.8-0.9": 1350,
+        "0.9-1.0": 1865
+      },
+      "timing": {
+        "generate_s": 3171.8,
+        "s_per_question": 0.4229,
+        "peak_vram_gb": 9.65
+      },
+      "adapter": "checkpoints/v3/grounding_vlm_vrs/adapter_best"
+    }
+  },
+  "paired_tests": {
+    "lora_r16_vs_lora_vrs": {
+      "a_only": 324,
+      "b_only": 312,
+      "chi2_cc": 0.19,
+      "significant_at_0.05": false
+    }
+  }
+}

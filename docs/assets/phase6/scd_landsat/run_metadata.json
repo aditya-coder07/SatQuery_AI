@@ -1,0 +1,29 @@
+{
+  "experiment_id": "scd_landsat-20260913-004701-b35192",
+  "task": "semantic_change_landsat_scd",
+  "n_train": 5134,
+  "n_val": 477,
+  "n_test": 477,
+  "split_method": "originals cut 3:1:1 by seed 42; augmented copies follow their original and are train-only; 0 copies without an original dropped",
+  "license": "CC BY 4.0",
+  "args": {
+    "index": "data/landsat_scd/index.json",
+    "ckpt_dir": "checkpoints/v3/scd_landsat",
+    "epochs": "40",
+    "batch_size": "8",
+    "lr": "0.0002",
+    "dim": "96",
+    "workers": "6",
+    "limit_train": "None",
+    "seed": "42"
+  },
+  "hardware": {
+    "host": "compute01.node",
+    "python": "3.12.14",
+    "platform": "Linux-5.14.0-611.49.1.el9_7.x86_64-x86_64-with-glibc2.34",
+    "torch": "2.6.0+cu124",
+    "gpu": "NVIDIA L40S",
+    "gpu_total_gb": 44.4,
+    "gpu_free_at_start_gb": 12.9
+  }
+}

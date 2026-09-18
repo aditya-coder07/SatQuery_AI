@@ -1,0 +1,591 @@
+{
+  "best_val": {
+    "n": 1200,
+    "<GROUNDING>": {
+      "n": 300,
+      "acc@0.5": 0.65,
+      "miou": 0.5668637678996531
+    },
+    "<VQA>": {
+      "n": 300,
+      "acc_all": 0.7566666666666667,
+      "acc_published": 0.9357798165137615,
+      "by_type": {
+        "comp": 0.9291,
+        "count": 0.2805,
+        "presence": 0.9438,
+        "rural_urban": 1.0
+      }
+    },
+    "<CAPTION>": {
+      "n": 300,
+      "corpus": {
+        "bleu1": 0.6728,
+        "bleu2": 0.5439,
+        "bleu3": 0.4441,
+        "bleu4": 0.3671,
+        "brevity_penalty": 1.0,
+        "rouge_l": 0.6115,
+        "cider_d": 1.8935,
+        "meteor_exact": 0.6739,
+        "n": 300
+      },
+      "unique_fraction": 0.68
+    },
+    "<CHANGE_CAPTION>": {
+      "n": 300,
+      "corpus": {
+        "bleu1": 0.8003,
+        "bleu2": 0.7165,
+        "bleu3": 0.6505,
+        "bleu4": 0.6,
+        "brevity_penalty": 0.979,
+        "rouge_l": 0.7085,
+        "cider_d": 1.2815,
+        "meteor_exact": 0.6797,
+        "n": 300
+      },
+      "changed": {
+        "bleu1": 0.6573,
+        "bleu2": 0.5035,
+        "bleu3": 0.3791,
+        "bleu4": 0.2855,
+        "brevity_penalty": 0.9565,
+        "rouge_l": 0.4417,
+        "cider_d": 0.5052,
+        "meteor_exact": 0.3879,
+        "n": 151
+      },
+      "unchanged": {
+        "bleu1": 0.9755,
+        "bleu2": 0.9723,
+        "bleu3": 0.97,
+        "bleu4": 0.9683,
+        "brevity_penalty": 1.0,
+        "rouge_l": 0.9788,
+        "cider_d": 0.0,
+        "meteor_exact": 0.9754,
+        "n": 149
+      },
+      "unique_fraction": 0.2433
+    },
+    "selection": 0.6382199541284403,
+    "step": 5000
+  },
+  "history": [
+    {
+      "n": 1200,
+      "<GROUNDING>": {
+        "n": 300,
+        "acc@0.5": 0.5766666666666667,
+        "miou": 0.5091184834700044
+      },
+      "<VQA>": {
+        "n": 300,
+        "acc_all": 0.7033333333333334,
+        "acc_published": 0.8853211009174312,
+        "by_type": {
+          "comp": 0.8898,
+          "count": 0.2195,
+          "presence": 0.8764,
+          "rural_urban": 1.0
+        }
+      },
+      "<CAPTION>": {
+        "n": 300,
+        "corpus": {
+          "bleu1": 0.6524,
+          "bleu2": 0.4957,
+          "bleu3": 0.3867,
+          "bleu4": 0.3088,
+          "brevity_penalty": 1.0,
+          "rouge_l": 0.5379,
+          "cider_d": 1.515,
+          "meteor_exact": 0.5739,
+          "n": 300
+        },
+        "unique_fraction": 0.77
+      },
+      "<CHANGE_CAPTION>": {
+        "n": 300,
+        "corpus": {
+          "bleu1": 0.7811,
+          "bleu2": 0.7018,
+          "bleu3": 0.6403,
+          "bleu4": 0.5919,
+          "brevity_penalty": 0.965,
+          "rouge_l": 0.6969,
+          "cider_d": 1.2331,
+          "meteor_exact": 0.6687,
+          "n": 300
+        },
+        "changed": {
+          "bleu1": 0.6202,
+          "bleu2": 0.4748,
+          "bleu3": 0.359,
+          "bleu4": 0.2683,
+          "brevity_penalty": 0.933,
+          "rouge_l": 0.4137,
+          "cider_d": 0.3814,
+          "meteor_exact": 0.361,
+          "n": 151
+        },
+        "unchanged": {
+          "bleu1": 0.9831,
+          "bleu2": 0.9811,
+          "bleu3": 0.9799,
+          "bleu4": 0.9791,
+          "brevity_penalty": 1.0,
+          "rouge_l": 0.984,
+          "cider_d": 0.0,
+          "meteor_exact": 0.9806,
+          "n": 149
+        },
+        "unique_fraction": 0.1467
+      },
+      "selection": 0.5906719418960245,
+      "step": 1000
+    },
+    {
+      "n": 1200,
+      "<GROUNDING>": {
+        "n": 300,
+        "acc@0.5": 0.6233333333333333,
+        "miou": 0.5449439728731629
+      },
+      "<VQA>": {
+        "n": 300,
+        "acc_all": 0.7266666666666667,
+        "acc_published": 0.908256880733945,
+        "by_type": {
+          "comp": 0.9134,
+          "count": 0.2439,
+          "presence": 0.8989,
+          "rural_urban": 1.0
+        }
+      },
+      "<CAPTION>": {
+        "n": 300,
+        "corpus": {
+          "bleu1": 0.6571,
+          "bleu2": 0.5014,
+          "bleu3": 0.39,
+          "bleu4": 0.3072,
+          "brevity_penalty": 1.0,
+          "rouge_l": 0.5491,
+          "cider_d": 1.4891,
+          "meteor_exact": 0.5717,
+          "n": 300
+        },
+        "unique_fraction": 0.8267
+      },
+      "<CHANGE_CAPTION>": {
+        "n": 300,
+        "corpus": {
+          "bleu1": 0.788,
+          "bleu2": 0.7015,
+          "bleu3": 0.6386,
+          "bleu4": 0.5913,
+          "brevity_penalty": 0.9866,
+          "rouge_l": 0.6956,
+          "cider_d": 1.2187,
+          "meteor_exact": 0.6632,
+          "n": 300
+        },
+        "changed": {
+          "bleu1": 0.6306,
+          "bleu2": 0.468,
+          "bleu3": 0.3468,
+          "bleu4": 0.2567,
+          "brevity_penalty": 0.9717,
+          "rouge_l": 0.4158,
+          "cider_d": 0.3906,
+          "meteor_exact": 0.3552,
+          "n": 151
+        },
+        "unchanged": {
+          "bleu1": 0.9789,
+          "bleu2": 0.9761,
+          "bleu3": 0.9746,
+          "bleu4": 0.9739,
+          "brevity_penalty": 1.0,
+          "rouge_l": 0.9792,
+          "cider_d": 0.0,
+          "meteor_exact": 0.9754,
+          "n": 149
+        },
+        "unique_fraction": 0.2533
+      },
+      "selection": 0.6075225535168196,
+      "step": 2000
+    },
+    {
+      "n": 1200,
+      "<GROUNDING>": {
+        "n": 300,
+        "acc@0.5": 0.6233333333333333,
+        "miou": 0.537937383016769
+      },
+      "<VQA>": {
+        "n": 300,
+        "acc_all": 0.74,
+        "acc_published": 0.9220183486238532,
+        "by_type": {
+          "comp": 0.9213,
+          "count": 0.2561,
+          "presence": 0.9213,
+          "rural_urban": 1.0
+        }
+      },
+      "<CAPTION>": {
+        "n": 300,
+        "corpus": {
+          "bleu1": 0.6503,
+          "bleu2": 0.5127,
+          "bleu3": 0.4119,
+          "bleu4": 0.3353,
+          "brevity_penalty": 1.0,
+          "rouge_l": 0.586,
+          "cider_d": 1.69,
+          "meteor_exact": 0.6396,
+          "n": 300
+        },
+        "unique_fraction": 0.6933
+      },
+      "<CHANGE_CAPTION>": {
+        "n": 300,
+        "corpus": {
+          "bleu1": 0.7627,
+          "bleu2": 0.6786,
+          "bleu3": 0.6112,
+          "bleu4": 0.5556,
+          "brevity_penalty": 0.9585,
+          "rouge_l": 0.693,
+          "cider_d": 1.233,
+          "meteor_exact": 0.6557,
+          "n": 300
+        },
+        "changed": {
+          "bleu1": 0.6399,
+          "bleu2": 0.5025,
+          "bleu3": 0.3921,
+          "bleu4": 0.3079,
+          "brevity_penalty": 0.9162,
+          "rouge_l": 0.4442,
+          "cider_d": 0.4879,
+          "meteor_exact": 0.3777,
+          "n": 151
+        },
+        "unchanged": {
+          "bleu1": 0.9244,
+          "bleu2": 0.9152,
+          "bleu3": 0.9092,
+          "bleu4": 0.9031,
+          "brevity_penalty": 1.0,
+          "rouge_l": 0.9452,
+          "cider_d": 0.0,
+          "meteor_exact": 0.9374,
+          "n": 149
+        },
+        "unique_fraction": 0.2333
+      },
+      "selection": 0.6090629204892967,
+      "step": 3000
+    },
+    {
+      "n": 1200,
+      "<GROUNDING>": {
+        "n": 300,
+        "acc@0.5": 0.63,
+        "miou": 0.5505519153791606
+      },
+      "<VQA>": {
+        "n": 300,
+        "acc_all": 0.7733333333333333,
+        "acc_published": 0.9403669724770642,
+        "by_type": {
+          "comp": 0.9291,
+          "count": 0.3293,
+          "presence": 0.9551,
+          "rural_urban": 1.0
+        }
+      },
+      "<CAPTION>": {
+        "n": 300,
+        "corpus": {
+          "bleu1": 0.6678,
+          "bleu2": 0.5347,
+          "bleu3": 0.4338,
+          "bleu4": 0.3545,
+          "brevity_penalty": 1.0,
+          "rouge_l": 0.5839,
+          "cider_d": 1.7984,
+          "meteor_exact": 0.6427,
+          "n": 300
+        },
+        "unique_fraction": 0.6667
+      },
+      "<CHANGE_CAPTION>": {
+        "n": 300,
+        "corpus": {
+          "bleu1": 0.7863,
+          "bleu2": 0.6969,
+          "bleu3": 0.6278,
+          "bleu4": 0.5782,
+          "brevity_penalty": 0.9789,
+          "rouge_l": 0.6909,
+          "cider_d": 1.2058,
+          "meteor_exact": 0.6572,
+          "n": 300
+        },
+        "changed": {
+          "bleu1": 0.6411,
+          "bleu2": 0.4759,
+          "bleu3": 0.342,
+          "bleu4": 0.2478,
+          "brevity_penalty": 0.9532,
+          "rouge_l": 0.4227,
+          "cider_d": 0.3923,
+          "meteor_exact": 0.3601,
+          "n": 151
+        },
+        "unchanged": {
+          "bleu1": 0.959,
+          "bleu2": 0.954,
+          "bleu3": 0.9507,
+          "bleu4": 0.9485,
+          "brevity_penalty": 1.0,
+          "rouge_l": 0.9627,
+          "cider_d": 0.0,
+          "meteor_exact": 0.9584,
+          "n": 149
+        },
+        "unique_fraction": 0.2333
+      },
+      "selection": 0.6257667431192661,
+      "step": 4000
+    },
+    {
+      "n": 1200,
+      "<GROUNDING>": {
+        "n": 300,
+        "acc@0.5": 0.65,
+        "miou": 0.5668637678996531
+      },
+      "<VQA>": {
+        "n": 300,
+        "acc_all": 0.7566666666666667,
+        "acc_published": 0.9357798165137615,
+        "by_type": {
+          "comp": 0.9291,
+          "count": 0.2805,
+          "presence": 0.9438,
+          "rural_urban": 1.0
+        }
+      },
+      "<CAPTION>": {
+        "n": 300,
+        "corpus": {
+          "bleu1": 0.6728,
+          "bleu2": 0.5439,
+          "bleu3": 0.4441,
+          "bleu4": 0.3671,
+          "brevity_penalty": 1.0,
+          "rouge_l": 0.6115,
+          "cider_d": 1.8935,
+          "meteor_exact": 0.6739,
+          "n": 300
+        },
+        "unique_fraction": 0.68
+      },
+      "<CHANGE_CAPTION>": {
+        "n": 300,
+        "corpus": {
+          "bleu1": 0.8003,
+          "bleu2": 0.7165,
+          "bleu3": 0.6505,
+          "bleu4": 0.6,
+          "brevity_penalty": 0.979,
+          "rouge_l": 0.7085,
+          "cider_d": 1.2815,
+          "meteor_exact": 0.6797,
+          "n": 300
+        },
+        "changed": {
+          "bleu1": 0.6573,
+          "bleu2": 0.5035,
+          "bleu3": 0.3791,
+          "bleu4": 0.2855,
+          "brevity_penalty": 0.9565,
+          "rouge_l": 0.4417,
+          "cider_d": 0.5052,
+          "meteor_exact": 0.3879,
+          "n": 151
+        },
+        "unchanged": {
+          "bleu1": 0.9755,
+          "bleu2": 0.9723,
+          "bleu3": 0.97,
+          "bleu4": 0.9683,
+          "brevity_penalty": 1.0,
+          "rouge_l": 0.9788,
+          "cider_d": 0.0,
+          "meteor_exact": 0.9754,
+          "n": 149
+        },
+        "unique_fraction": 0.2433
+      },
+      "selection": 0.6382199541284403,
+      "step": 5000
+    },
+    {
+      "n": 1200,
+      "<GROUNDING>": {
+        "n": 300,
+        "acc@0.5": 0.6433333333333333,
+        "miou": 0.5637634515065587
+      },
+      "<VQA>": {
+        "n": 300,
+        "acc_all": 0.76,
+        "acc_published": 0.9357798165137615,
+        "by_type": {
+          "comp": 0.9291,
+          "count": 0.2927,
+          "presence": 0.9438,
+          "rural_urban": 1.0
+        }
+      },
+      "<CAPTION>": {
+        "n": 300,
+        "corpus": {
+          "bleu1": 0.6729,
+          "bleu2": 0.5393,
+          "bleu3": 0.4381,
+          "bleu4": 0.3605,
+          "brevity_penalty": 1.0,
+          "rouge_l": 0.6021,
+          "cider_d": 1.8351,
+          "meteor_exact": 0.6634,
+          "n": 300
+        },
+        "unique_fraction": 0.69
+      },
+      "<CHANGE_CAPTION>": {
+        "n": 300,
+        "corpus": {
+          "bleu1": 0.8101,
+          "bleu2": 0.7165,
+          "bleu3": 0.6473,
+          "bleu4": 0.5932,
+          "brevity_penalty": 0.9975,
+          "rouge_l": 0.7075,
+          "cider_d": 1.2667,
+          "meteor_exact": 0.6824,
+          "n": 300
+        },
+        "changed": {
+          "bleu1": 0.6808,
+          "bleu2": 0.5099,
+          "bleu3": 0.3815,
+          "bleu4": 0.282,
+          "brevity_penalty": 0.9903,
+          "rouge_l": 0.4452,
+          "cider_d": 0.4807,
+          "meteor_exact": 0.3989,
+          "n": 151
+        },
+        "unchanged": {
+          "bleu1": 0.9704,
+          "bleu2": 0.9668,
+          "bleu3": 0.9646,
+          "bleu4": 0.963,
+          "brevity_penalty": 1.0,
+          "rouge_l": 0.9733,
+          "cider_d": 0.0,
+          "meteor_exact": 0.9697,
+          "n": 149
+        },
+        "unique_fraction": 0.2467
+      },
+      "selection": 0.6332032874617737,
+      "step": 6000
+    },
+    {
+      "n": 1200,
+      "<GROUNDING>": {
+        "n": 300,
+        "acc@0.5": 0.6466666666666666,
+        "miou": 0.5634330073947114
+      },
+      "<VQA>": {
+        "n": 300,
+        "acc_all": 0.7633333333333333,
+        "acc_published": 0.9403669724770642,
+        "by_type": {
+          "comp": 0.9291,
+          "count": 0.2927,
+          "presence": 0.9551,
+          "rural_urban": 1.0
+        }
+      },
+      "<CAPTION>": {
+        "n": 300,
+        "corpus": {
+          "bleu1": 0.6744,
+          "bleu2": 0.5409,
+          "bleu3": 0.4403,
+          "bleu4": 0.3632,
+          "brevity_penalty": 1.0,
+          "rouge_l": 0.6034,
+          "cider_d": 1.8543,
+          "meteor_exact": 0.6641,
+          "n": 300
+        },
+        "unique_fraction": 0.7
+      },
+      "<CHANGE_CAPTION>": {
+        "n": 300,
+        "corpus": {
+          "bleu1": 0.8107,
+          "bleu2": 0.7181,
+          "bleu3": 0.6485,
+          "bleu4": 0.5946,
+          "brevity_penalty": 0.995,
+          "rouge_l": 0.7105,
+          "cider_d": 1.2719,
+          "meteor_exact": 0.6833,
+          "n": 300
+        },
+        "changed": {
+          "bleu1": 0.6822,
+          "bleu2": 0.5132,
+          "bleu3": 0.3841,
+          "bleu4": 0.2855,
+          "brevity_penalty": 0.9858,
+          "rouge_l": 0.4512,
+          "cider_d": 0.4917,
+          "meteor_exact": 0.4006,
+          "n": 151
+        },
+        "unchanged": {
+          "bleu1": 0.9704,
+          "bleu2": 0.9668,
+          "bleu3": 0.9646,
+          "bleu4": 0.963,
+          "brevity_penalty": 1.0,
+          "rouge_l": 0.9733,
+          "cider_d": 0.0,
+          "meteor_exact": 0.9697,
+          "n": 149
+        },
+        "unique_fraction": 0.2467
+      },
+      "selection": 0.6362084097859327,
+      "step": 6243
+    }
+  ],
+  "step": 6243,
+  "elapsed_s": 41950.986844062805,
+  "gpu_hours": 11.653051901128556
+}

@@ -99,8 +99,8 @@ class _Handle:
         # existing checkpoint rebuilds exactly as it always did. Guessing
         # instead would load v1 weights into a v2 graph and fail on a key
         # mismatch that says nothing about the cause.
-        model = build_model(extra.get("dim", 32),
-                            arch=extra.get("arch", "v1"))
+        self.arch = extra.get("arch", "v1")
+        model = build_model(extra.get("dim", 32), arch=self.arch)
         load_checkpoint(latest, model, map_location="cpu")
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
         self.model = model.to(self.device).eval()
@@ -142,6 +142,30 @@ def _read(meta, n_bands: int) -> np.ndarray:
     return stacked.astype("float32")
 
 
+def _read_v3(meta, n_bands: int, size: int) -> np.ndarray:
+    """Bands scaled to [0, 1] by their 2nd-98th percentile, then the fixed
+    normalisation the v3 trainer used on 8-bit tiles ((x - 0.5) / 0.25). A
+    robust scale rather than /255 so 16-bit Sentinel inputs land in the same
+    range the model saw."""
+    with rasterio.open(meta.path) as src:
+        count = min(src.count, n_bands)
+        arr = src.read(
+            list(range(1, count + 1)), out_shape=(count, size, size),
+            resampling=Resampling.bilinear, masked=True,
+        ).astype("float32")
+    arr = np.ma.filled(arr, np.nan)
+    out = []
+    for band in arr:
+        finite = band[np.isfinite(band)]
+        lo, hi = (np.percentile(finite, [2, 98]) if finite.size else (0.0, 1.0))
+        band = (band - lo) / max(hi - lo, 1e-6)
+        out.append((np.clip(np.nan_to_num(band), 0, 1) - 0.5) / 0.25)
+    stacked = np.stack(out)
+    while stacked.shape[0] < n_bands:
+        stacked = np.concatenate([stacked, stacked[-1:]])
+    return stacked.astype("float32")
+
+
 class OptSARFusionTool(ToolProtocol):
     def run(self, manifest: InputManifest, params: dict[str, Any]) -> ToolResult:
         started = time.perf_counter()
@@ -158,6 +182,8 @@ class OptSARFusionTool(ToolProtocol):
 
         handle = _Handle.get(Path(os.environ[ENV_CHECKPOINT]))
         torch = handle.torch
+        if handle.arch == "v3":
+            return self._run_v3(handle, optical, sar, started)
 
         o = _read(optical, 4)[None]
         s = _read(sar, 1)[None]
@@ -235,6 +261,76 @@ class OptSARFusionTool(ToolProtocol):
             warnings=(
                 [] if asserted else ["no class exceeded the presence threshold"]
             ),
+        )
+
+    def _run_v3(self, handle, optical, sar, started: float) -> ToolResult:
+        """Per-pixel triad (Phase 6): class maps from optical, SAR and the
+        gated fusion, with the complementarity read off the pixels.
+
+        The v3 model is the one whose offline gain is positive on aligned,
+        scene-disjoint WHU-OPT-SAR (+0.021 mIoU, per-tile CI excluding zero;
+        docs/assets/phase6/optsar_fusion). Its output is a class map, so the
+        payload reports class *fractions* per arm rather than presence
+        probabilities, plus the fraction of pixels where fusion changed the
+        optical decision and which modality it sided with.
+        """
+        from training.prepare.whu_opt_sar import CLASSES  # background + 7
+
+        names = CLASSES[1:]  # the v3 head predicts the 7 labelled classes
+        torch = handle.torch
+        size = 256
+        o = _read_v3(optical, 4, size)[None]
+        s = _read_v3(sar, 1, size)[None]
+        with torch.no_grad():
+            ob, sb = torch.from_numpy(o).to(handle.device), torch.from_numpy(s).to(handle.device)
+            lo, ls, lf = handle.model(ob, sb)
+            _, _, lf_no_sar = handle.model(ob, sb, drop="sar")
+            probs = {k: torch.softmax(v[0].float(), dim=0).cpu().numpy()
+                     for k, v in (("optical", lo), ("sar", ls), ("fused", lf), ("fused_no_sar", lf_no_sar))}
+        maps = {k: v.argmax(0) for k, v in probs.items()}
+
+        def fractions(m):
+            return {names[c]: round(float((m == c).mean()), 4) for c in range(len(names))}
+
+        changed = maps["fused"] != maps["optical"]
+        sided_sar = changed & (maps["fused"] == maps["sar"])
+        agreement = float((maps["optical"] == maps["sar"]).mean())
+        # Where fusion overrode optical, did SAR get the vote?
+        attribution = {}
+        for c, name in enumerate(names):
+            sel = changed & (maps["fused"] == c)
+            if sel.any():
+                attribution[name] = "sar" if (maps["sar"][sel] == c).mean() > 0.5 else "fused_feature"
+        fused_conf = float(probs["fused"].max(0).mean())
+        dominant = sorted(fractions(maps["fused"]).items(), key=lambda kv: -kv[1])[:3]
+        answer = (
+            "Fused optical+SAR land-cover map: " + ", ".join(f"{k} {v:.0%}" for k, v in dominant) +
+            f". Optical and SAR agree on {agreement:.0%} of pixels; fusion revised "
+            f"{float(changed.mean()):.1%} of the optical decisions, siding with SAR on "
+            f"{float(sided_sar.sum()) / max(1, int(changed.sum())):.0%} of those."
+        )
+        payload = FusionPayload(data={
+            "answer": answer,
+            "mode": "triad_segmentation_v3",
+            "optical_only": fractions(maps["optical"]),
+            "sar_only": fractions(maps["sar"]),
+            "fused": fractions(maps["fused"]),
+            "fused_without_sar": fractions(maps["fused_no_sar"]),
+            "complementarity": {
+                "pixels_revised_by_fusion": round(float(changed.mean()), 4),
+                "revisions_siding_with_sar": round(float(sided_sar.sum()) / max(1, int(changed.sum())), 4),
+                "modality_agreement": round(agreement, 4),
+                "attribution": attribution,
+                "note": ("Offline, scene-disjoint WHU-OPT-SAR with aligned labels: optical 0.447, "
+                         "SAR 0.388, fused 0.468 mIoU; per-tile gain +0.009, 95% CI [+0.006, +0.012]. "
+                         "See docs/assets/phase6/optsar_fusion."),
+            },
+        })
+        return ToolResult(
+            tool=TOOL_NAME, version=TOOL_VERSION, payload=payload, artifacts=[],
+            confidence=fused_conf, confidence_method="mean_asserted_probability",
+            model_card=f"optical-SAR segmentation triad v3 ({Path(handle.path).name})",
+            runtime_ms=int((time.perf_counter() - started) * 1000), warnings=[],
         )
 
     def run_batch(self, manifests, params):

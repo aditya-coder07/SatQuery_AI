@@ -1,0 +1,70 @@
+{
+  "manifest": "data/rsicd/manifests/test.jsonl",
+  "manifest_hash": "977e3c2f5254cee23b27fbf7d1c074c87b48713de1277a8b074b3c148a4522af",
+  "n": 1093,
+  "quant": "none",
+  "limited_debug_run": false,
+  "task": "<CAPTION>",
+  "arms": {
+    "caption_lora": {
+      "n": 1093,
+      "corpus": {
+        "bleu1": 0.6424572068469045,
+        "bleu2": 0.4556536791966683,
+        "bleu3": 0.33707955029135456,
+        "bleu4": 0.25461054138506867,
+        "brevity_penalty": 1.0,
+        "rouge_l": 0.48718213201866534,
+        "cider_d": 0.7931805025247264,
+        "meteor_exact": 0.48448560726775614,
+        "n": 1093
+      },
+      "bleu4_ci95": [
+        0.2403,
+        0.2693
+      ],
+      "cider_d_ci95": [
+        0.7595,
+        0.8295
+      ],
+      "unique_fraction": 0.6048,
+      "headline": 0.25461054138506867,
+      "adapter": "checkpoints/v3/caption_vlm/adapter_best",
+      "timing": {
+        "generate_s": 476.9,
+        "s_per_item": 0.4364,
+        "peak_vram_gb": 7.28
+      }
+    },
+    "unified": {
+      "n": 1093,
+      "corpus": {
+        "bleu1": 0.6259105506383645,
+        "bleu2": 0.4379922840563864,
+        "bleu3": 0.31681951981226864,
+        "bleu4": 0.23493961371035832,
+        "brevity_penalty": 1.0,
+        "rouge_l": 0.46683517753652193,
+        "cider_d": 0.7445597755291761,
+        "meteor_exact": 0.47011840027706164,
+        "n": 1093
+      },
+      "bleu4_ci95": [
+        0.2219,
+        0.2484
+      ],
+      "cider_d_ci95": [
+        0.7137,
+        0.7802
+      ],
+      "unique_fraction": 0.505,
+      "headline": 0.23493961371035832,
+      "adapter": "checkpoints/v3/unified_vlm/adapter_best",
+      "timing": {
+        "generate_s": 478.8,
+        "s_per_item": 0.4381,
+        "peak_vram_gb": 7.28
+      }
+    }
+  }
+}
