@@ -1,7 +1,9 @@
 import './globals.css';
+import { GeistMono } from 'geist/font/mono';
 import { IBM_Plex_Sans, JetBrains_Mono, Manrope } from 'next/font/google';
 
 import Nav from './Nav';
+import DotField from './components/DotField';
 
 /**
  * Three faces, three jobs.
@@ -48,13 +50,12 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html
       lang="en"
-      className={`${display.variable} ${ui.variable} ${mono.variable}`}
+      className={`${GeistMono.variable} ${display.variable} ${ui.variable} ${mono.variable}`}
     >
       <body>
-        {/* Obsidian ground and film grain sit behind every route, fixed, so
-            scrolling a long trace does not scroll the sky with it. */}
-        <div className="ground" aria-hidden="true" />
-        <div className="grain" aria-hidden="true" />
+        {/* The dot grid sits behind every route, fixed, so scrolling a long
+            trace does not scroll the field with it. */}
+        <DotField />
 
         {/* One navigation for every route. Without it /models and
             /benchmarks - the two pages that carry the measured evidence -
