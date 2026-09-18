@@ -41,15 +41,17 @@ export default function ParticleCloud({
 
     const spawn = (p: P, initial = false) => {
       if (shape === 'wave') {
-        // Enter at the left edge (anywhere across the width on first fill),
-        // ride a swell to the right, leave, come back.
-        p.x = initial ? Math.random() * w : -10 - Math.random() * 40;
-        p.rad = Math.random(); // lane 0..1 across the band's thickness
-        p.vx = 28 + Math.random() * 40; // px/s
+        // One dense front that sweeps in from the left and out to the right,
+        // then is gone. Each dot sits some distance behind the front (the
+        // trail is thick near the front and thins out) in a lane across
+        // the band's height, and drifts a little slower than the front.
+        p.x = -Math.pow(Math.random(), 1.6) * w * 0.75; // offset behind the front
+        p.rad = Math.random(); // lane 0..1
+        p.vx = -(4 + Math.random() * 30); // slips back relative to the front
         p.vy = 0;
         p.max = 1e9;
         p.life = 0;
-        p.r = 0.6 + Math.random() * 1.2;
+        p.r = 0.7 + Math.random() * 1.3;
         p.seed = Math.random() * 1000;
         p.a = Math.random() * Math.PI * 2;
         return;
@@ -105,19 +107,23 @@ export default function ParticleCloud({
         if (p.life > p.max) spawn(p);
         const k = p.life / p.max;
         if (shape === 'wave') {
+          // The front crosses the width in ~3.2 s and keeps going until the
+          // whole trail has left the right edge.
+          const front = -w * 0.05 + t * (w / 3.2);
           p.x += p.vx * dt;
-          if (p.x > w + 20) spawn(p);
-          // Two swells travelling right, plus a per-dot flutter.
-          const phase = (p.x / w) * Math.PI * 2;
-          const swell = Math.sin(phase * 1.2 - t * 0.9) * h * 0.16 + Math.sin(phase * 2.6 - t * 1.7 + p.seed) * h * 0.05;
-          const lane = (p.rad - 0.5) * h * 0.34;
-          const flutter = Math.sin(t * 1.3 + p.seed) * 4;
+          const x = front + p.x;
+          if (x < -20 || x > w + 20) continue;
+          const phase = (x / w) * Math.PI * 2;
+          const swell = Math.sin(phase * 1.3 - t * 1.2) * h * 0.14 + Math.sin(phase * 2.8 + p.seed) * h * 0.04;
+          const lane = (p.rad - 0.5) * h * 0.28;
+          const flutter = Math.sin(t * 1.6 + p.seed) * 4;
           const y = h * 0.5 + swell + lane + flutter;
-          const edge = Math.min(1, p.x / (w * 0.12), (w - p.x) / (w * 0.12));
-          const alpha = Math.max(0, edge) * (0.18 + 0.4 * Math.abs(Math.sin(p.seed + t * 0.5)));
-          ctx.fillStyle = `rgba(${rgb}, ${alpha.toFixed(3)})`;
+          // Brightest just behind the front, fading down the trail.
+          const behind = Math.min(1, -p.x / (w * 0.75));
+          const alpha = (0.65 - 0.5 * behind) * (0.7 + 0.3 * Math.sin(p.seed + t * 2));
+          ctx.fillStyle = `rgba(${rgb}, ${Math.max(0, alpha).toFixed(3)})`;
           ctx.beginPath();
-          ctx.arc(p.x, y, p.r, 0, Math.PI * 2);
+          ctx.arc(x, y, p.r, 0, Math.PI * 2);
           ctx.fill();
           continue;
         }
@@ -148,11 +154,13 @@ export default function ParticleCloud({
     };
     let last = performance.now();
     const frame = () => {
-      raf = requestAnimationFrame(frame);
       const now = performance.now();
       const dt = Math.min((now - last) / 1000, 0.05);
       last = now;
       draw(dt);
+      // A finished sweep (front + trail past the right edge) stops the loop.
+      if (shape === 'wave' && t * (w / 3.2) > w * 1.85) { running = false; ctx.clearRect(0, 0, w, h); return; }
+      raf = requestAnimationFrame(frame);
     };
     const sync = () => {
       if (visible && !reduced) {
@@ -169,7 +177,14 @@ export default function ParticleCloud({
     }
     const ro = new ResizeObserver(resize);
     ro.observe(canvas);
-    const io = new IntersectionObserver((es) => { for (const e of es) visible = e.isIntersecting; sync(); });
+    const io = new IntersectionObserver((es) => {
+      for (const e of es) {
+        visible = e.isIntersecting;
+        // A wave replays from the left each time the section is entered.
+        if (visible && shape === 'wave') { t = 0; for (const p of ps) spawn(p); }
+      }
+      sync();
+    });
     io.observe(canvas);
     return () => {
       cancelAnimationFrame(raf);
