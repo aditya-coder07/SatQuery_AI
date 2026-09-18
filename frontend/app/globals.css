@@ -2642,7 +2642,7 @@
   flex-direction: column;
   align-items: center;
 }
-.home-sub {
+.home .home-sub {
   font-family: var(--f-mono);
   font-weight: 300;
   font-size: clamp(16px, 1.45vw, 21px);
@@ -2691,7 +2691,7 @@
   border-color: var(--border-strong);
   background: rgba(240, 240, 248, 0.04);
 }
-.home-stats {
+.home .home-stats {
   display: flex;
   flex-wrap: wrap;
   justify-content: center;
@@ -2702,7 +2702,7 @@
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--fg-45);
-  margin: 56px 0 0;
+  margin: 72px 0 0;
   padding: 0 16px;
 }
 .home-stats span + span::before {
