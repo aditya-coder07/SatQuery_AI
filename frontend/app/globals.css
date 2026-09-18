@@ -3035,25 +3035,6 @@
   border-top: 0.5px solid var(--border-soft);
   text-align: center;
 }
-.marquee {
-  overflow: hidden;
-  margin: 0 0 48px;
-  -webkit-mask-image: linear-gradient(90deg, transparent, #000 15%, #000 85%, transparent);
-  mask-image: linear-gradient(90deg, transparent, #000 15%, #000 85%, transparent);
-}
-.marquee-track {
-  display: flex;
-  width: max-content;
-  animation: strip 40s linear infinite;
-  font-family: var(--f-geist);
-  font-size: clamp(28px, 5vw, 64px);
-  font-weight: 800;
-  letter-spacing: -0.04em;
-  text-transform: uppercase;
-  color: transparent;
-  -webkit-text-stroke: 1px var(--fg-25);
-  white-space: nowrap;
-}
 .home-cta-inner {
   padding: 0 24px;
 }
@@ -3667,10 +3648,6 @@
   }
 }
 
-/* marquee: tilted like the reference */
-.marquee {
-  transform: rotate(-2deg) scale(1.04);
-}
 
 /* footer: a tilted particle disc behind a left-aligned headline */
 .home-foot-disc {

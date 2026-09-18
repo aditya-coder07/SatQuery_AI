@@ -15,7 +15,7 @@ import { BENCHMARKS, CAPABILITIES, CARRIES, METHOD, SENSORS } from './lib/site';
  * above a centred monospace headline, a marquee of the imagery the system
  * is built for, then card sections over the fixed dot grid - capabilities,
  * measured evidence, the five-phase method, what an answer carries, how it
- * deploys - a stroked marquee call-to-action, and a four-column footer.
+ * deploys - a talk-to-it band, and a four-column footer.
  * The query console is its own route (/query).
  *
  * Every number here is a measured official-split figure from
@@ -260,15 +260,8 @@ curl -F "query=What changed between these two scenes?" \\
           sub="Every one of these is a question the console answers today - with the checks, the confidence and the run id attached."
         />
 
-        {/* ------------------------------------------------------- marquee */}
+        {/* ---------------------------------------------------------- talk */}
         <section className="home-cta">
-          <div className="marquee" aria-hidden="true">
-            <div className="marquee-track">
-              {Array.from({ length: 4 }).map((_, i) => (
-                <span key={i}>every reading comes from the run that produced it&nbsp;·&nbsp;</span>
-              ))}
-            </div>
-          </div>
           <Reveal>
             <div className="home-cta-inner">
               <span className="eyebrow">[ talk to it ]</span>
