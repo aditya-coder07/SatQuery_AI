@@ -17,8 +17,9 @@ export default function ParticleCloud({
 }: {
   tone?: 'light' | 'dark';
   count?: number;
-  /** `disc`: a thin elliptical ring of dots that slowly orbits, dense at the rim. */
-  shape?: 'cloud' | 'disc';
+  /** `disc`: a thin elliptical ring of dots that slowly orbits, dense at the rim.
+   *  `wave`: a band of dots streaming left to right on a slow sine swell. */
+  shape?: 'cloud' | 'disc' | 'wave';
   className?: string;
 }) {
   const ref = useRef<HTMLCanvasElement>(null);
@@ -39,6 +40,20 @@ export default function ParticleCloud({
     const ps: P[] = [];
 
     const spawn = (p: P, initial = false) => {
+      if (shape === 'wave') {
+        // Enter at the left edge (anywhere across the width on first fill),
+        // ride a swell to the right, leave, come back.
+        p.x = initial ? Math.random() * w : -10 - Math.random() * 40;
+        p.rad = Math.random(); // lane 0..1 across the band's thickness
+        p.vx = 28 + Math.random() * 40; // px/s
+        p.vy = 0;
+        p.max = 1e9;
+        p.life = 0;
+        p.r = 0.6 + Math.random() * 1.2;
+        p.seed = Math.random() * 1000;
+        p.a = Math.random() * Math.PI * 2;
+        return;
+      }
       if (shape === 'disc') {
         // Ring: radius peaks near the rim with a soft inner fill; each dot
         // keeps its own angle and orbits slowly.
@@ -89,6 +104,23 @@ export default function ParticleCloud({
         p.life += dt;
         if (p.life > p.max) spawn(p);
         const k = p.life / p.max;
+        if (shape === 'wave') {
+          p.x += p.vx * dt;
+          if (p.x > w + 20) spawn(p);
+          // Two swells travelling right, plus a per-dot flutter.
+          const phase = (p.x / w) * Math.PI * 2;
+          const swell = Math.sin(phase * 1.2 - t * 0.9) * h * 0.16 + Math.sin(phase * 2.6 - t * 1.7 + p.seed) * h * 0.05;
+          const lane = (p.rad - 0.5) * h * 0.34;
+          const flutter = Math.sin(t * 1.3 + p.seed) * 4;
+          const y = h * 0.5 + swell + lane + flutter;
+          const edge = Math.min(1, p.x / (w * 0.12), (w - p.x) / (w * 0.12));
+          const alpha = Math.max(0, edge) * (0.18 + 0.4 * Math.abs(Math.sin(p.seed + t * 0.5)));
+          ctx.fillStyle = `rgba(${rgb}, ${alpha.toFixed(3)})`;
+          ctx.beginPath();
+          ctx.arc(p.x, y, p.r, 0, Math.PI * 2);
+          ctx.fill();
+          continue;
+        }
         if (shape === 'disc') {
           p.a += dt * 0.06;
           const wob = Math.sin(t * 0.4 + p.seed) * 0.02;

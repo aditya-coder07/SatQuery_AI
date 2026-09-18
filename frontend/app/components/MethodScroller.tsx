@@ -102,7 +102,7 @@ export default function MethodScroller({
       id="method"
     >
       <div className="method-pin">
-        <ParticleCloud tone="dark" count={600} className="method-cloud" />
+        <ParticleCloud tone="dark" count={520} shape="wave" className="method-cloud" />
         <div className="method-track">
           <div className="method-slide method-intro">
             <span className="eyebrow">[ {eyebrow} ]</span>
