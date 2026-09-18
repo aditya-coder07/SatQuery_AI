@@ -11,6 +11,7 @@ import ConfidenceCard from './components/ConfidenceCard';
 import Enter from './components/Enter';
 import Pipeline from './components/Pipeline';
 import QueryComposer from './components/QueryComposer';
+import RecentRuns from './components/RecentRuns';
 import Telemetry from './components/Telemetry';
 import type { Check, Confidence, TraceEvent, Verification } from './lib/events';
 import { isCalibrated, parseSSE } from './lib/events';
@@ -82,6 +83,7 @@ export default function Page() {
   const [aoi, setAoi] = useState<Bounds | null>(null);
   const traceRef = useRef<HTMLDivElement>(null);
   const pipelineRef = useRef<HTMLDivElement>(null);
+  const answerRef = useRef<HTMLDivElement>(null);
 
   // The composer owns its own <form> and calls this after preventing the
   // default, so this takes no event.
@@ -195,6 +197,21 @@ export default function Page() {
   }, [startedAt]);
 
   /**
+   * When the run completes, bring the answer into view. The pipeline is what
+   * you watch while it runs; the answer is what you came for, and on a long
+   * run the user has often scrolled away from where it will appear. Same
+   * one-frame delay as above, for the same reason: `complete` sets several
+   * pieces of state and the panel grows under the scroll otherwise.
+   */
+  useEffect(() => {
+    if (!runComplete) return;
+    const frame = requestAnimationFrame(() => {
+      answerRef.current?.scrollIntoView({ block: 'start', behavior: 'smooth' });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [runComplete]);
+
+  /**
    * `/` jumps to the composer, the convention every search-shaped tool uses.
    *
    * Ignored while the caret is already in a field, so typing a path or a
@@ -297,55 +314,7 @@ export default function Page() {
             />
           </Enter>
 
-          <Enter index={3}>
-            <div className="vitals">
-              <div className="vital">
-                <div className="k">Run</div>
-                <div className="v">{runId || '—'}</div>
-                <div className="n">
-                  {roles.length ? roles.join(' · ') : 'no scenes ingested yet'}
-                </div>
-              </div>
-              <div className="vital">
-                <div className="k">Wall clock</div>
-                <div className="v accent">
-                  {elapsed == null ? '—' : `${elapsed.toFixed(2)} s`}
-                </div>
-                <div className="n">measured in the browser</div>
-              </div>
-              <div className="vital">
-                <div className="k">Task</div>
-                <div className="v">{task || '—'}</div>
-                <div className="n">{task ? 'routed, not asked for' : 'awaiting routing'}</div>
-              </div>
-              <div className="vital">
-                <div className="k">Confidence</div>
-                <div className="v accent">
-                  {confidence && !abstained ? confidence.final.toFixed(2) : '—'}
-                </div>
-                <div className="n">
-                  {abstained
-                    ? 'n/a — the run abstained'
-                    : confidence
-                      ? `${confidence.band} · ${isCalibrated(confidence) ? 'calibrated' : 'uncalibrated'}`
-                      : 'no confidence event yet'}
-                </div>
-              </div>
-              <div className="vital">
-                <div className="k">Checks</div>
-                <div className="v">
-                  {checks.length
-                    ? `${checkCounts.pass} / ${checkCounts.warn} / ${checkCounts.fail}`
-                    : '—'}
-                </div>
-                <div className="n">
-                  {checks.length ? 'pass · warn · fail' : 'no ingest event yet'}
-                </div>
-              </div>
-            </div>
-          </Enter>
-
-          <Enter index={4}>
+          <Enter index={3} ref={answerRef} className="answer-anchor">
             <div className="deck-row row-2">
               <section className="panel">
                 <div className="panel-head">
@@ -405,13 +374,61 @@ export default function Page() {
             </div>
           </Enter>
 
+          <Enter index={4}>
+            <div className="vitals">
+              <div className="vital">
+                <div className="k">Run</div>
+                <div className="v">{runId || '—'}</div>
+                <div className="n">
+                  {roles.length ? roles.join(' · ') : 'no scenes ingested yet'}
+                </div>
+              </div>
+              <div className="vital">
+                <div className="k">Wall clock</div>
+                <div className="v accent">
+                  {elapsed == null ? '—' : `${elapsed.toFixed(2)} s`}
+                </div>
+                <div className="n">measured in the browser</div>
+              </div>
+              <div className="vital">
+                <div className="k">Task</div>
+                <div className="v">{task || '—'}</div>
+                <div className="n">{task ? 'routed, not asked for' : 'awaiting routing'}</div>
+              </div>
+              <div className="vital">
+                <div className="k">Confidence</div>
+                <div className="v accent">
+                  {confidence && !abstained ? confidence.final.toFixed(2) : '—'}
+                </div>
+                <div className="n">
+                  {abstained
+                    ? 'n/a — the run abstained'
+                    : confidence
+                      ? `${confidence.band} · ${isCalibrated(confidence) ? 'calibrated' : 'uncalibrated'}`
+                      : 'no confidence event yet'}
+                </div>
+              </div>
+              <div className="vital">
+                <div className="k">Checks</div>
+                <div className="v">
+                  {checks.length
+                    ? `${checkCounts.pass} / ${checkCounts.warn} / ${checkCounts.fail}`
+                    : '—'}
+                </div>
+                <div className="n">
+                  {checks.length ? 'pass · warn · fail' : 'no ingest event yet'}
+                </div>
+              </div>
+            </div>
+          </Enter>
+
           <Enter index={5}>
             <Telemetry />
           </Enter>
 
           {runId && roles.length === 2 && (
             <Enter index={6}>
-              <Comparator api={API} runId={runId} roles={roles} />
+              <Comparator api={API} runId={runId} roles={roles} ready={runComplete} />
             </Enter>
           )}
 
@@ -445,6 +462,10 @@ export default function Page() {
           )}
 
           <Enter index={8}>
+            <RecentRuns api={API} refreshKey={runComplete ? runId : ''} />
+          </Enter>
+
+          <Enter index={9}>
             <section className="panel">
               <div className="panel-head">
                 <span className="label">Live trace</span>

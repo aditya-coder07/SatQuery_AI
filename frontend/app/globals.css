@@ -716,6 +716,63 @@
     color: var(--dim);
     font-variant-numeric: tabular-nums;
   }
+  /* Sample chips: the "nothing to attach" escape hatch. Quiet by default -
+     the composer box above is still the one object with a fill - and they
+     light up like the attach button on hover. */
+  .composer-samples {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: var(--s1) var(--s2);
+    margin-top: var(--s2);
+  }
+  .composer-samples-label {
+    font-family: var(--f-mono);
+    font-size: 10.5px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--dim);
+    margin-right: var(--s1);
+  }
+  .sample-chip {
+    font: inherit;
+    display: inline-flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 2px;
+    padding: 6px 10px;
+    border: 1px solid var(--hair);
+    border-radius: 2px;
+    background: none;
+    color: var(--muted);
+    cursor: pointer;
+    text-align: left;
+    transition: color 200ms ease, border-color 200ms ease, background 200ms ease;
+  }
+  .sample-chip:hover:not(:disabled) {
+    color: var(--champ);
+    border-color: var(--hair-lit);
+    background: rgba(232, 195, 158, 0.04);
+  }
+  .sample-chip:disabled {
+    opacity: 0.45;
+    cursor: default;
+  }
+  .sample-title {
+    font-family: var(--f-ui);
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--ink);
+  }
+  .sample-chip:hover:not(:disabled) .sample-title {
+    color: var(--champ);
+  }
+  .sample-blurb {
+    font-family: var(--f-mono);
+    font-size: 10px;
+    color: var(--dim);
+  }
+
   .composer-kbd {
     font-family: var(--f-mono);
     font-size: 11px;
@@ -1020,7 +1077,8 @@
 
   /* ---------------- pipeline board ---------------- */
   /* The board is what a starting run scrolls to, so it clears the header. */
-  .pipeline-anchor {
+  .pipeline-anchor,
+  .answer-anchor {
     scroll-margin-top: calc(var(--nav-h) + var(--s3));
   }
   .rig-head {
@@ -1287,6 +1345,80 @@
   .permalink:hover {
     color: var(--champ);
     border-bottom-color: var(--champ);
+  }
+
+  /* ---------------- recent runs ---------------- */
+  .recent {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+  .recent-row {
+    display: flex;
+    gap: var(--s3);
+    align-items: baseline;
+    padding: var(--s2) 0;
+    border-top: 1px solid var(--hair);
+  }
+  .recent-row:first-child {
+    border-top: 0;
+  }
+  .recent-main {
+    flex: 1 1 auto;
+    min-width: 0;
+    max-width: 100%;
+  }
+  .recent-query {
+    display: block;
+    color: var(--ink);
+    font-size: 14px;
+    font-weight: 500;
+    text-decoration: none;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    transition: color 200ms ease;
+  }
+  .recent-query:hover {
+    color: var(--champ);
+  }
+  .recent-answer {
+    color: var(--muted);
+    font-size: 13px;
+    font-weight: 300;
+    margin-top: 2px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .recent-side {
+    flex: 0 0 auto;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 2px;
+    font-family: var(--f-mono);
+    font-size: 10.5px;
+    color: var(--dim);
+    font-variant-numeric: tabular-nums;
+  }
+  .recent-task {
+    color: var(--champ);
+    letter-spacing: 0.04em;
+  }
+  @media (max-width: 640px) {
+    .recent-row {
+      flex-direction: column;
+      /* baseline alignment in a column shrink-wraps the children to their
+         content, which defeats the ellipsis; stretch keeps them at the row's
+         width. */
+      align-items: stretch;
+      gap: 4px;
+    }
+    .recent-side {
+      flex-direction: row;
+      gap: var(--s2);
+    }
   }
 
   .checks {
