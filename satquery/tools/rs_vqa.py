@@ -77,23 +77,42 @@ class _ModelHandle:
         except ImportError:  # transformers < 5
             from transformers import AutoModelForVision2Seq as AutoVLM
 
-        quant = BitsAndBytesConfig(
-            load_in_4bit=True,
-            bnb_4bit_quant_type="nf4",
-            bnb_4bit_use_double_quant=True,
-            bnb_4bit_compute_dtype=(
-                torch.bfloat16 if torch.cuda.is_bf16_supported() else torch.float16
-            ),
-        )
         self.torch = torch
         self.processor = AutoProcessor.from_pretrained(str(base), local_files_only=True)
-        model = AutoVLM.from_pretrained(
-            str(base),
-            quantization_config=quant,
-            device_map={"": 0} if torch.cuda.is_available() else "cpu",
-            local_files_only=True,
-            trust_remote_code=False,
-        )
+        if torch.cuda.is_available():
+            # The deployed path: NF4 4-bit on the GPU (bitsandbytes needs CUDA).
+            quant = BitsAndBytesConfig(
+                load_in_4bit=True,
+                bnb_4bit_quant_type="nf4",
+                bnb_4bit_use_double_quant=True,
+                bnb_4bit_compute_dtype=(
+                    torch.bfloat16 if torch.cuda.is_bf16_supported() else torch.float16
+                ),
+            )
+            model = AutoVLM.from_pretrained(
+                str(base),
+                quantization_config=quant,
+                device_map={"": 0},
+                local_files_only=True,
+                trust_remote_code=False,
+            )
+            self.quantised = True
+        else:
+            # No CUDA: bf16 weights on the CPU (~7 GB of RAM for the 3B base).
+            # Slow - tens of seconds per answer - but the same adapters
+            # attach unchanged, and bf16 is the un-quantised reference the
+            # 4-bit path was measured against (-1.0 pt on grounding), so
+            # nothing is lost except time. SATQUERY_VLM_CPU_DTYPE=float32
+            # doubles the memory for CPUs without a fast bf16 path.
+            dtype = getattr(torch, os.environ.get("SATQUERY_VLM_CPU_DTYPE", "bfloat16"))
+            model = AutoVLM.from_pretrained(
+                str(base),
+                dtype=dtype,
+                device_map="cpu",
+                local_files_only=True,
+                trust_remote_code=False,
+            )
+            self.quantised = False
         # The adapter is ours, produced by training/track_b_vlm_qlora.py, so
         # loading it is not the third-party-code risk that trust_remote_code is.
         self.model = PeftModel.from_pretrained(model, str(adapter), adapter_name=self.DEFAULT_ADAPTER)
