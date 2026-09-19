@@ -27,7 +27,8 @@ import { focusQuery } from './lib/focusQuery';
 const API = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000';
 
 const ROUTES = [
-  { href: '/', label: 'Query' },
+  { href: '/', label: 'Home' },
+  { href: '/query', label: 'Query' },
   { href: '/models', label: 'Models' },
   { href: '/benchmarks', label: 'Benchmarks' },
 ];
@@ -47,7 +48,14 @@ function gib(bytes: number | null): string | null {
 export default function Nav() {
   const pathname = usePathname();
   const [device, setDevice] = useState<Device | null>(null);
+  const [open, setOpen] = useState(false);
   const navRef = useRef<HTMLElement>(null);
+
+  // The mobile panel closes on navigation; a menu that stays open over the
+  // page you just chose is a menu you have to dismiss twice.
+  useEffect(() => {
+    setOpen(false);
+  }, [pathname]);
 
   /**
    * Publish the header's height as `--nav-h`.
@@ -94,44 +102,70 @@ export default function Nav() {
       : device.device.toUpperCase();
 
   return (
-    <nav className="nav" aria-label="Main" ref={navRef}>
-      <Link className="nav-brand" href="/">
-        SatQuery&nbsp;AI
-      </Link>
-      <ul>
-        {ROUTES.map((route) => {
-          const active =
-            route.href === '/' ? pathname === '/' : pathname?.startsWith(route.href);
-          return (
-            <li key={route.href}>
-              <Link
-                href={route.href}
-                className={`link${active ? ' active' : ''}`}
-                aria-current={active ? 'page' : undefined}
-                onClick={(event) => {
-                  // Already on the query page: the useful thing is not a
-                  // route change to where you already are, it is getting to
-                  // the composer. Any other route still navigates normally.
-                  if (route.href === '/' && pathname === '/') {
-                    event.preventDefault();
-                    focusQuery();
-                  }
-                }}
-              >
-                {route.label}
-              </Link>
-            </li>
-          );
-        })}
-      </ul>
-      {chip && (
-        <div className="right">
-          <span className="device" title={device?.name ?? undefined}>
-            <span className={`dot${device?.device === 'cpu' ? ' idle' : ''}`} />
-            {chip}
-          </span>
+    <header className={`nav-wrap${open ? ' open' : ''}`} ref={navRef}>
+      <nav className="nav" aria-label="Main">
+        <Link className="nav-brand" href="/">
+          SatQuery<span className="accent">AI</span>
+        </Link>
+        <ul className="nav-links">
+          {ROUTES.map((route) => {
+            const active =
+              route.href === '/' ? pathname === '/' : pathname?.startsWith(route.href);
+            return (
+              <li key={route.href}>
+                <Link
+                  href={route.href}
+                  className={`link${active ? ' active' : ''}`}
+                  aria-current={active ? 'page' : undefined}
+                  onClick={(event) => {
+                    // Already on the query page: the useful thing is not a
+                    // route change to where you already are, it is getting
+                    // to the composer. Any other route still navigates.
+                    if (route.href === '/query' && pathname === '/query') {
+                      event.preventDefault();
+                      focusQuery();
+                    }
+                  }}
+                >
+                  {route.label}
+                </Link>
+              </li>
+            );
+          })}
+        </ul>
+        <div className="nav-right">
+          {chip && (
+            <span className="device" title={device?.name ?? undefined}>
+              <span className={`dot${device?.device === 'cpu' ? ' idle' : ''}`} />
+              {chip}
+            </span>
+          )}
+          <Link href="/query" className="nav-cta">
+            Ask the imagery
+          </Link>
+          <button
+            type="button"
+            className="nav-burger"
+            aria-expanded={open}
+            aria-controls="mobile-nav"
+            aria-label={open ? 'Close menu' : 'Open menu'}
+            onClick={() => setOpen((v) => !v)}
+          >
+            <span />
+            <span />
+          </button>
         </div>
-      )}
-    </nav>
+      </nav>
+      <div id="mobile-nav" className="nav-mobile" hidden={!open}>
+        {ROUTES.map((route) => (
+          <Link key={route.href} href={route.href} className="nav-mobile-link">
+            {route.label}
+          </Link>
+        ))}
+        <Link href="/query" className="nav-cta wide">
+          Ask the imagery
+        </Link>
+      </div>
+    </header>
   );
 }

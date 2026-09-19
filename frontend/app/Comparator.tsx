@@ -23,14 +23,28 @@ type Props = {
   api: string;
   runId: string;
   roles: string[];
+  /**
+   * The run is persisted only when it completes, and `/preview/{role}` 404s
+   * until then. Mounting on `ingest` (when the roles are known) and fetching
+   * straight away lost the race on every run longer than a moment and showed
+   * "previews are unavailable" for a run whose images were right there.
+   */
+  ready: boolean;
 };
 
 const SWIPE_PAIRS: [string, string][] = [['t1', 't2']];
 const BLEND_PAIRS: [string, string][] = [['optical', 'sar']];
 
-export default function Comparator({ api, runId, roles }: Props) {
+export default function Comparator({ api, runId, roles, ready }: Props) {
   const [position, setPosition] = useState(50);
   const [failed, setFailed] = useState(false);
+
+  // A new run is a new pair of images; a failure from the previous one must
+  // not carry over.
+  useEffect(() => {
+    setFailed(false);
+    setPosition(50);
+  }, [runId]);
   const containerRef = useRef<HTMLDivElement>(null);
   const dragging = useRef(false);
 
@@ -63,6 +77,21 @@ export default function Comparator({ api, runId, roles }: Props) {
   const [left, right] = pair;
   const url = (role: string) => `${api}/runs/${runId}/preview/${role}?max_edge=768`;
 
+  const title = mode === 'swipe' ? 'Bi-temporal swipe' : 'Optical–SAR blend';
+
+  if (!ready) {
+    return (
+      <section className="panel">
+        <div className="panel-head">
+          <span className="label">{title}</span>
+          <span className="spacer" />
+          <span className="meta">previews render when the run completes</span>
+        </div>
+        <p className="answer empty">Waiting for the run to finish…</p>
+      </section>
+    );
+  }
+
   if (failed) {
     return (
       <section className="panel">
@@ -85,7 +114,7 @@ export default function Comparator({ api, runId, roles }: Props) {
             <path d="M4 4h16v16H4z" />
             <path d="M12 4v16" />
           </svg>
-          {mode === 'swipe' ? 'Bi-temporal swipe' : 'Optical–SAR blend'}
+          {title}
         </span>
         <span className="spacer" />
         <span className="meta">preview/{'{role}'} · max_edge 768</span>

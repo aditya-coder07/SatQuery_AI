@@ -20,8 +20,9 @@ from pathlib import Path
 import yaml
 
 ROOT = Path(__file__).resolve().parent.parent
-# Running a script puts scripts/ on sys.path, not the repo root; the tools
-# import training.* at load time (the image has /app as its working dir).
+# `python scripts/serve_local.py` puts scripts/ first on sys.path, not the
+# repo root. `satquery` is installed, but the tools import the model builders
+# from `training/`, which is not - Docker gets it from WORKDIR /app.
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 

@@ -49,7 +49,17 @@ type CalibrationEntry = {
   split_note: string | null;
 };
 
+type Deployed = {
+  tool: string;
+  status: string | null;
+  note: string | null;
+  env: Record<string, string>;
+  present: Record<string, boolean>;
+};
+
 type Registry = {
+  deployed: Deployed[];
+  deploy_map: string | null;
   checkpoints: Checkpoint[];
   downloaded_models: Downloaded[];
   calibration: {
@@ -181,6 +191,42 @@ export default function ModelsPage() {
       </div>
 
       <div className="deck">
+        <section className="panel">
+          <div className="panel-head">
+            <span className="label">Deployed now</span>
+            <span className="spacer" />
+            <span className="meta">{registry.deploy_map ?? 'no deploy map'}</span>
+          </div>
+          {(registry.deployed ?? []).length === 0 ? (
+            <p className="cap">No deployment map on this machine.</p>
+          ) : (
+            <ul className="deployed">
+              {registry.deployed.map((d) => {
+                const missing = Object.entries(d.present).filter(([, ok]) => !ok).map(([k]) => k);
+                return (
+                  <li key={d.tool} className={`deployed-row status-${d.status ?? 'unknown'}`}>
+                    <div className="deployed-head">
+                      <span className="deployed-tool">{d.tool}</span>
+                      <span className="deployed-status">{d.status ?? '—'}</span>
+                      <span className={`deployed-present${missing.length ? ' is-missing' : ''}`}>
+                        {missing.length ? `missing: ${missing.join(', ')}` : 'weights present'}
+                      </span>
+                    </div>
+                    <div className="deployed-env">
+                      {Object.entries(d.env).map(([k, v]) => (
+                        <code key={k}>
+                          <span>{k}</span>={v}
+                        </code>
+                      ))}
+                    </div>
+                    {d.note && <p className="deployed-note">{d.note}</p>}
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </section>
+
         <section className="panel">
           <div className="panel-head">
             <span className="label">Trained checkpoints</span>
