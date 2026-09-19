@@ -36,8 +36,9 @@ import { QUERY_FIELD_ID } from '../lib/focusQuery';
 import type { Bounds } from '../lib/footprint';
 import { SAMPLES, loadSample, type Sample } from '../lib/samples';
 import type { ProbedScene } from './AreaPicker';
+import { apiBase } from '../lib/api';
 
-const API = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000';
+const API = apiBase();
 
 // OpenLayers has no business in the first paint of a page whose main control
 // is a text field.

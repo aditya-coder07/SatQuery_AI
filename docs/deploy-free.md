@@ -1,108 +1,97 @@
-# Free, all-cloud deployment: Hugging Face Space (API) + Vercel (frontend)
+# Free, all-cloud deployment (no card): Vercel frontend + Kaggle GPU backend
 
-No laptop, no cluster, no card. The API runs on a free Hugging Face Docker
-Space (2 vCPU, 16 GB RAM, no GPU) under the **`cpu` profile**; the web UI
-runs on Vercel's free Hobby plan.
+**What is free on Hugging Face without PRO, measured on the account
+`DeepakShivhareEe` on 2026-09-19:** creating a `static` Space succeeds;
+creating a `gradio` or `docker` Space returns `402 Payment Required`
+("hosting Gradio and Docker Spaces on free cpu-basic requires a PRO
+subscription"). A static Space serves files only, so the API cannot run on
+Hugging Face for free. What HF still provides free, and what this layout
+uses: **the private model repo that holds every trained checkpoint**
+(`DeepakShivhareEe/satquery-cpu-weights`: the 7 v3/v2/v1 heads and the 4
+v3 VLM adapters, 38 files).
+
+The only free GPU that needs no card is a **Kaggle** session (T4, 30
+h/week, ≤ 12 h per session). So:
 
 ```
-browser ──HTTPS──► https://satquery-ai.vercel.app        (Vercel, Next.js)
-                        │  NEXT_PUBLIC_API_URL
-                        ▼
-      https://<user>-satquery-api.hf.space               (HF Docker Space, port 7860)
-                        │  at start: snapshot_download(<user>/satquery-cpu-weights)
-                        ▼
-                 /app/checkpoints  (1.4 GB: v3 heads + v2/v1 specialists)
+browser ──► https://satquery-ai.vercel.app            (Vercel Hobby, free, always on)
+                 │  API endpoint set at runtime: ?api=<url> or the header chip
+                 ▼
+     https://<random>.trycloudflare.com               (Cloudflare quick tunnel, free)
+                 ▼
+     Kaggle notebook: T4, full Phase 6 stack           (free; up while the notebook runs)
+        code   ← GitHub main
+        base   ← Qwen/Qwen2.5-VL-3B-Instruct (HF Hub)
+        weights← DeepakShivhareEe/satquery-cpu-weights (private HF repo, HF_TOKEN secret)
 ```
 
-## What runs, and what does not
+This runs the **complete v3 system** — 4-bit Qwen2.5-VL-3B with the VQA /
+grounding (arm E) / caption / change-caption adapters plus the v3 heads —
+not the CPU-degraded set. The trade: the backend is up only while you have
+a Kaggle session running, and its URL changes per session, which is why
+the frontend accepts the endpoint at runtime.
 
-| Tool | On the Space | Model |
-|---|---|---|
-| landcover | yes | v3 SSL4EO head (`landcover_full/best.pt`) — official test micro mAP 0.885 |
-| change_mask | yes | v3 (`change_mask/best.pt`) — LEVIR-CD F1 0.904 |
-| optsar_fusion | yes | v3 (`optsar_fusion/best.pt`) |
-| grounding | yes | **v2 specialist** (`grounding_pre`, 32 M params) — the arm-E VLM adapter needs the 3B base |
-| caption | yes | **v2 specialist** (`caption_pre`, BLEU-4 0.174; the VLM adapter scores 0.256 on GPU) |
-| change_caption | yes | v1 specialist (`change_caption`) |
-| change_vqa | yes | v2 (`change_vqa/best.pt`) |
-| index_engine | yes | deterministic |
-| rs_vqa | **shed** | the 3B VLM cannot run in useful time on a CPU; a VQA question is answered with an explicit "this profile cannot answer" abstain plus the index narrative where one exists |
-
-Measured on a laptop CPU with the GPU hidden: every rehearsal input in
-`data/demo_bundle` answers in 0.3–6 s; the ingest gates (footprint
-overlap, cloud cover) reject as on GPU. `scripts/verify_deploy.py --map
-configs/deploy.cpu.yaml` → 7/7 loaded on CPU.
-
-Files: `configs/profiles/cpu.yaml` (profile), `configs/deploy.cpu.yaml`
-(which checkpoint each tool loads), `deploy/hf_space/{Dockerfile,start.sh,README.md}`
-(the Space).
-
-## 1 + 2. Weights and Space in one command (≈ 15 min, mostly upload)
-
-The CPU weight set is staged at `C:\Users\dk231\Desktop\SatQuery_AI\hf_stage\checkpoints`
-(1.39 GB, 25 files; on the cluster the same set is `~/satquery/.hf_stage/checkpoints`).
-It goes to a **private** model repo because the grounding specialist was
-trained on DIOR-RSVG (CC-BY-NC).
-
-```bash
-pip install -U "huggingface_hub[cli]"
-```
-```bash
-hf auth login
-```
-(paste a **write** token from huggingface.co/settings/tokens)
-```bash
-python deploy/hf_space/publish.py --weights "C:/Users/dk231/Desktop/SatQuery_AI/hf_stage/checkpoints"
-```
-
-`publish.py` creates `<user>/satquery-cpu-weights` (private), uploads the
-weights, creates the Docker Space `<user>/satquery-api` from
-`deploy/hf_space/`, sets the `HF_TOKEN` secret and the
-`SATQUERY_WEIGHTS_REPO` / `SATQUERY_CORS_ORIGINS` / `SATQUERY_GIT_REF`
-variables, and restarts it. It prints the API URL. Re-running updates in
-place (`--skip-weights` to leave the weights alone, `--cors` to change the
-allowed origin, `--read-token` to give the Space a read-only token).
-
-The Space then builds (clones `main`, installs the CPU torch stack, ≈ 10
-min), downloads the weights (≈ 1 min) and serves on 7860. Check:
-`https://<user>-satquery-api.hf.space/health` → `{"status":"ok"}`.
-
-Manual equivalent, if preferred: New Space → Docker → Blank → CPU basic;
-upload `Dockerfile`, `start.sh`, `README.md`; Settings → secret `HF_TOKEN`
-(read token), variables `SATQUERY_WEIGHTS_REPO`, `SATQUERY_CORS_ORIGINS`.
-
-## 3. Frontend on Vercel (≈ 3 min)
+## 1. Frontend on Vercel (once, ≈ 3 min)
 
 1. vercel.com → *Add New → Project* → import `aditya-coder07/SatQuery_AI`.
 2. Project name **`satquery-ai`**; **Root Directory `frontend`**.
-3. Environment variable `NEXT_PUBLIC_API_URL` = `https://<user>-satquery-api.hf.space` (no trailing slash; inlined at build → change it, then *Redeploy*).
-4. Deploy. If Vercel assigns a different name, set that origin in the
-   Space's `SATQUERY_CORS_ORIGINS` variable (the Space restarts by itself).
+3. No environment variable needed: the API endpoint is set in the browser
+   (below). Optionally `NEXT_PUBLIC_API_URL` as a default for a fixed backend.
+4. Deploy → `https://satquery-ai.vercel.app`.
 
-## 4. Smoke test
+## 2. Backend on Kaggle (each session, ≈ 10 min to come up)
 
-Open `https://satquery-ai.vercel.app` → *Ask a question* → attach two
-LEVIR tiles or `test.png` → "What changed between these two dates?" /
-"Describe the land cover." A VQA question ("Is there a road?") returns the
-honest abstain of the cpu profile.
+1. kaggle.com → *Create → New Notebook* → *File → Import Notebook* →
+   upload `deploy/kaggle/satquery_api.ipynb` (or paste its one cell).
+2. Notebook settings: **Accelerator GPU T4 x2**, **Internet On**.
+3. *Add-ons → Secrets*: `HF_TOKEN` = a Hugging Face **read** token
+   (huggingface.co/settings/tokens) — the checkpoints are in a private repo.
+4. Run the cell. It clones `main`, installs the pinned stack, downloads the
+   base model (7 GB, from the Hub) and the checkpoints (1.9 GB), runs
+   `verify_deploy.py` (must print `8/8 loaded`), starts the API and a
+   Cloudflare quick tunnel, then prints:
+   ```
+   API:      https://<random>.trycloudflare.com
+   frontend: https://satquery-ai.vercel.app/query?api=https://<random>.trycloudflare.com
+   ```
+5. Open the printed frontend link. The `?api=` value is saved in that
+   browser; afterwards `https://satquery-ai.vercel.app` alone works until
+   the next session. The header chip (`CUDA:0 · n GB FREE`) shows which
+   endpoint is in use; click it to change or reset it. When the backend is
+   down the chip reads `API OFFLINE`.
+
+Keep the cell running; stop it (or let Kaggle's 12 h limit end it) to
+close the session. Restart = run the cell again, share the new link.
+
+CORS: the API allows `https://satquery-ai.vercel.app` (and localhost) by
+default (`SATQUERY_CORS_ORIGINS` in `deploy/kaggle/satquery_kaggle.py`);
+set the env var in the notebook if the Vercel name differs.
+
+## 3. Smoke test
+
+From the frontend link: attach `test.png` (or the LEVIR pair) → "Is there a
+road in this image?" → an answer with confidence and trace from the real
+VLM; "What changed between these two dates?" → change mask + caption.
 
 ## Expectations
 
-* **Free Space sleeps after 48 h without traffic**; the first request then
-  takes ≈ 2 min (container start + weight download). Any visit wakes it.
-* CPU: single requests 1–6 s on 256-px tiles; a full Cartosat scene is
-  tiled at 256 px and will take minutes — the UI streams progress.
-* **No VLM answers** on this tier. The GPU layouts (`docker-compose.v3.yml`,
-  `deploy/modal_app.py`) are unchanged and take over when a GPU is available:
-  Modal needs a card on file (free $30/month credit), HF ZeroGPU needs PRO.
-* The API has no authentication. Anyone with the Space URL can call it;
-  fine for an MVP, add a gate before sharing widely.
+* First request after start: models already loaded by the verify step, so
+  seconds. Grounding at 1024 px ≈ 5–8 s on a T4, VQA ≈ 2–4 s.
+* One GPU, in-process: concurrent users queue.
+* Quick-tunnel URLs are random per start and carry no authentication:
+  share the link only with the people who should use the session.
+* Kaggle quota: 30 GPU-hours per week, 12 h per session.
 
-## Why not …
+## When a card or a subscription becomes acceptable
 
-| Option | Why not |
-|---|---|
-| HF ZeroGPU Space | creating one needs a PRO account ($9/month) |
-| Modal / GCP / AWS free credits | require a payment method |
-| Render / Railway / Fly free | CPU with 0.5–2 GB RAM: too small even for the specialists |
-| Kaggle / Colab GPU | real T4 for free, but sessions expire and need a tunnel: demo-only |
+Everything below is already built and needs only the account step:
+
+| Layout | Files | Cost | Notes |
+|---|---|---|---|
+| Hugging Face **ZeroGPU** or CPU Space | `deploy/hf_space/` (+ ZeroGPU: GPU map) | PRO $9/month | always on, full models on ZeroGPU |
+| **Modal** serverless T4 | `deploy/modal_app.py` (image built, weights on the Volume) | card on file, $30/month free credit | scale-to-zero, ≈ 50 T4-hours/month free |
+| Own GPU box / cluster | `docker-compose.v3.yml` or `scripts/serve_local.py` | — | as verified 8/8 on compute01 |
+
+CPU-only hosts (any tier) use `SATQUERY_PROFILE=cpu` with
+`configs/deploy.cpu.yaml`: every specialist runs, the 3B VLM is shed
+(7/7 load-verified; rehearsal inputs answer in 0.5–7 s).

@@ -2,6 +2,7 @@
 
 import dynamic from 'next/dynamic';
 import { useEffect, useState } from 'react';
+import { apiBase } from '../lib/api';
 
 /**
  * The hero globe with a badge that says what the API is actually running
@@ -9,7 +10,7 @@ import { useEffect, useState } from 'react';
  * API is unreachable the badge says so - it never claims to be online on
  * its own authority.
  */
-const API = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000';
+const API = apiBase();
 
 const ParticleWorld = dynamic(() => import('./ParticleWorld'), {
   ssr: false,

@@ -23,8 +23,9 @@ import { usePathname } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
 
 import { focusQuery } from './lib/focusQuery';
+import { apiBase, isOverridden, setApiBase } from './lib/api';
 
-const API = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000';
+const API = apiBase();
 
 const ROUTES = [
   { href: '/', label: 'Home' },
@@ -48,6 +49,9 @@ function gib(bytes: number | null): string | null {
 export default function Nav() {
   const pathname = usePathname();
   const [device, setDevice] = useState<Device | null>(null);
+  // null = not asked yet, false = the API did not answer. An unreachable
+  // backend is the one state where the endpoint control has to be visible.
+  const [reachable, setReachable] = useState<boolean | null>(null);
   const [open, setOpen] = useState(false);
   const navRef = useRef<HTMLElement>(null);
 
@@ -85,10 +89,14 @@ export default function Nav() {
     fetch(`${API}/device`)
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error(String(r.status)))))
       .then((d) => {
-        if (!cancelled) setDevice(d);
+        if (!cancelled) {
+          setDevice(d);
+          setReachable(true);
+        }
       })
-      // A missing device reading is not worth an error state in the header.
-      .catch(() => undefined);
+      .catch(() => {
+        if (!cancelled) setReachable(false);
+      });
     return () => {
       cancelled = true;
     };
@@ -96,10 +104,26 @@ export default function Nav() {
 
   const free = gib(device?.vram_free_bytes ?? null);
   const chip = !device
-    ? null
+    ? reachable === false
+      ? 'API OFFLINE'
+      : null
     : free
       ? `${device.device.toUpperCase()} · ${free} FREE`
       : device.device.toUpperCase();
+
+  // The backend may be a GPU session with a new public URL each time it
+  // starts (docs/deploy-free.md); the chip doubles as the place to point the
+  // site at it. A prompt is enough: it is set once per session, by whoever
+  // started the backend.
+  const changeEndpoint = () => {
+    const current = API;
+    const next = window.prompt(
+      'API endpoint (leave empty to reset to the default):',
+      isOverridden() ? current : '',
+    );
+    if (next === null) return;
+    setApiBase(next.trim() === '' ? null : next);
+  };
 
   return (
     <header className={`nav-wrap${open ? ' open' : ''}`} ref={navRef}>
@@ -135,10 +159,16 @@ export default function Nav() {
         </ul>
         <div className="nav-right">
           {chip && (
-            <span className="device" title={device?.name ?? undefined}>
-              <span className={`dot${device?.device === 'cpu' ? ' idle' : ''}`} />
+            <button
+              type="button"
+              className={`device${reachable === false ? ' offline' : ''}`}
+              title={reachable === false ? `No answer from ${API} - click to set the endpoint` : `${device?.name ?? ''}
+${API} - click to change`}
+              onClick={changeEndpoint}
+            >
+              <span className={`dot${device?.device === 'cpu' || reachable === false ? ' idle' : ''}`} />
               {chip}
-            </span>
+            </button>
           )}
           <Link href="/query" className="nav-cta">
             Ask the imagery
