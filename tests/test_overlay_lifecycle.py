@@ -203,3 +203,32 @@ class TestConfidenceIsShownAsAScore:
             encoding="utf-8"
         )
         assert "uncalibrated (score is not a calibratable probability)" in text
+
+
+def test_the_listing_carries_the_extent_a_proxy_would_hide(tmp_path, monkeypatch):
+    """The 3857 extent is in the JSON body of /overlays, equal to X-Extent.
+
+    A reverse proxy can rewrite Access-Control-Expose-Headers (Lightning AI's
+    does), after which a cross-origin page cannot read X-Extent; the listing
+    is the channel no proxy touches.
+    """
+    import numpy as np
+    import rasterio
+    from fastapi.testclient import TestClient
+    from rasterio.transform import from_origin
+
+    tif = tmp_path / "change_mask.tif"
+    with rasterio.open(tif, "w", driver="GTiff", height=8, width=8, count=1, dtype="uint8",
+                       crs="EPSG:32643", transform=from_origin(500000, 2000000, 10, 10)) as dst:
+        dst.write(np.ones((1, 8, 8), dtype="uint8"))
+
+    class _Store:
+        def get(self, run_id):
+            return {"trace": {"artifact_paths": {"change_mask": str(tif)}}}
+
+    monkeypatch.setattr(api_main, "get_store", lambda: _Store())
+    client = TestClient(api_main.app)
+    listing = client.get("/runs/run_x/overlays").json()["overlays"]
+    assert listing[0]["key"] == "change_mask" and listing[0]["projection"] == "EPSG:3857"
+    header = client.get("/runs/run_x/overlay/change_mask").headers["X-Extent"]
+    assert [round(float(v), 3) for v in header.split(",")] == listing[0]["extent"]

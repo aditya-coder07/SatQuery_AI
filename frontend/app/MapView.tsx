@@ -278,12 +278,29 @@ export default function MapView({
         const response = await fetch(`${API}/runs/${runId}/overlay/${active}`);
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
         // The extent travels in a header because the payload is the PNG
-        // itself; the server already reprojected both to EPSG:3857.
+        // itself; the server already reprojected both to EPSG:3857. A
+        // reverse proxy may rewrite Access-Control-Expose-Headers and hide
+        // the header from a cross-origin page (Lightning AI's does), so the
+        // listing repeats it in its JSON body; that is the fallback.
+        let extent: [number, number, number, number] | null = null;
         const header = response.headers.get('X-Extent');
-        if (!header) throw new Error('overlay is missing its X-Extent header');
-        const extent = header.split(',').map(Number) as [
-          number, number, number, number,
-        ];
+        if (header) {
+          extent = header.split(',').map(Number) as [number, number, number, number];
+        } else {
+          const listing = await fetch(`${API}/runs/${runId}/overlays`);
+          if (listing.ok) {
+            const body = (await listing.json()) as {
+              overlays?: { key: string; extent?: number[] }[];
+            };
+            const found = body.overlays?.find((o) => o.key === active)?.extent;
+            if (found && found.length === 4) {
+              extent = found as [number, number, number, number];
+            }
+          }
+        }
+        if (!extent || extent.some((v) => !Number.isFinite(v))) {
+          throw new Error('overlay extent unavailable (no X-Extent header and none in the listing)');
+        }
         const url = URL.createObjectURL(await response.blob());
         if (cancelled) {
           URL.revokeObjectURL(url);
