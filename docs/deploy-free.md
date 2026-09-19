@@ -13,7 +13,7 @@ v3 VLM adapters, 38 files).
 Two free hosts need no card: a **Lightning AI CPU Studio** (always available, slow — option A) and a **Kaggle GPU session** (fast, up while you run it — option B). Both serve the same complete v3 stack and the same Vercel frontend:
 
 ```
-browser ──► https://satquery-ai.vercel.app            (Vercel Hobby, free, always on)
+browser ──► https://satquery-ai-self.vercel.app            (Vercel Hobby, free, always on)
                  │  API endpoint set at runtime: ?api=<url> or the header chip
                  ▼
      https://<random>.trycloudflare.com               (Cloudflare quick tunnel, free)
@@ -81,7 +81,7 @@ wake on the next request (≈ 1 min).
    ```
    then in the Studio's **Ports** panel expose **8000** publicly → a URL
    like `https://8000-<studio-id>.cloudspaces.litng.ai`.
-4. Open `https://satquery-ai.vercel.app/query?api=<that URL>` once; the
+4. Open `https://satquery-ai-self.vercel.app/query?api=<that URL>` once; the
    browser remembers it.
 
 Switching the Studio to a GPU (credits) and rerunning `serve.sh` serves
@@ -101,10 +101,10 @@ change-detection requests answered, test suite green.
 ## Frontend on Vercel (both options; once, ≈ 3 min)
 
 1. vercel.com → *Add New → Project* → import `aditya-coder07/SatQuery_AI`.
-2. Project name **`satquery-ai`**; **Root Directory `frontend`**.
+2. Project name (Vercel assigned **`satquery-ai-self`**; the deployed site is `https://satquery-ai-self.vercel.app`); **Root Directory `frontend`**.
 3. No environment variable needed: the API endpoint is set in the browser
    (below). Optionally `NEXT_PUBLIC_API_URL` as a default for a fixed backend.
-4. Deploy → `https://satquery-ai.vercel.app`.
+4. Deploy → `https://satquery-ai-self.vercel.app`.
 
 ## Option B — free GPU sessions: Kaggle (each session, ≈ 10 min to come up)
 
@@ -119,10 +119,10 @@ change-detection requests answered, test suite green.
    Cloudflare quick tunnel, then prints:
    ```
    API:      https://<random>.trycloudflare.com
-   frontend: https://satquery-ai.vercel.app/query?api=https://<random>.trycloudflare.com
+   frontend: https://satquery-ai-self.vercel.app/query?api=https://<random>.trycloudflare.com
    ```
 5. Open the printed frontend link. The `?api=` value is saved in that
-   browser; afterwards `https://satquery-ai.vercel.app` alone works until
+   browser; afterwards `https://satquery-ai-self.vercel.app` alone works until
    the next session. The header chip (`CUDA:0 · n GB FREE`) shows which
    endpoint is in use; click it to change or reset it. When the backend is
    down the chip reads `API OFFLINE`.
@@ -130,7 +130,7 @@ change-detection requests answered, test suite green.
 Keep the cell running; stop it (or let Kaggle's 12 h limit end it) to
 close the session. Restart = run the cell again, share the new link.
 
-CORS: the API allows `https://satquery-ai.vercel.app` (and localhost) by
+CORS: the API allows `https://satquery-ai-self.vercel.app` (and localhost) by
 default (`SATQUERY_CORS_ORIGINS` in `deploy/kaggle/satquery_kaggle.py`);
 set the env var in the notebook if the Vercel name differs.
 

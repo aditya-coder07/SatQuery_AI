@@ -14,7 +14,7 @@ Add-ons -> Secrets. Then one cell:
     %run /kaggle/working/satquery/deploy/kaggle/satquery_kaggle.py
 
 Prints the public API URL and a ready-made frontend link
-(`https://satquery-ai.vercel.app/query?api=<url>`). The session ends after
+(`https://satquery-ai-self.vercel.app/query?api=<url>`). The session ends after
 Kaggle's limit (12 h) or when the notebook is stopped; the URL changes on
 every start, which is why the frontend accepts `?api=` at runtime.
 
@@ -36,7 +36,7 @@ from pathlib import Path
 REPO = Path(os.environ.get("SATQUERY_REPO", "/kaggle/working/satquery"))
 WEIGHTS_REPO = os.environ.get("SATQUERY_WEIGHTS_REPO", "DeepakShivhareEe/satquery-cpu-weights")
 BASE_REPO = "Qwen/Qwen2.5-VL-3B-Instruct"
-FRONTEND = os.environ.get("SATQUERY_FRONTEND", "https://satquery-ai.vercel.app")
+FRONTEND = os.environ.get("SATQUERY_FRONTEND", "https://satquery-ai-self.vercel.app")
 CORS = os.environ.get("SATQUERY_CORS_ORIGINS", f"{FRONTEND},http://localhost:3000")
 PORT = 8000
 PINS = ["transformers==5.15.1", "peft==0.20.0", "bitsandbytes==0.50.2", "accelerate==1.14.0", "timm==1.0.29",

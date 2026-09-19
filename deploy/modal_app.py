@@ -23,7 +23,7 @@ Deploy / update:
 Set the browser origin that may call it (repeat after Vercel assigns the name):
 
     modal deploy deploy/modal_app.py   # after editing CORS_ORIGINS below, or
-    SATQUERY_CORS_ORIGINS=https://satquery-ai.vercel.app modal deploy deploy/modal_app.py
+    SATQUERY_CORS_ORIGINS=https://satquery-ai-self.vercel.app modal deploy deploy/modal_app.py
 
 Cost model: billed per second only while a request is being served plus the
 SCALEDOWN_WINDOW after it; idle costs nothing. Free tier: $30/month.
@@ -42,7 +42,7 @@ import modal
 REPO = Path(__file__).resolve().parent.parent
 GPU = os.environ.get("SATQUERY_MODAL_GPU", "T4")          # T4 is the cheapest that fits (4-6 GB used); "A10G" is ~2x faster
 SCALEDOWN_WINDOW = int(os.environ.get("SATQUERY_MODAL_IDLE_S", "300"))
-CORS_ORIGINS = os.environ.get("SATQUERY_CORS_ORIGINS", "https://satquery-ai.vercel.app,http://localhost:3000")
+CORS_ORIGINS = os.environ.get("SATQUERY_CORS_ORIGINS", "https://satquery-ai-self.vercel.app,https://satquery-ai.vercel.app,http://localhost:3000")
 
 weights = modal.Volume.from_name("satquery-weights", create_if_missing=True)
 runs = modal.Volume.from_name("satquery-runs", create_if_missing=True)
