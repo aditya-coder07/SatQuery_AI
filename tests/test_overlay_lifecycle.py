@@ -31,7 +31,9 @@ from fastapi.testclient import TestClient
 from satquery.api import main as api_main
 
 ROOT = Path(__file__).resolve().parent.parent
-PAGE = ROOT / "frontend" / "app" / "page.tsx"
+# The query UI moved from app/page.tsx to app/query/page.tsx with the
+# frontend redesign (PR #10); the landing page no longer runs queries.
+PAGE = ROOT / "frontend" / "app" / "query" / "page.tsx"
 MAPVIEW = ROOT / "frontend" / "app" / "MapView.tsx"
 
 
