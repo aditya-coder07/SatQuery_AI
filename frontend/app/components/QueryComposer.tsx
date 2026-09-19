@@ -34,6 +34,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { QUERY_FIELD_ID } from '../lib/focusQuery';
 import type { Bounds } from '../lib/footprint';
+import { SAMPLES, loadSample, type Sample } from '../lib/samples';
 import type { ProbedScene } from './AreaPicker';
 
 const API = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000';
@@ -97,6 +98,33 @@ export default function QueryComposer({
   const [probe, setProbe] = useState<ProbedScene[] | null>(null);
   const [probing, setProbing] = useState(false);
   const [probeError, setProbeError] = useState('');
+  const [loadingSample, setLoadingSample] = useState<string>('');
+
+  /**
+   * A sample REPLACES the attachments and the question: it is a complete
+   * input, and mixing its scenes with whatever was attached before would
+   * produce a pair the sample never promised. It does not run by itself -
+   * the user still presses Run, so the shortcut never submits something they
+   * have not looked at.
+   */
+  const pickSample = useCallback(
+    async (sample: Sample) => {
+      if (running) return;
+      setLoadingSample(sample.key);
+      setReject('');
+      try {
+        const loaded = await loadSample(sample);
+        onQueryChange(sample.query);
+        onFilesChange(loaded);
+        textareaRef.current?.focus();
+      } catch (err: any) {
+        setReject(err?.message ?? String(err));
+      } finally {
+        setLoadingSample('');
+      }
+    },
+    [running, onQueryChange, onFilesChange],
+  );
 
   /**
    * Ask the server where the attached scenes are, and for a picture of them.
@@ -400,6 +428,26 @@ export default function QueryComposer({
             Drop imagery to attach
           </div>
         )}
+      </div>
+
+      <div className="composer-samples" role="group" aria-label="Sample inputs">
+        <span className="composer-samples-label">Try a sample</span>
+        {SAMPLES.map((sample) => (
+          <button
+            type="button"
+            key={sample.key}
+            className="sample-chip"
+            disabled={running || Boolean(loadingSample)}
+            aria-busy={loadingSample === sample.key}
+            title={sample.query}
+            onClick={() => pickSample(sample)}
+          >
+            <span className="sample-title">
+              {loadingSample === sample.key ? 'Loading…' : sample.title}
+            </span>
+            <span className="sample-blurb">{sample.blurb}</span>
+          </button>
+        ))}
       </div>
 
       <div className="composer-foot">

@@ -17,7 +17,13 @@ checkpoints_backup/
 models/
 
 # Runtime output: gitignored already, and meaningless inside a fresh image.
-artifacts/
+# The benchmark reports are the exception: /benchmarks reads its official
+# table from them (satquery/report/registry.py), so the JSON summaries
+# (~200 kB) travel; the per-prediction dumps (*.jsonl) do not.
+artifacts/*
+!artifacts/benchmark_reports/
+artifacts/benchmark_reports/*.jsonl
+artifacts/benchmark_reports/rescoring/
 *.db
 satquery_runs.db
 
