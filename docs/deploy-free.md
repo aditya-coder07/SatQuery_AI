@@ -37,11 +37,12 @@ Files: `configs/profiles/cpu.yaml` (profile), `configs/deploy.cpu.yaml`
 (which checkpoint each tool loads), `deploy/hf_space/{Dockerfile,start.sh,README.md}`
 (the Space).
 
-## 1. Weights → private HF model repo (once, ≈ 10 min upload)
+## 1 + 2. Weights and Space in one command (≈ 15 min, mostly upload)
 
-The set is staged at `C:\Users\dk231\Desktop\SatQuery_AI\hf_stage\checkpoints`
-(1.39 GB, 25 files; on the cluster the same set is `~/satquery/.hf_stage`).
-Private because the grounding specialist was trained on DIOR-RSVG (CC-BY-NC).
+The CPU weight set is staged at `C:\Users\dk231\Desktop\SatQuery_AI\hf_stage\checkpoints`
+(1.39 GB, 25 files; on the cluster the same set is `~/satquery/.hf_stage/checkpoints`).
+It goes to a **private** model repo because the grounding specialist was
+trained on DIOR-RSVG (CC-BY-NC).
 
 ```bash
 pip install -U "huggingface_hub[cli]"
@@ -51,33 +52,24 @@ hf auth login
 ```
 (paste a **write** token from huggingface.co/settings/tokens)
 ```bash
-hf repo create satquery-cpu-weights --type model --private
-```
-```bash
-hf upload <user>/satquery-cpu-weights "C:\Users\dk231\Desktop\SatQuery_AI\hf_stage\checkpoints" checkpoints --repo-type model
+python deploy/hf_space/publish.py --weights "C:/Users/dk231/Desktop/SatQuery_AI/hf_stage/checkpoints"
 ```
 
-## 2. The Space (≈ 5 min + first build ≈ 10 min)
+`publish.py` creates `<user>/satquery-cpu-weights` (private), uploads the
+weights, creates the Docker Space `<user>/satquery-api` from
+`deploy/hf_space/`, sets the `HF_TOKEN` secret and the
+`SATQUERY_WEIGHTS_REPO` / `SATQUERY_CORS_ORIGINS` / `SATQUERY_GIT_REF`
+variables, and restarts it. It prints the API URL. Re-running updates in
+place (`--skip-weights` to leave the weights alone, `--cors` to change the
+allowed origin, `--read-token` to give the Space a read-only token).
 
-1. huggingface.co → *New Space* → name `satquery-api`, SDK **Docker**,
-   *Blank*, hardware **CPU basic (free)**, visibility public.
-2. Upload the three files from `deploy/hf_space/` (`Dockerfile`, `start.sh`,
-   `README.md`) — *Files → Add file → Upload files*, or:
-   ```bash
-   git clone https://huggingface.co/spaces/<user>/satquery-api && cp deploy/hf_space/* satquery-api/ && cd satquery-api && git add . && git commit -m "SatQuery API, cpu profile" && git push
-   ```
-3. *Settings → Variables and secrets*:
-   * Secret `HF_TOKEN` = a **read** token (so the Space can download the private weights)
-   * Variable `SATQUERY_WEIGHTS_REPO` = `<user>/satquery-cpu-weights`
-   * Variable `SATQUERY_CORS_ORIGINS` = `https://satquery-ai.vercel.app`
-4. The Space builds (clones `main` of the GitHub repo, installs the CPU
-   torch stack), then starts: downloads the weights (≈ 1 min) and serves on 7860.
-   Logs show `7 files` then `Uvicorn running`.
-5. Check: `https://<user>-satquery-api.hf.space/health` → `{"status":"ok"}`.
+The Space then builds (clones `main`, installs the CPU torch stack, ≈ 10
+min), downloads the weights (≈ 1 min) and serves on 7860. Check:
+`https://<user>-satquery-api.hf.space/health` → `{"status":"ok"}`.
 
-The Dockerfile clones `main`; `deploy/hf_space` and the `cpu` profile must
-be merged there first (PR #12). To pin a branch or tag instead, set the
-build arg / variable `SATQUERY_GIT_REF`.
+Manual equivalent, if preferred: New Space → Docker → Blank → CPU basic;
+upload `Dockerfile`, `start.sh`, `README.md`; Settings → secret `HF_TOKEN`
+(read token), variables `SATQUERY_WEIGHTS_REPO`, `SATQUERY_CORS_ORIGINS`.
 
 ## 3. Frontend on Vercel (≈ 3 min)
 
