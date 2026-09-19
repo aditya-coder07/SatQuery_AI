@@ -12,11 +12,20 @@ from pathlib import Path
 
 import pytest
 
+from evaluation import compare_v2
 from evaluation.compare_v2 import (
     COMPARISONS, POST_CAMPAIGN_RUNS, build_rows, load_metrics, render, verdict,
 )
 
 REPO = Path(__file__).resolve().parent.parent
+
+
+@pytest.fixture(autouse=True)
+def _no_configured_ckpt_dirs(monkeypatch):
+    """The campaign's configured directories resolve under the repo root, so
+    on a machine that has the real v2 checkpoints they are found regardless of
+    the temp root these tests build. Every test here is about that temp root."""
+    monkeypatch.setattr(compare_v2, "_CKPT_DIRS", {})
 
 
 def test_every_comparison_names_a_real_campaign_run():
