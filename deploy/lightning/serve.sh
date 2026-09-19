@@ -8,6 +8,6 @@
 set -euo pipefail
 cd "$(dirname "$0")/../.."
 export HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
-export SATQUERY_CORS_ORIGINS="${SATQUERY_CORS_ORIGINS:-https://satquery-ai.vercel.app,http://localhost:3000}"
+export SATQUERY_CORS_ORIGINS="${SATQUERY_CORS_ORIGINS:-https://satquery-ai-self.vercel.app,https://satquery-ai.vercel.app,http://localhost:3000}"
 export OMP_NUM_THREADS="${SATQUERY_THREADS:-$(nproc)}"
 exec python scripts/serve_local.py --map configs/deploy.v3.yaml --profile full --host 0.0.0.0 --port "${PORT:-8000}"

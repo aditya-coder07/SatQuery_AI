@@ -36,7 +36,7 @@ def main() -> int:
     ap.add_argument("--weights", type=Path, required=True, help="staged checkpoints/ directory (1.4 GB)")
     ap.add_argument("--weights-repo", default="satquery-cpu-weights")
     ap.add_argument("--space", default="satquery-api")
-    ap.add_argument("--cors", default="https://satquery-ai.vercel.app", help="browser origin allowed to call the API")
+    ap.add_argument("--cors", default="https://satquery-ai-self.vercel.app", help="browser origin allowed to call the API")
     ap.add_argument("--git-ref", default="main", help="branch/tag of the GitHub repo the Space builds from")
     ap.add_argument("--read-token", default=None, help="read-only token for the Space secret (default: the login token)")
     ap.add_argument("--skip-weights", action="store_true", help="do not re-upload the weights")
