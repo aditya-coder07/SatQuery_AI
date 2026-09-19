@@ -23,8 +23,6 @@ ROOT = Path(__file__).resolve().parent.parent
 # `python scripts/serve_local.py` puts scripts/ first on sys.path, not the
 # repo root. `satquery` is installed, but the tools import the model builders
 # from `training/`, which is not - Docker gets it from WORKDIR /app.
-# Running a script puts scripts/ on sys.path, not the repo root; the tools
-# import training.* at load time (the image has /app as its working dir).
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
@@ -53,6 +51,7 @@ def main() -> int:
     ap.add_argument("--map", type=Path, default=ROOT / "configs" / "deploy.v3.yaml")
     ap.add_argument("--host", default="127.0.0.1")
     ap.add_argument("--port", type=int, default=8000)
+    ap.add_argument("--profile", default=None, help="SATQUERY_PROFILE (full, lite, cpu); default: env or full")
     args = ap.parse_args()
     missing = export(args.map)
     if missing:
@@ -60,6 +59,8 @@ def main() -> int:
         return 1
     os.environ.setdefault("HF_HUB_OFFLINE", "1")
     os.environ.setdefault("TRANSFORMERS_OFFLINE", "1")
+    if args.profile:
+        os.environ["SATQUERY_PROFILE"] = args.profile
     os.environ.setdefault("SATQUERY_PROFILE", "full")
     os.environ.setdefault("PYTORCH_CUDA_ALLOC_CONF", "expandable_segments:True")
     for k in sorted(os.environ):

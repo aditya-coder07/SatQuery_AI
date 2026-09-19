@@ -47,6 +47,11 @@ class Profile:
     enable_nli: bool = True
     verifier_enabled: bool = True
     max_tile_px: int = 512
+    # Tools the router drops from every plan regardless of the VRAM budget.
+    # A resource decision, like the budget: the cpu profile sheds the 3B VLM
+    # because it cannot answer in useful time on a CPU, while every tool with
+    # a small specialist model stays. Legality is still the matrix's alone.
+    shed_tools: tuple[str, ...] = ()
     notes: list[str] = field(default_factory=list)
 
     @property
@@ -82,6 +87,29 @@ BUILTIN: dict[str, Profile] = {
             "Answers come from measured indices via synth/narrative.py, so "
             "they are quantitatively grounded but not open-ended language.",
             "The entailment gate still runs, on its deterministic backend.",
+        ],
+    ),
+    "cpu": Profile(
+        name="cpu",
+        description=(
+            "CPU-only host with a few GB of RAM (a free Hugging Face Space): "
+            "every tool with a small specialist model runs; only the 3B VLM is shed."
+        ),
+        # No budget: the numbers in TOOL_VRAM_MB are GPU estimates and mean
+        # nothing on a CPU. What decides here is wall time - the small heads
+        # answer a 256-px tile in seconds, the 3B VLM would take minutes, so
+        # it is the one tool shed. VQA questions then get the index-based
+        # narrative, as under lite.
+        vram_budget_mb=None,
+        device="cpu",
+        enable_nli=False,
+        verifier_enabled=True,
+        max_tile_px=256,
+        shed_tools=("rs_vqa_v1",),
+        notes=[
+            "rs_vqa_v1 is shed; a VQA question is answered from measured indices.",
+            "caption, grounding and change caption run their specialist models, not the VLM adapters "
+            "(leave SATQUERY_*_ADAPTER unset).",
         ],
     ),
 }
@@ -123,6 +151,7 @@ def load_profile(name: str | None = None) -> Profile:
                 blob.get("verifier_enabled", base.verifier_enabled)
             ),
             max_tile_px=int(blob.get("max_tile_px", base.max_tile_px)),
+            shed_tools=tuple(blob.get("shed_tools", base.shed_tools)),
             notes=list(blob.get("notes", base.notes)),
         )
     except Exception:  # noqa: BLE001 - degradation, not a crash

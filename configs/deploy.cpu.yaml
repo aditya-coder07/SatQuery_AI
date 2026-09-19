@@ -1,0 +1,38 @@
+# CPU deployment map (free Hugging Face Space, SATQUERY_PROFILE=cpu).
+#
+# Same rows as deploy.v3.yaml wherever the tool's model is a small
+# specialist; the VLM adapters are deliberately absent so caption, grounding
+# and change_caption take their specialist paths, and rs_vqa is shed by the
+# profile. Read by scripts/verify_deploy.py and scripts/serve_local.py.
+tools:
+  grounding:
+    env: {SATQUERY_GROUNDING: checkpoints/v2/grounding_pre}
+    status: selected
+    note: "v2 specialist (Phase 5); the VLM adapter needs the 3B base, which a CPU cannot serve in useful time"
+  change_mask:
+    env: {SATQUERY_CHANGE_MASK: checkpoints/v3/change_mask/best.pt}
+    status: selected
+    note: "same as deploy.v3.yaml"
+  optsar_fusion:
+    env: {SATQUERY_FUSION: checkpoints/v3/optsar_fusion/best.pt}
+    status: selected
+    note: "same as deploy.v3.yaml"
+  landcover:
+    env: {SATQUERY_LANDCOVER: checkpoints/v3/landcover_full/best.pt}
+    status: selected
+    note: "same as deploy.v3.yaml"
+  caption:
+    env: {SATQUERY_CAPTION: checkpoints/v2/caption_pre}
+    status: selected
+    note: "v2 specialist (RSICD BLEU-4 0.174); the VLM adapter path is GPU-only"
+  change_caption:
+    env: {SATQUERY_CHANGE_CAPTION: checkpoints/change_caption}
+    status: selected
+    note: "v1 specialist (LEVIR-CC BLEU-4 0.384 with mask)"
+  change_vqa:
+    env: {SATQUERY_CHANGE_VQA: checkpoints/v2/change_vqa/best.pt}
+    status: held
+    note: "same as deploy.v3.yaml"
+registries:
+  SATQUERY_CALIBRATION: configs/calibration.v3.json
+  SATQUERY_THRESHOLDS: configs/thresholds.v3.yaml

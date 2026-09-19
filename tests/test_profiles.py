@@ -191,7 +191,37 @@ class TestProfileDataclass:
             load_profile("lite").vram_budget_mb = 4096  # type: ignore[misc]
 
     def test_builtin_profiles_are_complete(self):
-        assert set(BUILTIN) == {"full", "lite"}
+        assert set(BUILTIN) == {"full", "lite", "cpu"}
         for profile in BUILTIN.values():
             assert isinstance(profile, Profile)
             assert profile.description
+
+
+class TestCpuProfile:
+    """The cpu profile (a free Hugging Face Space) sheds only the 3B VLM."""
+
+    def test_cpu_profile_sheds_the_vlm_and_nothing_else(self):
+        profile = load_profile("cpu")
+        assert profile.device == "cpu"
+        assert profile.vram_budget_mb is None
+        assert profile.shed_tools == ("rs_vqa_v1",)
+        assert profile.enable_nli is False
+        assert profile.verifier_enabled is True
+
+    def test_router_drops_shed_tools_but_keeps_specialists(self):
+        from satquery.controller.pipeline import DEFAULT_MATRIX_PATH
+        from satquery.controller.matrix_loader import load_matrix
+        from satquery.controller.router import TOOL_VRAM_MB, Router
+
+        router = Router(load_matrix(DEFAULT_MATRIX_PATH), shed_tools=("rs_vqa_v1",))
+        assert router.shed_tools == frozenset({"rs_vqa_v1"})
+        # No budget: a heavy specialist such as optsar_fusion (2400 MB on a
+        # GPU) is still admitted; only the named tool is gone.
+        assert "optsar_fusion_v1" in TOOL_VRAM_MB
+        assert router.vram_budget_mb is None
+
+    def test_cpu_controller_answers_a_vqa_question_without_the_vlm(self, tmp_path):
+        from satquery.controller.pipeline import Controller
+
+        controller = Controller(profile="cpu")
+        assert controller.router.shed_tools == frozenset({"rs_vqa_v1"})

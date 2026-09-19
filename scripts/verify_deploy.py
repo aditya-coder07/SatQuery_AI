@@ -80,7 +80,8 @@ def main() -> int:
     args = p.parse_args()
     spec = yaml.safe_load(args.map.read_text(encoding="utf-8"))
     tools = spec["tools"]
-    order = ["rs_vqa"] + [t for t in tools if t != "rs_vqa"]  # base first, adapters after
+    # Base first, adapters after; a map without the VLM (deploy.cpu.yaml) has no rs_vqa row.
+    order = (["rs_vqa"] if "rs_vqa" in tools else []) + [t for t in tools if t != "rs_vqa"]
     ok_n = 0
     for tool in order:
         if args.only and tool not in args.only:
