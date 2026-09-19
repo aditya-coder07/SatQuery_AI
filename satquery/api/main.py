@@ -995,6 +995,31 @@ async def probe_uploads(images: list[UploadFile] = File(...)):
         shutil.rmtree(work_dir, ignore_errors=True)
 
 
+def _cpu_device(sample: dict) -> dict:
+    """Finish a /device sample for a host with no CUDA device.
+
+    The processor name stands in for the GPU name and the CPU load for the
+    utilisation series, so the telemetry panel draws a CPU host with the
+    same honesty as a GPU one: real readings, labelled as what they are.
+    """
+    import platform
+
+    name = platform.processor() or None
+    try:
+        with open("/proc/cpuinfo", encoding="utf-8") as fh:  # Linux: the model string
+            for line in fh:
+                if line.lower().startswith("model name"):
+                    name = line.split(":", 1)[1].strip()
+                    break
+    except OSError:
+        pass
+    sample["name"] = name
+    if sample.get("cpu_utilisation") is not None:
+        sample["utilisation"] = sample["cpu_utilisation"]
+        sample["utilisation_source"] = "psutil"
+    return sample
+
+
 @app.get("/device")
 def get_device():
     """One sample of what the process actually knows about its device.
@@ -1024,15 +1049,34 @@ def get_device():
         "vram_used_fraction": None,
         "utilisation": None,
         "utilisation_source": None,
+        # Host memory and CPU load, measured on every host. On a CPU-only
+        # deployment (a Lightning AI Studio, docs/deploy-free.md) these are
+        # the device readings, and `utilisation` then carries the CPU load
+        # so the chart keeps its two series under different labels.
+        "ram_total_bytes": None,
+        "ram_used_fraction": None,
+        "cpu_count": os.cpu_count(),
+        "cpu_utilisation": None,
     }
+    try:
+        import psutil  # a dependency of accelerate, so present wherever the models run
+
+        vm = psutil.virtual_memory()
+        sample["ram_total_bytes"] = int(vm.total)
+        sample["ram_used_fraction"] = round(vm.percent / 100.0, 4)
+        # Non-blocking: the first call after import reports 0.0, every later
+        # call the load since the previous one - right for a 1 Hz poll.
+        sample["cpu_utilisation"] = round(float(psutil.cpu_percent(interval=None)), 1)
+    except Exception:  # noqa: BLE001 - psutil missing or a platform without the reading
+        pass
 
     try:
         import torch
     except Exception:  # noqa: BLE001 - torch missing is a valid answer here
-        return sample
+        return _cpu_device(sample)
 
     if not torch.cuda.is_available():
-        return sample
+        return _cpu_device(sample)
 
     index = torch.cuda.current_device()
     sample["device"] = f"cuda:{index}"
