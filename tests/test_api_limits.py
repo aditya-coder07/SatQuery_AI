@@ -248,3 +248,28 @@ class TestMapOverlays:
         assert client.get(
             f"/runs/{run_id}/overlay/{missing[0]}"
         ).status_code == 410
+
+
+def test_device_reports_host_memory_and_cpu_on_every_host(monkeypatch):
+    """/device carries RAM and CPU readings; without CUDA they are the device."""
+    from fastapi.testclient import TestClient
+
+    from satquery.api import main as api_main
+
+    monkeypatch.setenv("CUDA_VISIBLE_DEVICES", "-1")
+    client = TestClient(api_main.app)
+    client.get("/device")  # psutil's first cpu_percent is 0 by contract
+    sample = client.get("/device").json()
+    assert sample["cpu_count"] and sample["cpu_count"] > 0
+    try:
+        import psutil  # noqa: F401 - optional: arrives with accelerate on model hosts
+    except ImportError:
+        # Without psutil the readings are honest nulls, never invented.
+        assert sample["ram_total_bytes"] is None and sample["cpu_utilisation"] is None
+        return
+    assert sample["ram_total_bytes"] > 0 and 0.0 <= sample["ram_used_fraction"] <= 1.0
+    assert sample["cpu_utilisation"] is not None
+    if sample["device"] == "cpu":
+        assert sample["utilisation"] == sample["cpu_utilisation"]
+        assert sample["utilisation_source"] == "psutil"
+        assert sample["name"]

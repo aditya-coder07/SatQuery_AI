@@ -39,6 +39,7 @@ type Device = {
   name: string | null;
   vram_free_bytes: number | null;
   vram_total_bytes: number | null;
+  ram_used_fraction?: number | null;
 };
 
 function gib(bytes: number | null): string | null {
@@ -109,7 +110,9 @@ export default function Nav() {
       : null
     : free
       ? `${device.device.toUpperCase()} · ${free} FREE`
-      : device.device.toUpperCase();
+      : device.ram_used_fraction != null
+        ? `${device.device.toUpperCase()} · ${Math.round(device.ram_used_fraction * 100)}% RAM`
+        : device.device.toUpperCase();
 
   // The backend may be a GPU session with a new public URL each time it
   // starts (docs/deploy-free.md); the chip doubles as the place to point the

@@ -35,6 +35,10 @@ type Sample = {
   device: string;
   name: string | null;
   vram_used_fraction: number | null;
+  ram_total_bytes?: number | null;
+  ram_used_fraction?: number | null;
+  cpu_count?: number | null;
+  cpu_utilisation?: number | null;
   vram_total_bytes: number | null;
   utilisation: number | null;
   utilisation_source: string | null;
@@ -157,7 +161,16 @@ export default function Telemetry() {
         buffer.current = [
           ...buffer.current,
           {
-            vram: data.vram_used_fraction == null ? null : data.vram_used_fraction * 100,
+            // On a CPU host the memory series is host RAM and the
+            // utilisation series is CPU load; the API labels which it sent.
+            vram:
+              data.device === 'cpu'
+                ? data.ram_used_fraction == null
+                  ? null
+                  : data.ram_used_fraction * 100
+                : data.vram_used_fraction == null
+                  ? null
+                  : data.vram_used_fraction * 100,
             util: data.utilisation,
           },
         ].slice(-BUFFER);
@@ -194,9 +207,12 @@ export default function Telemetry() {
   const vramText =
     latest?.vram == null ? 'unavailable' : `${latest.vram.toFixed(0)}%`;
   const utilInstrumented = sample?.utilisation != null;
-  const totalGiB = sample?.vram_total_bytes
-    ? `${(sample.vram_total_bytes / 1024 ** 3).toFixed(1)} GB`
-    : null;
+  const isCpu = sample?.device === 'cpu';
+  const memLabel = isCpu ? 'RAM in use' : 'VRAM in use';
+  const utilLabel = isCpu ? 'CPU utilisation' : 'GPU utilisation';
+  const totalBytes = isCpu ? sample?.ram_total_bytes : sample?.vram_total_bytes;
+  const totalGiB = totalBytes ? `${(totalBytes / 1024 ** 3).toFixed(1)} GB` : null;
+  const cores = isCpu && sample?.cpu_count ? `${sample.cpu_count} cores` : null;
 
   return (
     <section className="panel" aria-label="Device telemetry">
@@ -209,7 +225,9 @@ export default function Telemetry() {
         </span>
         <span className="spacer" />
         <span className="meta">
-          {sample ? `${sample.device}${totalGiB ? ` · ${totalGiB}` : ''} · 1 Hz` : '1 Hz'}
+          {sample
+            ? `${sample.device}${cores ? ` · ${cores}` : ''}${totalGiB ? ` · ${totalGiB}` : ''} · 1 Hz`
+            : '1 Hz'}
         </span>
         <button
           className="tele-btn"
@@ -235,16 +253,16 @@ export default function Telemetry() {
             ref={canvasRef}
             className="tele-canvas"
             role="img"
-            aria-label={`VRAM in use over the last ${BUFFER} seconds, currently ${vramText}.`}
+            aria-label={`${memLabel} over the last ${BUFFER} seconds, currently ${vramText}.`}
           />
           <div className="tele-legend">
             <span className="leg">
               <span className="swatch solid" />
-              VRAM in use <b>{vramText}</b>
+              {memLabel} <b>{vramText}</b>
             </span>
             <span className={`leg${utilInstrumented ? '' : ' off'}`}>
               <span className="swatch dashed" />
-              GPU utilisation{' '}
+              {utilLabel}{' '}
               <b>{utilInstrumented ? `${sample!.utilisation}%` : 'not instrumented'}</b>
             </span>
             <span className="leg" style={{ color: running ? 'var(--sage)' : 'var(--amber)' }}>
@@ -253,14 +271,15 @@ export default function Telemetry() {
           </div>
           {!utilInstrumented && (
             <p className="cap">
-              Utilisation needs NVML (pip install pynvml). Until it is there the
-              series is absent rather than estimated.
+              {isCpu
+                ? 'CPU load needs psutil on the API host. Until it is there the series is absent rather than estimated.'
+                : 'Utilisation needs NVML (pip install pynvml). Until it is there the series is absent rather than estimated.'}
             </p>
           )}
           <p className="sr" aria-live="polite">
             {running
-              ? `Telemetry streaming. VRAM in use ${vramText}.`
-              : `Telemetry paused at VRAM in use ${vramText}.`}
+              ? `Telemetry streaming. ${memLabel} ${vramText}.`
+              : `Telemetry paused at ${memLabel} ${vramText}.`}
           </p>
         </>
       )}

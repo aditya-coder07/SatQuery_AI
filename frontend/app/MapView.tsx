@@ -78,6 +78,32 @@ const PROBE_TIMEOUT_MS = 2500;
 
 type Basemap = 'probing' | 'online' | 'offline';
 
+/**
+ * A second, imagery basemap for the online path. Esri World Imagery is the
+ * usual free choice (attribution required, no key); configurable like the
+ * street basemap so a venue can point it at its own tile server, and an
+ * empty string removes the toggle. The choice persists per browser.
+ */
+const SATELLITE_URL =
+  process.env.NEXT_PUBLIC_SATELLITE_URL ??
+  'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}';
+const SATELLITE_ATTRIBUTION =
+  process.env.NEXT_PUBLIC_SATELLITE_ATTRIBUTION ??
+  'Imagery © Esri, Maxar, Earthstar Geographics, and the GIS User Community';
+type BaseStyle = 'satellite' | 'streets';
+const STYLE_KEY = 'satquery.basemap';
+
+function initialStyle(): BaseStyle {
+  if (!SATELLITE_URL) return 'streets';
+  try {
+    const saved = window.localStorage.getItem(STYLE_KEY);
+    if (saved === 'streets' || saved === 'satellite') return saved;
+  } catch {
+    // no storage: default below
+  }
+  return 'satellite';
+}
+
 async function basemapReachable(): Promise<boolean> {
   // An explicitly empty basemap is a deliberate choice, not a failure.
   if (!BASEMAP_URL) return false;
@@ -152,6 +178,10 @@ export default function MapView({
   const container = useRef<HTMLDivElement>(null);
   const mapRef = useRef<Map | null>(null);
   const [basemap, setBasemap] = useState<Basemap>('probing');
+  const [style, setStyle] = useState<BaseStyle>('streets');
+  useEffect(() => {
+    setStyle(initialStyle());
+  }, []);
   const [overlays, setOverlays] = useState<Overlay[]>([]);
   const [active, setActive] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -199,15 +229,28 @@ export default function MapView({
   useEffect(() => {
     if (!container.current || basemap === 'probing' || mapRef.current) return;
 
+    const streets = new TileLayer({
+      source: new XYZ({
+        url: BASEMAP_URL,
+        attributions: BASEMAP_ATTRIBUTION || undefined,
+        crossOrigin: 'anonymous',
+      }),
+    });
+    streets.set('base', 'streets');
+    const satellite = SATELLITE_URL
+      ? new TileLayer({
+          source: new XYZ({
+            url: SATELLITE_URL,
+            attributions: SATELLITE_ATTRIBUTION || undefined,
+            crossOrigin: 'anonymous',
+            maxZoom: 19,
+          }),
+        })
+      : null;
+    satellite?.set('base', 'satellite');
     const base =
       basemap === 'online'
-        ? new TileLayer({
-            source: new XYZ({
-              url: BASEMAP_URL,
-              attributions: BASEMAP_ATTRIBUTION || undefined,
-              crossOrigin: 'anonymous',
-            }),
-          })
+        ? streets
         : // No tiles offline. A graticule gives the eye a coordinate frame so
           // the overlay is not floating in a void.
           new Graticule({
@@ -216,9 +259,12 @@ export default function MapView({
             wrapX: false,
           });
 
+    // Both online basemaps are in the map; the style effect below flips
+    // visibility, so switching never rebuilds the map or drops the overlay.
+    const layers = basemap === 'online' && satellite ? [streets, satellite] : [base];
     mapRef.current = new Map({
       target: container.current,
-      layers: [base],
+      layers,
       view: new View({ center: [0, 0], zoom: 2 }),
       /* Wheel zoom off.
          OpenLayers binds the wheel by default, so scrolling the page with the
@@ -235,6 +281,21 @@ export default function MapView({
       mapRef.current = null;
     };
   }, [basemap]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+    map
+      .getLayers()
+      .getArray()
+      .filter((l) => l.get('base'))
+      .forEach((l) => l.setVisible(l.get('base') === style));
+    try {
+      window.localStorage.setItem(STYLE_KEY, style);
+    } catch {
+      // no storage: the choice lasts for this page only
+    }
+  }, [style, basemap]);
 
   /**
    * Place the view on the scene itself.
@@ -341,6 +402,21 @@ export default function MapView({
               ? 'live basemap'
               : 'offline — local rendering'}
         </span>
+        {basemap === 'online' && SATELLITE_URL && (
+          <span className="mapview-style" role="group" aria-label="Basemap style">
+            {(['satellite', 'streets'] as BaseStyle[]).map((s) => (
+              <button
+                key={s}
+                type="button"
+                className={`mapview-layer ${style === s ? 'active' : ''}`}
+                aria-pressed={style === s}
+                onClick={() => setStyle(s)}
+              >
+                {s}
+              </button>
+            ))}
+          </span>
+        )}
         {overlays.map((o) => (
           <button
             key={o.key}
@@ -365,7 +441,10 @@ export default function MapView({
         )}
       </div>
       <div ref={container} className="mapview-canvas" />
-      {basemap === 'online' && isOpenStreetMap && (
+      {basemap === 'online' && style === 'satellite' && SATELLITE_ATTRIBUTION && (
+        <div className="mapview-attribution">{SATELLITE_ATTRIBUTION}</div>
+      )}
+      {basemap === 'online' && style === 'streets' && isOpenStreetMap && (
         // Required by the ODbL, and shown only when OSM tiles are the source -
         // attributing OSM for someone else's tile server would be wrong.
         <div className="mapview-attribution">
@@ -373,7 +452,7 @@ export default function MapView({
           contributors
         </div>
       )}
-      {basemap === 'online' && !isOpenStreetMap && BASEMAP_ATTRIBUTION && (
+      {basemap === 'online' && style === 'streets' && !isOpenStreetMap && BASEMAP_ATTRIBUTION && (
         <div className="mapview-attribution">{BASEMAP_ATTRIBUTION}</div>
       )}
       {error && <p className="mapview-note error">{error}</p>}
