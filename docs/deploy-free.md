@@ -1,4 +1,4 @@
-# Free, all-cloud deployment (no card): Vercel frontend + Kaggle GPU backend
+# Free, all-cloud deployment (no card): Vercel frontend + a free CPU (Lightning AI) or GPU session (Kaggle)
 
 **What is free on Hugging Face without PRO, measured on the account
 `DeepakShivhareEe` on 2026-09-19:** creating a `static` Space succeeds;
@@ -10,8 +10,7 @@ uses: **the private model repo that holds every trained checkpoint**
 (`DeepakShivhareEe/satquery-cpu-weights`: the 7 v3/v2/v1 heads and the 4
 v3 VLM adapters, 38 files).
 
-The only free GPU that needs no card is a **Kaggle** session (T4, 30
-h/week, ≤ 12 h per session). So:
+Two free hosts need no card: a **Lightning AI CPU Studio** (always available, slow — option A) and a **Kaggle GPU session** (fast, up while you run it — option B). Both serve the same complete v3 stack and the same Vercel frontend:
 
 ```
 browser ──► https://satquery-ai.vercel.app            (Vercel Hobby, free, always on)
@@ -31,7 +30,64 @@ not the CPU-degraded set. The trade: the backend is up only while you have
 a Kaggle session running, and its URL changes per session, which is why
 the frontend accepts the endpoint at runtime.
 
-## 1. Frontend on Vercel (once, ≈ 3 min)
+## The whole system runs on a CPU (slowly)
+
+Since 2026-09-19 the VLM loader (`satquery/tools/rs_vqa.py`) takes a bf16
+CPU path when there is no CUDA device (the 4-bit path needs bitsandbytes,
+which is CUDA-only). The same adapters attach unchanged, so **all 9 tools
+run on a CPU with ≥ 12 GB RAM** from the ordinary `configs/deploy.v3.yaml`
+map — the `cpu` profile (VLM shed) is no longer required, only faster.
+Measured on a laptop CPU (8 threads, other work running), one request at a
+time:
+
+| Path | Time on CPU | Same on a T4 |
+|---|---|---|
+| VQA (`rs_vqa`, short answer) | 25 s | 2–4 s |
+| VQA, long answer (≈ 80 tokens) | ≈ 4.5 min | ≈ 6 s |
+| Grounding, arm E at 1024 px | ≈ 4.7 min | 5–8 s |
+| VLM caption + land cover | ≈ 4.6 min | ≈ 5 s |
+| VLM change caption (pair) + change mask | ≈ 9.7 min | ≈ 8 s |
+| change mask + change VQA | 1.3 s | < 1 s |
+| optical–SAR fusion | 4 s | < 1 s |
+
+Knobs for a CPU host: `SATQUERY_GROUNDING_MIN_PIXELS=262144` makes
+grounding ≈ 4× faster at some accuracy cost (the deployed number was
+measured at 1048576); `SATQUERY_VLM_CPU_DTYPE=float32` is faster on CPUs
+without bf16 arithmetic but needs ≈ 14 GB for the base model;
+`SATQUERY_THREADS` caps torch threads.
+
+## Option A — always-on free CPU: Lightning AI Studio
+
+Lightning AI's free tier gives a persistent **CPU Studio (4 cores, 16 GB
+RAM, disk)** with a **public URL per exposed port**, plus monthly credits
+that can switch the same Studio to a T4 for a demo. Sign-up needs phone
+verification, not a card. Free Studios auto-sleep after inactivity and
+wake on the next request (≈ 1 min).
+
+1. lightning.ai → New Studio (CPU) → open the terminal.
+2. ```bash
+   git clone https://github.com/aditya-coder07/SatQuery_AI.git && cd SatQuery_AI
+   ```
+   ```bash
+   export HF_TOKEN=hf_...   # a Hugging Face READ token (the checkpoints are in a private repo)
+   ```
+   ```bash
+   bash deploy/lightning/setup.sh
+   ```
+   (installs the pinned stack, downloads the base model and checkpoints,
+   prints `8/8 loaded`; ≈ 10 min.)
+3. ```bash
+   bash deploy/lightning/serve.sh
+   ```
+   then in the Studio's **Ports** panel expose **8000** publicly → a URL
+   like `https://8000-<studio-id>.cloudspaces.litng.ai`.
+4. Open `https://satquery-ai.vercel.app/query?api=<that URL>` once; the
+   browser remembers it.
+
+Switching the Studio to a GPU (credits) and rerunning `serve.sh` serves
+the 4-bit path at GPU speed with no other change.
+
+## Frontend on Vercel (both options; once, ≈ 3 min)
 
 1. vercel.com → *Add New → Project* → import `aditya-coder07/SatQuery_AI`.
 2. Project name **`satquery-ai`**; **Root Directory `frontend`**.
@@ -39,7 +95,7 @@ the frontend accepts the endpoint at runtime.
    (below). Optionally `NEXT_PUBLIC_API_URL` as a default for a fixed backend.
 4. Deploy → `https://satquery-ai.vercel.app`.
 
-## 2. Backend on Kaggle (each session, ≈ 10 min to come up)
+## Option B — free GPU sessions: Kaggle (each session, ≈ 10 min to come up)
 
 1. kaggle.com → *Create → New Notebook* → *File → Import Notebook* →
    upload `deploy/kaggle/satquery_api.ipynb` (or paste its one cell).
@@ -67,7 +123,7 @@ CORS: the API allows `https://satquery-ai.vercel.app` (and localhost) by
 default (`SATQUERY_CORS_ORIGINS` in `deploy/kaggle/satquery_kaggle.py`);
 set the env var in the notebook if the Vercel name differs.
 
-## 3. Smoke test
+## Smoke test
 
 From the frontend link: attach `test.png` (or the LEVIR pair) → "Is there a
 road in this image?" → an answer with confidence and trace from the real
