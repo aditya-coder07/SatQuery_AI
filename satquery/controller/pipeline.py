@@ -42,7 +42,7 @@ class Controller:
             else self.profile.vram_budget_mb
         )
         self.matrix = matrix or load_matrix(matrix_path)
-        self.router = Router(self.matrix, vram_budget_mb=budget)
+        self.router = Router(self.matrix, vram_budget_mb=budget, shed_tools=self.profile.shed_tools)
         # `verifier_enabled=False` is the off arm of the verifier ablation
         # (task 3.7), plumbed from here so the ablation runs the real
         # controller rather than a reimplementation of it.

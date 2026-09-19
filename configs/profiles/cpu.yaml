@@ -1,0 +1,28 @@
+# CPU runtime profile: a CPU-only host with a few GB of RAM, such as a free
+# Hugging Face Space (2 vCPU, 16 GB).
+#
+# Unlike lite, which keeps only the index engine, this profile runs every
+# tool that has a small specialist model - land cover, change mask,
+# optical-SAR fusion (v3 heads), the v2 grounding and caption specialists,
+# change caption v1, change VQA v2 - because on a 256-px tile each answers
+# in seconds on a CPU. The one tool shed is the 3B vision-language model
+# (rs_vqa_v1): minutes per answer on a CPU, and it cannot load 4-bit
+# without CUDA. A VQA question then gets the index-based narrative, as
+# under lite.
+#
+# Leave SATQUERY_*_ADAPTER unset under this profile so caption, grounding
+# and change caption take their specialist paths, not the VLM adapters.
+#
+# A profile governs RESOURCES, never LEGALITY (see lite.yaml).
+description: >
+  CPU-only host with a few GB of RAM. Every specialist model runs; only
+  the 3B VLM is shed.
+vram_budget_mb: null
+device: cpu
+enable_nli: false
+verifier_enabled: true
+max_tile_px: 256
+shed_tools: [rs_vqa_v1]
+notes:
+  - rs_vqa_v1 is shed; a VQA question is answered from measured indices.
+  - caption, grounding and change caption run their specialist models, not the VLM adapters.

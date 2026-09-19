@@ -125,10 +125,12 @@ class Router:
         matrix: CapabilityMatrix,
         classifier: IntentClassifier | None = None,
         vram_budget_mb: int | None = None,
+        shed_tools: tuple[str, ...] | list[str] = (),
     ):
         self.matrix = matrix
         self.classifier = classifier or default_classifier()
         self.vram_budget_mb = vram_budget_mb
+        self.shed_tools = frozenset(shed_tools)
 
     # -- gating ----------------------------------------------------------
     @staticmethod
@@ -344,6 +346,10 @@ class Router:
             task = "CLARIFY_OR_ABSTAIN"
 
         steps = self._build_steps(task, manifest)
+        if self.shed_tools:
+            # Profile-level shedding (the cpu profile drops the 3B VLM). Same
+            # degrade-not-fail contract as the budget below.
+            steps = [s for s in steps if s.tool not in self.shed_tools]
         vram, runtime = self._estimate(steps)
 
         if self.vram_budget_mb is not None and vram > self.vram_budget_mb:
