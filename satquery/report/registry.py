@@ -111,14 +111,26 @@ def checkpoint_entries(root: Path | None = None) -> list[dict]:
         return []
 
     entries = []
+    # Phase 5/6 runs live one level down (checkpoints/v2/<run>,
+    # checkpoints/v3/<run>); a version directory itself has no metrics and
+    # is descended into rather than skipped.
+    candidates = []
     for directory in sorted(p for p in root.iterdir() if p.is_dir()):
+        if (directory / "metrics.json").exists() or (directory / "run_metadata.json").exists():
+            candidates.append((directory.name, directory))
+        else:
+            for sub in sorted(p for p in directory.iterdir() if p.is_dir()):
+                candidates.append((f"{directory.name}/{sub.name}", sub))
+    for name, directory in candidates:
         metadata = _read_json(directory / "run_metadata.json")
         metrics = _read_json(directory / "metrics.json")
         if metadata is None and metrics is None:
             continue
         checkpoints = sorted(directory.glob("ckpt_step_*.pt"))
+        artefacts = [p.name for p in directory.iterdir() if p.name in ("best.pt", "adapter_best", "final.pt", "adapter_final")]
         entries.append({
-            "name": directory.name,
+            "name": name,
+            "artefacts": artefacts,
             "task": (metadata or {}).get("task", "unknown"),
             "training": metadata or {},
             "metrics": metrics or {},
@@ -162,8 +174,41 @@ def calibration_entries(path: Path | None = None) -> dict:
     }
 
 
+DEPLOY_MAP = REPO_ROOT / "configs" / "deploy.v3.yaml"
+
+
+def deployed_tools() -> list[dict]:
+    """What each tool loads in the current deployment, from the deploy map.
+
+    The same file `scripts/verify_deploy.py` checks and the compose overlay
+    mirrors, so the page shows the map that is actually served, not a
+    hand-written copy of it. A checkpoint path that does not exist on this
+    machine is flagged rather than hidden.
+    """
+    try:
+        import yaml
+
+        spec = yaml.safe_load(DEPLOY_MAP.read_text(encoding="utf-8")) or {}
+    except Exception:  # noqa: BLE001 - no map, no table
+        return []
+    rows = []
+    for tool, entry in (spec.get("tools") or {}).items():
+        env = {k: str(v) for k, v in (entry.get("env") or {}).items()}
+        paths = {k: v for k, v in env.items() if not v.strip().isdigit()}
+        rows.append({
+            "tool": tool,
+            "status": entry.get("status"),
+            "note": entry.get("note"),
+            "env": env,
+            "present": {k: (REPO_ROOT / v).exists() for k, v in paths.items()},
+        })
+    return rows
+
+
 def model_registry() -> dict:
     return {
+        "deployed": deployed_tools(),
+        "deploy_map": str(DEPLOY_MAP.relative_to(REPO_ROOT)) if DEPLOY_MAP.exists() else None,
         "checkpoints": checkpoint_entries(),
         "downloaded_models": downloaded_models(),
         "calibration": calibration_entries(),
@@ -173,6 +218,103 @@ def model_registry() -> dict:
             "hardcoded. Where a caveat exists it travels with the number."
         ),
     }
+
+
+REPORTS = REPO_ROOT / "artifacts" / "benchmark_reports"
+PHASE6 = REPO_ROOT / "docs" / "assets" / "phase6"
+
+
+def _g(blob, *keys):
+    """Nested lookup that returns None instead of raising."""
+    for k in keys:
+        if not isinstance(blob, dict) or k not in blob:
+            return None
+        blob = blob[k]
+    return blob
+
+
+def official_benchmarks() -> list[dict]:
+    """The Phase 6 headline numbers, read from the official-split reports.
+
+    One row per deployed tool: the metric the field reports for that task,
+    on the published test split, with its 95 % interval where the report
+    carries one, and the report path so the number can be checked. A row
+    whose report is missing is emitted with `value: null` rather than
+    dropped, for the same reason `benchmarks()` names missing reports.
+    """
+    rows: list[dict] = []
+
+    def add(task, tool, dataset, metric, value, ci=None, n=None, note=None, source=None):
+        rows.append({
+            "task": task, "tool": tool, "dataset": dataset, "metric": metric,
+            "value": value, "ci95": ci, "n": n, "note": note,
+            "source": source.relative_to(REPO_ROOT).as_posix() if source else None,
+        })
+
+    r = _read_json(REPORTS / "rsvqa_lr_official_phase6.json")
+    pc = _g(r, "arms", "v3_official", "published_convention")
+    add("Visual question answering", "rs_vqa", "RSVQA-LR test", "accuracy (published convention)",
+        _g(pc, "micro_accuracy"), _g(pc, "ci95"), _g(pc, "n"),
+        "presence, comparison and rural/urban; v2 deployed adapter scored 0.8947 on the same split",
+        REPORTS / "rsvqa_lr_official_phase6.json")
+
+    r = _read_json(REPORTS / "dior_rsvg_official_armE.json")
+    arm = _g(r, "arms", "lora_hires")
+    add("Visual grounding", "grounding", "DIOR-RSVG test", "Acc@0.5",
+        _g(arm, "acc@0.5"), _g(arm, "acc@0.5_ci95"), _g(arm, "n"),
+        "served at the 1024-px budget it was measured with; mIoU %s" % (
+            f"{_g(arm, 'miou'):.4f}" if _g(arm, "miou") is not None else "n/a"),
+        REPORTS / "dior_rsvg_official_armE.json")
+
+    r = _read_json(REPORTS / "vrsbench_val_grounding_armE_subsets.json")
+    a = _g(r, "arms", "lora_hires", "all")
+    add("Visual grounding (transfer)", "grounding", "VRSBench val", "Acc@0.5",
+        _g(a, "acc@0.5"), _g(a, "ci95"), _g(a, "n"),
+        "a second benchmark the adapter was not tuned on",
+        REPORTS / "vrsbench_val_grounding_armE_subsets.json")
+
+    r = _read_json(REPORTS / "levircd_test_independent_v3.json")
+    head = _g(r, "pooled", "0.5")
+    add("Change mask", "change_mask", "LEVIR-CD test", "F1 (change class)",
+        _g(head, "f1"), _g(r, "ci95_f1"), _g(r, "n_tiles"),
+        "IoU %s; re-scored independently through the deployed loader" % (
+            f"{_g(head, 'iou'):.4f}" if _g(head, "iou") is not None else "n/a"),
+        REPORTS / "levircd_test_independent_v3.json")
+
+    m = _read_json(PHASE6 / "landcover_full" / "metrics.json")
+    t = _g(m, "test_at_best_val") or {}
+    add("Land cover (19 classes)", "landcover", "BigEarthNet-S2 v1.0 test", "micro mAP",
+        t.get("map_micro_all_bands"), None, 125866,
+        "macro mAP %s; %s of the score retained with the four Cartosat bands" % (
+            f"{t.get('map_all_bands'):.4f}" if t.get("map_all_bands") is not None else "n/a",
+            f"{t.get('retention') * 100:.0f} %" if t.get("retention") is not None else "n/a"),
+        PHASE6 / "landcover_full" / "metrics.json")
+
+    r = _read_json(REPORTS / "rsicd_test_vlm.json")
+    c = _g(r, "arms", "caption_lora", "corpus")
+    add("Captioning", "caption", "RSICD test", "corpus BLEU-4",
+        _g(c, "bleu4"), _g(r, "arms", "caption_lora", "bleu4_ci95"), _g(c, "n"),
+        "CIDEr-D %s, ROUGE-L %s" % (
+            f"{_g(c, 'cider_d'):.3f}" if _g(c, "cider_d") is not None else "n/a",
+            f"{_g(c, 'rouge_l'):.3f}" if _g(c, "rouge_l") is not None else "n/a"),
+        REPORTS / "rsicd_test_vlm.json")
+
+    r = _read_json(REPORTS / "levircc_test_vlm.json")
+    c = _g(r, "arms", "cc_lora", "corpus")
+    add("Change captioning", "change_caption", "LEVIR-CC test", "corpus BLEU-4",
+        _g(c, "bleu4"), _g(r, "arms", "cc_lora", "bleu4_ci95"), _g(r, "n"),
+        "images only, no ground-truth mask at inference; CIDEr-D %s" % (
+            f"{_g(c, 'cider_d'):.2f}" if _g(c, "cider_d") is not None else "n/a"),
+        REPORTS / "levircc_test_vlm.json")
+
+    m = _read_json(PHASE6 / "optsar_fusion" / "metrics.json")
+    add("Optical-SAR fusion", "optsar_fusion", "WHU-OPT-SAR (scene-disjoint)", "fused mIoU",
+        _g(m, "arms", "fused", "miou"), None, _g(m, "n_tiles"),
+        "optical alone %s; complementarity gain %s" % (
+            f"{_g(m, 'arms', 'optical', 'miou'):.4f}" if _g(m, "arms", "optical", "miou") is not None else "n/a",
+            f"{_g(m, 'complementarity_gain_miou'):+.4f}" if _g(m, "complementarity_gain_miou") is not None else "n/a"),
+        PHASE6 / "optsar_fusion" / "metrics.json")
+    return rows
 
 
 def benchmarks() -> dict:
@@ -188,6 +330,8 @@ def benchmarks() -> dict:
                 "data": blob,
             }
     return {
+        # Phase 6: the deployed tools on the published test splits.
+        "official": official_benchmarks(),
         "available": available,
         # Named rather than omitted: a benchmark page that silently drops a
         # missing report looks complete when it is not.

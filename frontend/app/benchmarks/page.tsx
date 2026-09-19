@@ -19,7 +19,20 @@ import { useEffect, useState } from 'react';
 
 const API = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000';
 
+type Official = {
+  task: string;
+  tool: string;
+  dataset: string;
+  metric: string;
+  value: number | null;
+  ci95: [number, number] | null;
+  n: number | null;
+  note: string | null;
+  source: string | null;
+};
+
 type Benchmarks = {
+  official: Official[];
   available: Record<string, { source: string; data: any }>;
   missing: { name: string; expected_at: string }[];
   regenerate_with: string;
@@ -99,7 +112,38 @@ export default function BenchmarksPage() {
         </section>
       )}
 
-      <h2>Headline</h2>
+      <h2>Official test splits</h2>
+      <p className="note">
+        The deployed tools on the published test splits, one row per task, each read
+        from its own report under <code>artifacts/benchmark_reports</code>. These are the
+        numbers the home page quotes.
+      </p>
+      <div className="official">
+        {(data.official ?? []).map((row) => (
+          <div className="official-row" key={row.task}>
+            <div className="official-main">
+              <span className="official-task">{row.task}</span>
+              <span className="official-set">
+                {row.dataset}
+                {row.n != null ? ` · n ${row.n.toLocaleString()}` : ''}
+              </span>
+              {row.note && <span className="official-note">{row.note}</span>}
+            </div>
+            <div className="official-value">
+              <span className="official-num">{row.value == null ? '—' : row.value.toFixed(4)}</span>
+              <span className="official-metric">{row.metric}</span>
+              {row.ci95 && (
+                <span className="official-ci">
+                  95 % CI [{row.ci95[0].toFixed(3)}, {row.ci95[1].toFixed(3)}]
+                </span>
+              )}
+              {row.source && <code className="official-src">{row.source}</code>}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <h2>System evaluation (Phase 3)</h2>
       <div className="stats">
         {adversarial && (
           <Stat
