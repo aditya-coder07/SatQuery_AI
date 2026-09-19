@@ -775,11 +775,36 @@ def list_overlays(run_id: str):
     return {
         "run_id": run_id,
         "overlays": [
-            {"key": k, "available": Path(v).exists()}
+            {"key": k, "available": Path(v).exists(), **_overlay_extent(Path(v))}
             for k, v in sorted(paths.items())
             if Path(v).suffix.lower() in {".tif", ".tiff"}
         ],
     }
+
+
+def _overlay_extent(path: Path) -> dict:
+    """The overlay's EPSG:3857 extent, as the body of the listing.
+
+    The same number `/overlay/{key}` sends in `X-Extent`. It is repeated
+    here because a reverse proxy in front of the API can rewrite
+    `Access-Control-Expose-Headers` (Lightning AI's does, to
+    `Content-Length, Content-Range`), after which a cross-origin page can no
+    longer read the custom header although it is on the wire. A JSON body
+    passes through any proxy. Absent when the file is gone or has no CRS.
+    """
+    if not path.exists():
+        return {}
+    try:
+        import rasterio
+        from rasterio.warp import transform_bounds
+
+        with rasterio.open(path) as src:
+            if src.crs is None:
+                return {}
+            bounds = transform_bounds(src.crs, "EPSG:3857", *src.bounds)
+    except Exception:  # noqa: BLE001 - a listing must not fail on one bad file
+        return {}
+    return {"extent": [round(v, 3) for v in bounds], "projection": "EPSG:3857"}
 
 
 @app.get("/models")
