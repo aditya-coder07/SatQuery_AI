@@ -261,6 +261,12 @@ def test_device_reports_host_memory_and_cpu_on_every_host(monkeypatch):
     client.get("/device")  # psutil's first cpu_percent is 0 by contract
     sample = client.get("/device").json()
     assert sample["cpu_count"] and sample["cpu_count"] > 0
+    try:
+        import psutil  # noqa: F401 - optional: arrives with accelerate on model hosts
+    except ImportError:
+        # Without psutil the readings are honest nulls, never invented.
+        assert sample["ram_total_bytes"] is None and sample["cpu_utilisation"] is None
+        return
     assert sample["ram_total_bytes"] > 0 and 0.0 <= sample["ram_used_fraction"] <= 1.0
     assert sample["cpu_utilisation"] is not None
     if sample["device"] == "cpu":
