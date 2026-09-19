@@ -258,13 +258,64 @@ function buildBoard(
   return { nodes, edges, phase };
 }
 
-function edgePath(a: BoardNode, b: BoardNode): string {
-  const x1 = a.x + NODE_W;
-  const y1 = a.y + NODE_H / 2;
+type Placed = BoardNode & { w: number; h: number };
+
+function edgePath(a: Placed, b: Placed, portrait: boolean): string {
+  if (portrait) {
+    // Bottom-centre of the feeder to top-centre of the fed node.
+    const x1 = a.x + a.w / 2;
+    const y1 = a.y + a.h;
+    const x2 = b.x + b.w / 2;
+    const y2 = b.y;
+    const dy = Math.max(18, (y2 - y1) * 0.55);
+    return `M ${x1} ${y1} C ${x1} ${y1 + dy}, ${x2} ${y2 - dy}, ${x2} ${y2}`;
+  }
+  const x1 = a.x + a.w;
+  const y1 = a.y + a.h / 2;
   const x2 = b.x;
-  const y2 = b.y + NODE_H / 2;
+  const y2 = b.y + b.h / 2;
   const dx = Math.max(46, (x2 - x1) * 0.55);
   return `M ${x1} ${y1} C ${x1 + dx} ${y1}, ${x2 - dx} ${y2}, ${x2} ${y2}`;
+}
+
+const ROW_GAP = 28;
+const PAIR_GAP = 12;
+
+/**
+ * Place the board for the width it has.
+ *
+ * Landscape keeps the designed positions (a scaled transform fits them to
+ * the container). Portrait - a phone - is the same graph turned on its
+ * side: the lane runs down the screen, one node per row at full width, and
+ * the two nodes that share the last column (confidence, answer) sit side by
+ * side, so the wires still show the branch. It is a re-layout, not a list:
+ * nothing about the graph is lost on a narrow screen, only its direction.
+ */
+function place(nodes: BoardNode[], portrait: boolean, width: number): { placed: Placed[]; w: number; h: number } {
+  if (!portrait) {
+    const placed = nodes.map((n) => ({ ...n, w: NODE_W, h: NODE_H }));
+    return { placed, w: Math.max(...nodes.map((n) => n.x + NODE_W)) + PAD, h: DESIGN_H };
+  }
+  const inner = Math.max(200, width - 2 * PAD);
+  const placed: Placed[] = [];
+  let y = PAD;
+  let i = 0;
+  while (i < nodes.length) {
+    const n = nodes[i];
+    const pair = nodes[i + 1];
+    // Two nodes on the same design column are a branch: one row, two halves.
+    if (pair && pair.x === n.x) {
+      const half = (inner - PAIR_GAP) / 2;
+      placed.push({ ...n, x: PAD, y, w: half, h: NODE_H });
+      placed.push({ ...pair, x: PAD + half + PAIR_GAP, y, w: half, h: NODE_H });
+      i += 2;
+    } else {
+      placed.push({ ...n, x: PAD, y, w: inner, h: NODE_H });
+      i += 1;
+    }
+    y += NODE_H + ROW_GAP;
+  }
+  return { placed, w: width, h: y - ROW_GAP + PAD };
 }
 
 export default function Pipeline({
@@ -281,14 +332,17 @@ export default function Pipeline({
   const reduce = useReducedMotion();
   const fitRef = useRef<HTMLDivElement>(null);
   const stageRef = useRef<HTMLDivElement>(null);
-  const [stacked, setStacked] = useState(false);
+  const [portrait, setPortrait] = useState(false);
+  const [boxWidth, setBoxWidth] = useState(0);
   const [elapsed, setElapsed] = useState(0);
 
   const [revealed, setRevealed] = useState(0);
 
   const { nodes, edges, phase } = buildBoard(events, running);
-  const byId = Object.fromEntries(nodes.map((n) => [n.id, n]));
-  const designWidth = Math.max(...nodes.map((n) => n.x + NODE_W)) + PAD;
+  const board = place(nodes, portrait, boxWidth);
+  const byId = Object.fromEntries(board.placed.map((n) => [n.id, n]));
+  const designWidth = board.w;
+  const designHeight = board.h;
 
   // How far the events have actually got, against how far the board has been
   // allowed to show. The second chases the first, one node at a time.
@@ -340,11 +394,16 @@ export default function Pipeline({
     const box = fitRef.current;
     const stage = stageRef.current;
     if (!box || !stage) return;
-    const narrow = box.clientWidth < 900;
-    setStacked(narrow);
+    // Below this width the scaled landscape board would shrink its nodes
+    // past legibility, so the graph is laid out down the screen instead.
+    const narrow = box.clientWidth < 760;
+    setPortrait(narrow);
+    setBoxWidth(box.clientWidth);
     if (narrow) {
       stage.style.transform = '';
-      box.style.height = '';
+      stage.style.width = '100%';
+      stage.style.height = `${designHeight}px`;
+      box.style.height = `${designHeight}px`;
       return;
     }
     const scale = Math.min(box.clientWidth / designWidth, 1);
@@ -352,7 +411,7 @@ export default function Pipeline({
     stage.style.height = `${DESIGN_H}px`;
     stage.style.transform = `scale(${scale})`;
     box.style.height = `${DESIGN_H * scale}px`;
-  }, [designWidth]);
+  }, [designWidth, designHeight]);
 
   useLayoutEffect(() => {
     fit();
@@ -384,10 +443,10 @@ export default function Pipeline({
       </div>
 
       <div className="stage-fit" ref={fitRef}>
-        <div className={`stage${stacked ? ' stacked' : ''}`} ref={stageRef}>
+        <div className={`stage${portrait ? ' portrait' : ''}`} ref={stageRef}>
           <svg
             className="wires"
-            viewBox={`0 0 ${designWidth} ${DESIGN_H}`}
+            viewBox={`0 0 ${designWidth} ${designHeight}`}
             aria-hidden="true"
           >
             <defs>
@@ -401,10 +460,10 @@ export default function Pipeline({
               const a = byId[from];
               const b = byId[to];
               if (!a || !b) return null;
-              const d = edgePath(a, b);
+              const d = edgePath(a, b, portrait);
               // An edge lights when the node it feeds does, so the flow runs
               // ahead of each node rather than all at once.
-              const lit = displayState(nodes.indexOf(b)) !== 'idle';
+              const lit = displayState(nodes.findIndex((n) => n.id === b.id)) !== 'idle';
               return (
                 <g key={`${from}-${to}`}>
                   <path className="edge-base" d={d} />
@@ -420,17 +479,14 @@ export default function Pipeline({
             })}
           </svg>
 
-          {nodes.map((node, index) => {
+          {board.placed.map((node) => {
+            const index = nodes.findIndex((n) => n.id === node.id);
             const state = displayState(index);
             return (
             <motion.div
               key={node.id}
               className={`node${state === 'idle' ? '' : ` ${state}`}`}
-              style={
-                stacked
-                  ? undefined
-                  : { left: node.x, top: node.y, width: NODE_W, height: NODE_H }
-              }
+              style={{ left: node.x, top: node.y, width: node.w, height: node.h }}
               initial={false}
               // The one place a spring belongs: a node taking the baton. Two
               // states, not a keyframe array — a spring can only interpolate
