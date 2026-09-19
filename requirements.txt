@@ -18,8 +18,17 @@ pydantic==2.12.5
 pyyaml==6.0.3
 
 # Geospatial I/O (docs/01)
-rasterio==1.5.1
-numpy==2.4.1
+#
+# numpy stays on the 1.x ABI (2026-09-19): the CPU hosts this serves on
+# (Lightning AI Studios) ship pandas 2.1.4 and matplotlib 3.8.2 compiled
+# against numpy 1.x, and a numpy 2 wheel next to them fails at import with
+# "numpy.dtype size changed, may indicate binary incompatibility". Nothing
+# at runtime needs numpy 2. rasterio 1.5.x hard-requires numpy>=2, so it is
+# held at 1.4.3, the last release on the 1.x ABI; the APIs used here
+# (open, warp, enums, windows, vrt) are unchanged between the two.
+# numpy 1.26.4 publishes wheels for Python 3.9-3.12 only.
+rasterio==1.4.3
+numpy==1.26.4
 
 # Index engine: GLCM, Otsu, phase correlation, GMM thresholding
 scikit-image==0.26.0

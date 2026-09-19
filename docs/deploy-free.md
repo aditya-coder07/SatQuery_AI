@@ -87,6 +87,17 @@ wake on the next request (≈ 1 min).
 Switching the Studio to a GPU (credits) and rerunning `serve.sh` serves
 the 4-bit path at GPU speed with no other change.
 
+Dependency note (2026-09-19): Lightning Studios ship `pandas 2.1.4` and
+`matplotlib 3.8.2` built against the numpy 1.x ABI. `requirements.txt`
+therefore pins `numpy==1.26.4` (with `rasterio==1.4.3`, the last rasterio
+on that ABI) so `setup.sh` installs cleanly beside them; a numpy 2 pin
+produced `numpy.dtype size changed, may indicate binary incompatibility`.
+The checkpoints, written under numpy 2, load on 1.26 through the
+`numpy._core` shim in `training/common/checkpointing.py`. Verified in a
+Python 3.12 CPU image built from the pinned file with those Studio
+packages present: imports OK, `pip check` clean, 8/8 tools, VQA and
+change-detection requests answered, test suite green.
+
 ## Frontend on Vercel (both options; once, ≈ 3 min)
 
 1. vercel.com → *Add New → Project* → import `aditya-coder07/SatQuery_AI`.

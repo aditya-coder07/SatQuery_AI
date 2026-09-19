@@ -10,7 +10,9 @@ separately in the per-index threshold report.
 
 from __future__ import annotations
 
+import os
 import time
+import uuid
 from pathlib import Path
 from typing import Any
 
@@ -73,8 +75,19 @@ def write_cog(path: Path, array: np.ndarray, reference: ImageMeta) -> Path:
             "compress": "DEFLATE",
         }
     path.parent.mkdir(parents=True, exist_ok=True)
-    with rasterio.open(path, "w", **profile) as dst:
-        dst.write(array.astype("float32"), 1)
+    # Write to a per-call temporary name and move it into place: two writers
+    # of the same path (a run re-driven concurrently) otherwise race inside
+    # GDAL's delete-then-create, which GDAL < 3.10 (rasterio 1.4.x) reports
+    # as "Deleting ... failed: No such file or directory". os.replace is
+    # atomic on one filesystem, so a reader sees the old file or the new one.
+    tmp = path.with_name(f".{path.name}.{uuid.uuid4().hex}.tmp")
+    try:
+        with rasterio.open(tmp, "w", **profile) as dst:
+            dst.write(array.astype("float32"), 1)
+        os.replace(tmp, path)
+    finally:
+        if tmp.exists():
+            tmp.unlink()
     return path
 
 

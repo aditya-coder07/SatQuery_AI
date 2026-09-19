@@ -15,8 +15,8 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
-          # Must be >= 3.12: rasterio 1.5.1 publishes no wheels below it, so
-          # a 3.11 runner cannot resolve the pinned dependency set.
+          # 3.12 exactly (pyproject requires-python >=3.12,<3.13): numpy is
+          # held at 1.26.4, which publishes no wheels for 3.13 or later.
           python-version: "3.12"
 
       - name: Install dependencies
