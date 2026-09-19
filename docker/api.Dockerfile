@@ -1,6 +1,6 @@
-# Python 3.12, not 3.11: rasterio 1.5.1 publishes no wheels below 3.12, so a
-# 3.11 base cannot resolve the pinned requirement set and the build fails at
-# pip install. CI pins 3.12 for the same reason; the images had drifted from it.
+# Python 3.12 exactly: pyproject.toml declares >=3.12,<3.13 - numpy is held
+# at 1.26.4 (1.x ABI, see requirements.txt), which publishes no wheels for
+# 3.13+. CI pins 3.12 for the same reason; the images had drifted from it.
 FROM python:3.12-slim AS cpu-image
 
 # rasterio and pillow wheels are manylinux, but GDAL's runtime bits and the

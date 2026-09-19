@@ -7,16 +7,15 @@ name = "satquery"
 version = "0.1.0"
 description = "SatQuery AI"
 readme = "README.md"
-# rasterio 1.5.1 requires >=3.12; the rest of the pins are fine on
-# 3.11, but declaring 3.11 while depending on rasterio 1.5.1 is a
-# claim the dependency set cannot honour.
-requires-python = ">=3.12"
+# 3.12 exactly: the images and CI run 3.12, and numpy 1.26.4 (held on the
+# 1.x ABI, see requirements.txt) publishes no wheels for 3.13 or later.
+requires-python = ">=3.12,<3.13"
 dependencies = [
     "pydantic==2.12.5",
     "pyyaml==6.0.3",
     # Geospatial I/O (docs/01)
-    "rasterio==1.5.1",
-    "numpy==2.4.1",
+    "rasterio==1.4.3",
+    "numpy==1.26.4",  # 1.x ABI, see requirements.txt
     # Index engine: GLCM, Otsu, phase correlation, GMM thresholding
     "scikit-image==0.26.0",
     "scipy==1.17.0",

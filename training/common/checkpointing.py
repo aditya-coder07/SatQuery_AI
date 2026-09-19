@@ -21,6 +21,7 @@ Checkpoints are written atomically (temp file + replace) so a process killed
 from __future__ import annotations
 
 import glob
+import importlib
 import json
 import os
 import random
@@ -60,7 +61,22 @@ def _register_safe_globals() -> None:
     global _SAFE_GLOBALS_REGISTERED
     if _SAFE_GLOBALS_REGISTERED:
         return
-    allow: list[Any] = [np._core.multiarray._reconstruct, np.ndarray, np.dtype]
+    # Checkpoints written under numpy 2 pickle arrays as
+    # `numpy._core.multiarray._reconstruct`. numpy 1.26 ships `numpy._core`
+    # as a forward-compatibility shim for exactly these pickles, but only as
+    # importable submodules, not as attributes of `np` - so import it rather
+    # than reach for `np._core.multiarray`, which raises on the 1.x ABI.
+    multiarray = importlib.import_module("numpy._core.multiarray")
+    # torch keys the allowlist by the callable's own module path. On numpy
+    # 1.x the shim re-exports `numpy.core.multiarray._reconstruct`, so the
+    # spelling a numpy-2 pickle asks for would not match; register both
+    # spellings explicitly (torch accepts `(obj, "module.qualname")`).
+    allow: list[Any] = [
+        (multiarray._reconstruct, "numpy._core.multiarray._reconstruct"),
+        (multiarray._reconstruct, "numpy.core.multiarray._reconstruct"),
+        np.ndarray,
+        np.dtype,
+    ]
     # The concrete dtype classes numpy pickles alongside an array. Fetched by
     # name so a numpy without one of them degrades to a clear load error rather
     # than an AttributeError at import time.
