@@ -1249,49 +1249,14 @@
     stroke-linecap: round;
   }
 
-  .stage.stacked {
-    width: 100% !important;
-    height: auto !important;
-    transform: none !important;
-    padding-left: 22px;
-    display: flex;
-    flex-direction: column;
-    gap: var(--s2);
+  /* Portrait board (phones): same nodes and wires, laid out down the
+     screen by Pipeline.place(); the SVG viewBox follows the layout. */
+  .stage.portrait {
+    width: 100%;
   }
-  .stage.stacked::before {
-    content: '';
-    position: absolute;
-    left: 6px;
-    top: 10px;
-    bottom: 10px;
-    width: 1px;
-    background: var(--hair);
-  }
-  .stage.stacked svg.wires {
-    display: none;
-  }
-  .stage.stacked .node {
-    position: relative;
-    width: 100% !important;
-    height: auto !important;
-    left: auto !important;
-    top: auto !important;
-  }
-  .stage.stacked .node::after {
-    content: '';
-    position: absolute;
-    left: -19px;
-    top: 20px;
-    width: 7px;
-    height: 7px;
-    border-radius: 50%;
-    background: var(--void);
-    border: 1px solid var(--hair);
-  }
-  .stage.stacked .node.done::after,
-  .stage.stacked .node.active::after {
-    background: var(--champ);
-    border-color: var(--champ);
+  .stage.portrait svg.wires {
+    width: 100%;
+    height: 100%;
   }
 
   /* ---------------- answer ---------------- */
