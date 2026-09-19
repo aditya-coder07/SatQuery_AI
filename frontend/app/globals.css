@@ -2406,6 +2406,18 @@
 }
 .nav-right .device {
   color: var(--fg-45);
+  /* A button now: it sets the API endpoint. Same look as the old chip. */
+  background: none;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+}
+.nav-right .device:hover,
+.nav-right .device:focus-visible {
+  color: var(--fg);
+}
+.nav-right .device.offline {
+  color: var(--champ, #e8c39e);
 }
 .nav-cta {
   font-family: var(--f-mono);

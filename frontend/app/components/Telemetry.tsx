@@ -24,8 +24,9 @@
 
 import { useReducedMotion } from 'framer-motion';
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { apiBase } from '../lib/api';
 
-const API = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000';
+const API = apiBase();
 const BUFFER = 180;
 const CHAMP = '#E8C39E';
 const SAGE = '#9DBBA4';

@@ -19,8 +19,9 @@ import MapView from '@/MapView';
 import Checks from '@/components/Checks';
 import ConfidenceCard from '@/components/ConfidenceCard';
 import { hasGeoreference, sceneFootprint } from '@/lib/footprint';
+import { apiBase } from '../../lib/api';
 
-const API = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000';
+const API = apiBase();
 
 export default function RunPage() {
   const params = useParams<{ runId: string }>();

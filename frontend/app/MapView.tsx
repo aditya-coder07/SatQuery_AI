@@ -45,8 +45,9 @@ import { transformExtent } from 'ol/proj';
 import { defaults as defaultInteractions } from 'ol/interaction';
 import { Stroke, Style } from 'ol/style';
 import 'ol/ol.css';
+import { apiBase } from './lib/api';
 
-const API = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000';
+const API = apiBase();
 
 /**
  * The basemap tile source, as an XYZ template.

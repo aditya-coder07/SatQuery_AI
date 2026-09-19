@@ -16,8 +16,9 @@ import type { Check, Confidence, TraceEvent, Verification } from '../lib/events'
 import { isCalibrated, parseSSE } from '../lib/events';
 import { hasGeoreference, sceneFootprint, type Bounds } from '../lib/footprint';
 import { focusQuery } from '../lib/focusQuery';
+import { apiBase } from '../lib/api';
 
-const API = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000';
+const API = apiBase();
 
 function summarise(event: TraceEvent): string {
   const d = event.data;

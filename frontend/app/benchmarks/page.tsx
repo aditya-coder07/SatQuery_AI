@@ -16,8 +16,9 @@
  */
 
 import { useEffect, useState } from 'react';
+import { apiBase } from '../lib/api';
 
-const API = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000';
+const API = apiBase();
 
 type Official = {
   task: string;
