@@ -28,8 +28,8 @@ ARG SATQUERY_GIT_REF=main
 RUN git clone --depth 1 --branch ${SATQUERY_GIT_REF} https://github.com/aditya-coder07/SatQuery_AI.git /app \
     && rm -rf /app/.git /app/frontend /app/notebooks
 
-RUN pip install --no-cache-dir -r requirements.txt \
-    && pip install --no-cache-dir torch==2.13.0 torchvision==0.28.0 --index-url https://download.pytorch.org/whl/cpu \
+RUN pip install --no-cache-dir --timeout 120 --retries 5 -r requirements.txt \
+    && pip install --no-cache-dir --timeout 120 --retries 5 torch==2.13.0 torchvision==0.28.0 --index-url https://download.pytorch.org/whl/cpu \
     && pip install --no-cache-dir timm==1.0.29 "huggingface_hub>=0.30"
 
 COPY start.sh /app/deploy/hf_space/start.sh
