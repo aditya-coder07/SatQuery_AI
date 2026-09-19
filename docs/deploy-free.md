@@ -1,113 +1,117 @@
-# Free deployment: Vercel frontend + your own GPU behind a tunnel
+# Free, all-cloud deployment: Vercel frontend + Modal serverless GPU
 
-The backend needs a CUDA GPU (≈ 4–6 GB VRAM in serving, measured 4.2 GB
-peak on an RTX 4050) and ≈ 10 GB of weights (`models/qwen25_vl_3b` 7.1 GB,
-`checkpoints/{v2,v3,change_caption}` ≈ 2.5 GB). No free hosting tier gives
-that permanently, so the free layout is:
+Nothing runs on a laptop or the lab cluster. The backend needs a CUDA GPU
+(4.2 GB VRAM measured in serving) and ≈ 10 GB of weights; no cloud gives
+that free *and always-on*, so the layout that is free and runs the real
+models is a **scale-to-zero GPU**: the container exists only while a
+request is being served.
 
 ```
 browser ──HTTPS──► Vercel (Next.js, free Hobby)
                       │  NEXT_PUBLIC_API_URL
                       ▼
-            https://<tunnel-host>  ──► localhost:8000 on the GPU machine
+      https://<workspace>--satquery-api-api.modal.run   (Modal, T4, scale-to-zero)
+                      │
+                      ▼  Volumes: satquery-weights (10 GB), satquery-runs (db + previews)
 ```
 
-Everything below is copy-paste; each step is verified except the two that
-only the account owner can perform (tunnel start, Vercel login).
+| | Modal (this doc) | Hugging Face Spaces, CPU |
+|---|---|---|
+| cost | $30 credit **per month**, no card | free |
+| models | real v3 stack on a T4 | no GPU → `SATQUERY_PROFILE=lite` only (no VLM answers) |
+| availability | first request after idle waits ≈ 30–60 s for weights to load, then normal | sleeps after 48 h idle |
+| capacity | ≈ 50 T4-hours/month, billed only while serving → thousands of MVP queries | unlimited, degraded |
 
-## 1. Backend on the GPU machine (laptop or compute01)
+`deploy/modal_app.py` is the deployment; it serves the same FastAPI app as
+the Docker image with `configs/deploy.v3.yaml` resolved against the
+weights Volume, and mirrors `docker/api.Dockerfile` (gpu-image) for the
+Python stack.
+
+## 1. Modal account and weights (once, ≈ 20 min, mostly upload time)
+
+From a machine that has the weights (the cluster copy `~/satquery` is the
+fastest uplink; the repo root on a laptop works too):
 
 ```bash
-# once: weights in place (models/, checkpoints/v2, checkpoints/v3, checkpoints/change_caption)
-python scripts/verify_deploy.py --map configs/deploy.v3.yaml      # must print 8/8 loaded
-```
-
-Start the API with CORS limited to the Vercel origin you will create in
-step 3 (pick the project name now; `satquery-ai` → `https://satquery-ai.vercel.app`):
-
-```bash
-SATQUERY_CORS_ORIGINS=https://satquery-ai.vercel.app,http://localhost:3000 python scripts/serve_local.py --map configs/deploy.v3.yaml --host 127.0.0.1 --port 8000
-```
-
-PowerShell equivalent:
-
-```powershell
-$env:SATQUERY_CORS_ORIGINS = "https://satquery-ai.vercel.app,http://localhost:3000"; python scripts/serve_local.py --map configs/deploy.v3.yaml --host 127.0.0.1 --port 8000
-```
-
-`--host 127.0.0.1` is deliberate: the API is reachable only through the
-tunnel, never directly on the LAN.
-
-## 2. Tunnel (free, HTTPS)
-
-Preferred: **Cloudflare quick tunnel** — no account, no interstitial page,
-works for `<img>` previews and streaming.
-
-```powershell
-winget install --id Cloudflare.cloudflared
+pip install modal
+modal token new            # opens the browser: sign up (GitHub login), free plan, no card
 ```
 
 ```bash
-cloudflared tunnel --url http://localhost:8000
+modal volume create satquery-weights
+modal volume put satquery-weights models/qwen25_vl_3b        models/qwen25_vl_3b
+modal volume put satquery-weights checkpoints/v3             checkpoints/v3
+modal volume put satquery-weights checkpoints/v2             checkpoints/v2
+modal volume put satquery-weights checkpoints/change_caption checkpoints/change_caption
 ```
-
-It prints `https://<random>.trycloudflare.com`. The hostname changes every
-time the tunnel restarts, so keep the process running; a permanent
-hostname needs a free Cloudflare account plus a domain (named tunnel:
-`cloudflared tunnel login` → `cloudflared tunnel create satquery` → route
-`api.<your-domain>`), and Cloudflare Access (free ≤ 50 users) can then gate
-it with a login, since the API has no authentication of its own.
-
-Alternative already installed on the dev laptop: `ngrok http 8000`. Its
-free plan shows a warning page on browser requests, which breaks image
-previews unless every request carries `ngrok-skip-browser-warning`; use
-Cloudflare unless you have an ngrok static domain.
-
-Check from outside:
 
 ```bash
-curl https://<tunnel-host>/health
+modal volume ls satquery-weights checkpoints/v3      # expect the eight v3 run directories
 ```
 
-## 3. Frontend on Vercel
+## 2. Deploy the API (≈ 5 min first time: image build; seconds afterwards)
+
+From the repo root:
+
+```bash
+SATQUERY_CORS_ORIGINS=https://satquery-ai.vercel.app modal deploy deploy/modal_app.py
+```
+
+It prints the public URL, `https://<workspace>--satquery-api-api.modal.run`.
+Check it (the first call pays the cold start):
+
+```bash
+curl https://<workspace>--satquery-api-api.modal.run/health
+```
+
+Knobs (environment variables at deploy time): `SATQUERY_MODAL_GPU`
+(`T4` default; `A10G` ≈ 2× faster, ≈ 2× the per-second price),
+`SATQUERY_MODAL_IDLE_S` (300: how long a warm container waits for the next
+request before it is released; higher = fewer cold starts, more credit).
+
+## 3. Frontend on Vercel (≈ 3 min)
 
 1. vercel.com → *Add New → Project* → import `aditya-coder07/SatQuery_AI`.
-2. **Root Directory: `frontend`** (framework Next.js is auto-detected;
-   build `next build`, output default). The Dockerfile is not used.
-3. Environment variable (all environments):
-   `NEXT_PUBLIC_API_URL = https://<tunnel-host>` — no trailing slash.
-   It is inlined at build time, so change it → *Redeploy*.
-4. Deploy. Project name must match the origin you put in
-   `SATQUERY_CORS_ORIGINS` in step 1 (or restart the API with the name
-   Vercel assigned).
+2. **Root Directory `frontend`** (Next.js auto-detected; the Dockerfile is not used).
+3. Environment variable: `NEXT_PUBLIC_API_URL = https://<workspace>--satquery-api-api.modal.run` (no trailing slash; inlined at build → change it, then *Redeploy*).
+4. Project name `satquery-ai`, or redeploy the API with the origin Vercel assigned:
+   `SATQUERY_CORS_ORIGINS=https://<name>.vercel.app modal deploy deploy/modal_app.py`.
 
-CLI equivalent from `frontend/` (after `vercel login`):
+CLI equivalent, from `frontend/` after `vercel login`:
 
 ```bash
-vercel --prod -e NEXT_PUBLIC_API_URL=https://<tunnel-host>
+vercel --prod -e NEXT_PUBLIC_API_URL=https://<workspace>--satquery-api-api.modal.run
 ```
 
 ## 4. Smoke test
 
-Open `https://<project>.vercel.app` → the header shows the GPU telemetry
-(`CUDA:0 · n GB free`) when the API is reachable. *Ask a question* →
-attach `test.png` → "Is there a road in this image?" → answer with
-confidence and the trace.
+Open `https://satquery-ai.vercel.app`: the header shows `CUDA:0 · n GB
+free` once the API answers. *Ask a question* → attach `test.png` → "Is
+there a road in this image?" → an answer with confidence and trace. The
+first query after idle takes about a minute; the next ones a few seconds.
 
-## Limits of the free layout
+## What to expect
 
-* The service is up only while the GPU machine and the tunnel are up.
-* Quick-tunnel hostnames rotate on restart → one Vercel redeploy each time.
-* One GPU, in-process execution: requests queue; a full Cartosat scene is
-  ≈ 60 s. Fine for a demo/MVP, not for concurrent users.
-* Anyone with the URL can call the API. Put Cloudflare Access (free) in
-  front before sharing it beyond the team.
+* **Cold start** ≈ 30–60 s after 5 min idle (weights load from the
+  Volume). Raise `SATQUERY_MODAL_IDLE_S` for a demo session so it stays warm.
+* **One GPU, in-process execution**: concurrent requests queue; a full
+  Cartosat scene is ≈ 60 s. Right for an MVP, not for many simultaneous users.
+* **No authentication** on the API: anyone with the URL can call it and
+  spend the credit. Modal can require a proxy-auth token per endpoint
+  (`modal.web_endpoint(requires_proxy_auth=True)`) when the MVP is shared
+  beyond the team; the frontend would then send the token header.
+* **Run records** (`satquery_runs.db`, previews) live on the `satquery-runs`
+  Volume; SQLite there is fine for one container, which is what
+  `max_inputs=4` on a single function gives.
+* When the monthly credit is exhausted the endpoint returns errors until the
+  next month or a card is added; the frontend on Vercel stays up.
 
 ## What does not work for free
 
 | Option | Why |
 |---|---|
 | Render / Railway / Fly / Vercel functions for the API | CPU only, 0.5–2 GB RAM |
-| Hugging Face Spaces (free) | CPU only; 4-bit loading needs CUDA; ZeroGPU creation needs PRO |
-| Oracle always-free ARM VM | CPU only → `SATQUERY_PROFILE=lite` only (index engine + small heads, no VLM answers) — a valid 24/7 fallback |
-| Colab / Kaggle GPU + tunnel | works for demos; sessions expire (12 h / 30 h per week) and the URL changes |
+| Hugging Face Spaces (free) | CPU only; 4-bit loading needs CUDA; creating ZeroGPU Spaces needs PRO |
+| Oracle always-free ARM VM | CPU only → lite profile only; a valid 24/7 fallback without VLM answers |
+| Colab / Kaggle GPU + tunnel | demos only; sessions expire, URL rotates |
+| AWS / GCP / Azure trial credits | real GPUs but one-off credits (90 days), then paid |
