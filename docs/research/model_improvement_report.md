@@ -83,6 +83,33 @@ as "of the tennis court at the bottom") and replaced by the residual-based
 one. The subsample scores above the full-test 0.732 because it is a
 subsample; it is a comparison of formats, not a benchmark.
 
+### E4 — why the captioner's val and test disagree (data, not model)
+
+Measured on the RSICD parquet release (`data/rsicd/data`), CPU:
+
+| | val (1,094) | test (1,093) |
+|---|---|---|
+| nearest train image, dHash-256 Hamming distance, 5th / 50th percentile | 84 / 94 | 85 / 94 |
+| reference sentences that are verbatim train captions | **32.3%** | 11.3% |
+| images with ≥ 1 reference seen in train | 55.4% | 35.1% |
+| images with all 5 references seen in train | **18.4%** | 0.9% |
+| distinct references / references | 59.5% | 84.8% |
+
+The images are equally novel; the *captions* are not. RSICD's val
+references repeat training sentences three times as often as the test's,
+so a captioner is rewarded on val for reproducing training phrasing and
+on test for describing the image. That is the 0.40–0.42 (val) vs 0.256
+(test) gap, and it means "val still rising at the end of the schedule" is
+partly memorisation, not learning — checkpoint selection on this val
+picks the step that memorised most. LEVIR-CC does not have the asymmetry
+(val 61% / test 60% verbatim; the unchanged pairs are templated in both).
+
+Consequence for the queued caption arm: selection moves to
+`val_unseen.jsonl` (`training/prepare/rsicd_val_unseen.py`: the val images
+with no reference verbatim in train; ≈ 45% of val), reporting stays on
+the official test. The decoding choice in E3 is likewise read on the
+unseen subset of the val sample, not on the full sample.
+
 ### E3 — caption decoding
 
 (filled in from `artifacts/benchmark_reports/rsicd_decoding_{val,test}.json`)
