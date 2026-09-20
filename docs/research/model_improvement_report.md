@@ -95,6 +95,11 @@ Measured on the RSICD parquet release (`data/rsicd/data`), CPU:
 | images with all 5 references seen in train | **18.4%** | 0.9% |
 | distinct references / references | 59.5% | 84.8% |
 
+Greedy decoding on the **complete** official val (1,094,
+`rsicd_decoding_val_full.json`): corpus BLEU-4 0.415 / CIDEr-D 2.08 -
+against 0.253 / 0.800 on the complete official test with the same
+weights, precision and prompt. The gap is the whole split, not a sample.
+
 The images are equally novel; the *captions* are not. RSICD's val
 references repeat training sentences three times as often as the test's,
 so a captioner is rewarded on val for reproducing training phrasing and
@@ -215,8 +220,13 @@ keeps the conversation and shows "Understood as …".
 * RSVQA-LR protected number: untouched — the VQA adapter, processor and
   system prompt are unchanged; the VQA tool receives the resolved
   question (identical to the typed one for any standalone query).
-* Deployment: `scripts/verify_deploy.py` on `deploy.v3.yaml` (GPU, local)
-  and `deploy.cpu.yaml` — see the verification section of the PR.
+* Deployment: `scripts/verify_deploy.py` — `deploy.v3.yaml` 8/8 loaded on
+  the local GPU, `deploy.cpu.yaml` 7/7 on CPU, with the changed tools.
+  Live GPU run through the controller: "Find the airport in this image."
+  → grounder phrase `the airport`, one box; follow-up "Is it near a
+  runway?" with history → "Is the airport near a runway?" → VQA "yes";
+  "Map the water and vegetation." → `classes [water, vegetation]`, answer
+  opens with the asked-for classes.
 * Frontend: `tsc --noEmit` clean, `next build` clean; the conversation
   thread and "Understood as" line verified in the browser against the
   local CPU API (follow-up "Is it near the water?" → "Is the road near the
