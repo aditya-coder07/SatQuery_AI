@@ -88,6 +88,7 @@ def env(monkeypatch, tmp_path):
     monkeypatch.setenv(cc.ENV_VLM_ADAPTER, str(adapter))
     monkeypatch.setenv(rs_vqa.ENV_BASE, str(tmp_path))
     monkeypatch.setenv(rs_vqa.ENV_ADAPTER, str(adapter))
+    monkeypatch.delenv(cap.ENV_CAPTION_BEAMS, raising=False)
     from PIL import Image
 
     for mod in (cap, cc):
@@ -130,3 +131,50 @@ def test_empty_reply_is_named_not_blank(monkeypatch, env, tmp_path):
 def test_availability_reports_vlm_path(env):
     ok, reason = cap.is_available()
     assert ok or "safetensors" in reason.lower() or "not installed" in reason
+
+
+class _BeamModel(_Model):
+    """Records the beam width and answers a forward pass with peaked logits."""
+
+    def __init__(self):
+        self.calls = []
+
+    def generate(self, **kw):
+        self.calls.append(kw)
+        return _Generated()
+
+    def __call__(self, input_ids, attention_mask, **extra):
+        vocab = 2
+        logits = torch.full((1, input_ids.shape[1], vocab), -4.0)
+        logits[0, :, 0] = 4.0  # the chosen token 0 gets p ~ 0.9997 everywhere
+        return type("Out", (), {"logits": logits})()
+
+
+def test_caption_beams_default_and_override(monkeypatch):
+    # Greedy is the measured default (RSICD official test, E3); the env
+    # var is a knob, not a recommendation.
+    monkeypatch.delenv(cap.ENV_CAPTION_BEAMS, raising=False)
+    assert cap.caption_beams() == 1 == cap.DEFAULT_BEAMS
+    monkeypatch.setenv(cap.ENV_CAPTION_BEAMS, "3")
+    assert cap.caption_beams() == 3
+
+
+def test_beam_search_confidence_is_teacher_forced(monkeypatch, env, tmp_path):
+    handle = _stub(monkeypatch, "A large airport.")
+    handle.model = _BeamModel()
+    monkeypatch.setenv(cap.ENV_CAPTION_BEAMS, "5")
+    result = cap.CaptionTool().run(_manifest(1, tmp_path), {})
+    assert handle.model.calls[0]["num_beams"] == 5
+    # Beam scores are not token probabilities, so generate() is asked for
+    # none and the confidence comes from the forward pass instead.
+    assert handle.model.calls[0]["output_scores"] is False
+    assert result.confidence_method == "logprob" and 0.99 < result.confidence <= 1.0
+    assert result.payload.data["caption"] == "A large airport."
+
+
+def test_greedy_keeps_the_per_step_scores(monkeypatch, env, tmp_path):
+    handle = _stub(monkeypatch, "A large airport.")
+    handle.model = _BeamModel()
+    monkeypatch.setenv(cap.ENV_CAPTION_BEAMS, "1")
+    cap.CaptionTool().run(_manifest(1, tmp_path), {})
+    assert handle.model.calls[0]["num_beams"] == 1 and handle.model.calls[0]["output_scores"] is True

@@ -112,7 +112,52 @@ unseen subset of the val sample, not on the full sample.
 
 ### E3 — caption decoding
 
-(filled in from `artifacts/benchmark_reports/rsicd_decoding_{val,test}.json`)
+`caption_vlm/adapter_best`, NF4, `max_new_tokens` 64, the trained prompt;
+`artifacts/benchmark_reports/rsicd_decoding_val.json` (selection: seeded
+400 of the official val, and its 187 "unseen" images — no reference
+verbatim in train, §E4) and `rsicd_decoding_test.json` (report: the
+complete official test, 1,093).
+
+| Decoding | val 400 BLEU-4 / CIDEr-D | val-unseen 187 BLEU-4 / CIDEr-D | unique | words | unsupported content words (micro) |
+|---|---|---|---|---|---|
+| greedy (deployed) | 0.403 / 1.966 | 0.285 / 1.293 | 0.718 | 11.9 | 0.274 |
+| greedy + no-repeat-3 | 0.404 / 1.967 | 0.286 / 1.296 | 0.718 | 11.9 | 0.274 |
+| beam 3 | 0.453 / 2.205 | 0.300 / 1.331 | 0.685 | 11.0 | 0.249 |
+| beam 3 + no-repeat-3 | 0.453 / 2.205 | 0.300 / 1.331 | 0.685 | 11.0 | 0.249 |
+| **beam 5** | 0.452 / **2.235** | **0.308 / 1.382** | 0.695 | 11.1 | **0.246** |
+
+Selection: beam 5 — best CIDEr-D on the full sample *and* on the unseen
+subset (the subset is what predicts the test; its greedy 0.285 sits next
+to the test's 0.256, the full sample's 0.403 does not). No-repeat-ngram
+does nothing: the captions are one short sentence. Beams shorten the
+caption slightly (11.9 → 11.1 words), lower the unique fraction (more
+images get the same well-formed caption) and *reduce* the unsupported
+content-word rate (0.274 → 0.246), i.e. fewer words no reference makes —
+the hallucination proxy moves the right way.
+
+**Official test (report split, 1,093):**
+
+| Decoding | BLEU-4 [95% CI] | CIDEr-D [95% CI] | ROUGE-L | METEOR-exact | unique | words | unsupported (micro) |
+|---|---|---|---|---|---|---|---|
+| greedy (deployed) | 0.253 [0.239, 0.266] | **0.800** [0.769, 0.834] | **0.483** | **0.480** | **0.588** | 11.6 | 0.356 |
+| beam 5 (val-selected) | **0.259** [0.243, 0.272] | 0.788 [0.757, 0.823] | 0.475 | 0.468 | 0.511 | 10.9 | 0.351 |
+
+**Verdict: not adopted.** The val selection - including the unseen
+subset - predicted a gain that the test does not show: BLEU-4 +0.6
+inside the CI, against CIDEr-D -0.012, ROUGE-L -0.008, METEOR -0.012, and
+13% fewer distinct captions (0.588 -> 0.511): beams make the captioner
+*more* generic, the symptom this pass set out to reduce. A trade-off
+inside the intervals is reported as one; the deployed decode stays
+greedy, `SATQUERY_CAPTION_BEAMS` remains a knob. The NF4 greedy test
+number (0.253 / 0.800) reproduces the bf16 deployed number (0.256 /
+0.793) within noise - the deployed precision costs nothing here.
+
+What this says about the caption gap: it is not a decoding problem and
+(E4) not a val/test image shift. The remaining levers are training-time -
+more epochs *selected on unseen val* (C3, queued), and a caption
+supervision that rewards specificity (e.g. sampling the least-generic of
+the five references, or a CIDEr-weighted example weighting) - and both
+need the cluster.
 
 ## Training changes
 
@@ -149,7 +194,7 @@ keeps the conversation and shows "Understood as …".
 | NL routing, test 63 (after folding) | 0.667 | 0.968 | +0.301 | +45.1% | classifier v2 | — | — | — | CPU |
 | NL routing, final 50 (single shot, never tuned on) | 0.720 | 0.900 | +0.180 | +25.0% | classifier v2 | — | `queries_final.jsonl` | — | CPU |
 | Grounding, served prompt format (E2), DIOR-RSVG test subsample 150 | 0.800 (sentence) | 0.820 (extracted) | +0.020 | +2.5% (n.s.) | arm E, `min_pixels` 1048576 | `grounding_vlm_hires/adapter_best` | `data/dior_rsvg` test parquet | 0 | NF4, greedy, 4050 |
-| Caption decoding (E3) | — | — | — | — | — | — | — | — | — |
+| Caption decoding (E3), RSICD official test 1,093 | greedy 0.253 / 0.800 | beam 5 0.259 / 0.788 | +0.006 / −0.012 | +2.2% / −1.5% | `max_new_tokens` 64 | `caption_vlm/adapter_best` (unchanged) | `data/rsicd` test parquet | — | NF4, 4050 — **greedy kept** |
 
 (E2/E3 rows completed below when the runs finish.)
 
@@ -179,10 +224,11 @@ keeps the conversation and shows "Understood as …".
 
 ## Final selected checkpoints
 
-Unchanged: every row of `configs/deploy.v3.yaml` keeps its checkpoint. The
-selection that changed is *decoding* for the captioner if E3 justifies it
-(chosen on val, confirmed on test) and the *served prompt* for the
-grounder (E2).
+Unchanged: every row of `configs/deploy.v3.yaml` keeps its checkpoint,
+and the captioner's decode stays greedy (E3 did not confirm beams on the
+test). What changed in serving is the grounder's prompt (E2: the
+extracted phrase, kept as hygiene) and the land-cover answer (asked-for
+classes first).
 
 ## Deployment changes
 
