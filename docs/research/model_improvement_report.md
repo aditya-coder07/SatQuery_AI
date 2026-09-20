@@ -56,7 +56,7 @@ precision, or CPU.
 
 | # | Experiment | Split / n | Result | Artefact |
 |---|---|---|---|---|
-| E1 | NL routing v1 → v2 (config token + cue features + bank shapes + extraction + follow-ups) | dev 180 (tuned) / test 63 (single shot, then folded) | 71.7 → **99.4%**; 66.7 → **84.1%** single-shot (96.8% after folding) | `nl_understanding_v2_queries*.json` |
+| E1 | NL routing v1 → v2 (config token + cue features + bank shapes + extraction + follow-ups) | dev 180 (tuned) / test 63 (single shot, then folded) / final 50 (single shot) | 71.7 → **99.4%**; 66.7 → **84.1%** single-shot (96.8% after folding); 72.0 → **90.0%** single-shot | `nl_understanding_v2_queries*.json` |
 | E2 | Grounding phrase format: bare vs user sentence vs extracted | DIOR-RSVG test subsample, 150, seed 0, arm E, 1024² NF4 | see below | `grounding_phrase_format.json` |
 | E3 | Caption decoding: greedy vs beam 3/5 vs no-repeat | RSICD val (selection) → test (report), `caption_vlm/adapter_best`, NF4 | see below | `rsicd_decoding_{val,test}.json` |
 
@@ -120,6 +120,7 @@ keeps the conversation and shows "Understood as …".
 | NL routing, dev 180 | 0.717 | 0.994 | +0.277 | +38.7% | classifier v2 | fitted at start | `evaluation/nl/queries.jsonl` | 20260829 (bank), 0 (split) | CPU |
 | NL routing, test 63 (single shot) | 0.667 | 0.841 | +0.174 | +26.1% | classifier v2 | — | `queries_test.jsonl` | — | CPU |
 | NL routing, test 63 (after folding) | 0.667 | 0.968 | +0.301 | +45.1% | classifier v2 | — | — | — | CPU |
+| NL routing, final 50 (single shot, never tuned on) | 0.720 | 0.900 | +0.180 | +25.0% | classifier v2 | — | `queries_final.jsonl` | — | CPU |
 | Grounding, served prompt format (E2), DIOR-RSVG test subsample 150 | 0.800 (sentence) | 0.820 (extracted) | +0.020 | +2.5% (n.s.) | arm E, `min_pixels` 1048576 | `grounding_vlm_hires/adapter_best` | `data/dior_rsvg` test parquet | 0 | NF4, greedy, 4050 |
 | Caption decoding (E3) | — | — | — | — | — | — | — | — | — |
 

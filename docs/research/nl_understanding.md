@@ -121,10 +121,17 @@ each was rephrased on the bank side).
 | dev, 180 (tuned against) | 71.7% | **99.4%** | 100% (34) | 100% (13) | 100% (20) | 100% (9) | 100% (54) | 100% (6) |
 | test, 63 — **single shot, before any fix from it** | 66.7% | **84.1%** | 100% (13) | 100% (5) | 80% (5) | 100% (3) | 76% (17) | 100% (5) |
 | test, 63 — after folding its failure *shapes* into the bank (no longer held out) | — | 96.8% | 100% | 100% | 100% | 100% | 100% | 100% |
+| **final, 50 — written after every change, scored once, never tuned on** | 72.0% | **90.0%** | 89% (9) | 100% (5) | 100% (7) | 100% (3) | 82% (11) | 100% (4) |
 
-Reading: the single-shot number (**+17.5 points**, 66.7 → 84.1) is the
-honest generalisation estimate for the v2 layer; the 99.4 / 96.8 figures
-are the state after tuning and are what the CI floors pin (0.97 / 0.93).
+Reading: the single-shot numbers (**+17.5** on the test split, 66.7 →
+84.1; **+18.0** on the final split, 72.0 → 90.0) are the honest
+generalisation estimate for the v2 layer; the 99.4 / 96.8 figures are the
+state after tuning and are what the CI floors pin (0.97 / 0.93). The
+final split's five misses: "Could you look for a helipad?", "Object
+detection for windmills." and the bare follow-up "show me" abstain;
+"How much land got paved?" abstains; "Is there any deforestation?" on a
+pair goes to single-image VQA. They are left as they are - the split is
+the measurement.
 Two-image inputs went from 50–58% to 98–100%; follow-ups from ~50% to
 100% on both splits. The residual misses are typo strings ("were r the
 bildings", "were is teh airprot" → VQA rather than grounding) and one
