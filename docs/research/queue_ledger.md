@@ -230,6 +230,6 @@ precision), read-only against the deployed adapters:
 
 | Experiment | Script | Data | Result |
 |---|---|---|---|
-| Grounding phrase format (does the served prompt format cost accuracy?) | `evaluation/grounding_phrase_format.py` | seeded 150-expression subsample of the official DIOR-RSVG test, arm E adapter, 1024² | `artifacts/benchmark_reports/grounding_phrase_format.json` — filled in below when the run completes |
+| Grounding phrase format (does the served prompt format cost accuracy?) | `evaluation/grounding_phrase_format.py` | seeded 150-expression subsample of the official DIOR-RSVG test, arm E adapter, 1024² | bare 0.807 / sentence 0.800 / extracted 0.820 Acc@0.5, all pairwise McNemar n.s. — the whole-sentence prompt cost ≈ 0.7 pt; the extractor is hygiene, not a lever (`grounding_phrase_format.json`, 12:20) |
 | Caption decoding ablation (greedy vs beam vs no-repeat) | `evaluation/caption_decoding.py` | RSICD official val subsample (selection) then official test (report), `caption_vlm/adapter_best` | `artifacts/benchmark_reports/rsicd_decoding_{val,test}.json` |
 | NL understanding benchmark (routing + extraction) | `evaluation/nl_understanding_eval.py` | `evaluation/nl/queries{,_test}.jsonl` (hand-written, held out of the bank) | v1 71.7% / 66.7% → v2 99.4% / 84.1% single-shot (96.8% after folding shapes); `docs/research/nl_understanding.md` |

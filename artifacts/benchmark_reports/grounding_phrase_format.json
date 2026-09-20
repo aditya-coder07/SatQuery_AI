@@ -1,0 +1,127 @@
+{
+  "experiment": "grounding phrase format",
+  "n": 150,
+  "seed": 0,
+  "subsample_not_a_benchmark": true,
+  "adapter": "checkpoints/v3/grounding_vlm_hires/adapter_best",
+  "quant": "4bit",
+  "pixel_budget": [
+    1048576,
+    null
+  ],
+  "conditions": {
+    "bare": {
+      "acc@0.5": 0.8067,
+      "acc@0.5_ci95": [
+        0.74,
+        0.8667
+      ],
+      "miou": 0.7043,
+      "parse_rate": 1.0,
+      "s_per_item": 10.656
+    },
+    "sentence": {
+      "acc@0.5": 0.8,
+      "acc@0.5_ci95": [
+        0.7333,
+        0.86
+      ],
+      "miou": 0.7004,
+      "parse_rate": 1.0,
+      "s_per_item": 9.859
+    },
+    "extracted": {
+      "acc@0.5": 0.82,
+      "acc@0.5_ci95": [
+        0.76,
+        0.8733
+      ],
+      "miou": 0.7158,
+      "parse_rate": 1.0,
+      "s_per_item": 9.95
+    }
+  },
+  "examples": [
+    {
+      "expr": "The small train station",
+      "sentence": "Find the small train station in this image.",
+      "extracted": "the small train station"
+    },
+    {
+      "expr": "The chimney on the right",
+      "sentence": "Where is the chimney on the right?",
+      "extracted": "the chimney on the right"
+    },
+    {
+      "expr": "A airplane at the bottom",
+      "sentence": "Can you locate a airplane at the bottom in this picture?",
+      "extracted": "the airplane at the bottom"
+    },
+    {
+      "expr": "A large gray airport in the middle",
+      "sentence": "Show me a large gray airport in the middle.",
+      "extracted": "the large gray airport in the middle"
+    },
+    {
+      "expr": "A tennis court is on the left of the tennis court at the bottom",
+      "sentence": "Point out a tennis court is on the left of the tennis court at the bottom for me.",
+      "extracted": "the tennis court is on the left of the tennis court at the bottom"
+    },
+    {
+      "expr": "The ship on the lower left",
+      "sentence": "Find the ship on the lower left in this image.",
+      "extracted": "the ship on the lower left"
+    },
+    {
+      "expr": "The vehicle is on the right of the small expressway toll station",
+      "sentence": "Where is the vehicle is on the right of the small expressway toll station?",
+      "extracted": "the vehicle is on the right of the small expressway toll station"
+    },
+    {
+      "expr": "A tiny windmill",
+      "sentence": "Can you locate a tiny windmill in this picture?",
+      "extracted": "the tiny windmill"
+    },
+    {
+      "expr": "A windmill on the lower right",
+      "sentence": "Show me a windmill on the lower right.",
+      "extracted": "the windmill on the lower right"
+    },
+    {
+      "expr": "The bridge on the right",
+      "sentence": "Point out the bridge on the right for me.",
+      "extracted": "the bridge on the right"
+    },
+    {
+      "expr": "The tiny overpass in the middle",
+      "sentence": "Find the tiny overpass in the middle in this image.",
+      "extracted": "the tiny overpass in the middle"
+    },
+    {
+      "expr": "A chimney in the middle",
+      "sentence": "Where is a chimney in the middle?",
+      "extracted": "the chimney in the middle"
+    }
+  ],
+  "paired_tests": {
+    "bare_vs_sentence": {
+      "a_only": 3,
+      "b_only": 2,
+      "chi2_cc": 0.0,
+      "significant_at_0.05": false
+    },
+    "bare_vs_extracted": {
+      "a_only": 1,
+      "b_only": 3,
+      "chi2_cc": 0.25,
+      "significant_at_0.05": false
+    },
+    "sentence_vs_extracted": {
+      "a_only": 1,
+      "b_only": 4,
+      "chi2_cc": 0.8,
+      "significant_at_0.05": false
+    }
+  },
+  "peak_vram_gb": 3.25
+}

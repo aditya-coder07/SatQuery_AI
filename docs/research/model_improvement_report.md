@@ -62,7 +62,26 @@ precision, or CPU.
 
 ### E2 — grounding phrase format
 
-(filled in from `artifacts/benchmark_reports/grounding_phrase_format.json`)
+`artifacts/benchmark_reports/grounding_phrase_format.json` — 150 official
+DIOR-RSVG test expressions (seed 0), arm E adapter, NF4, 1024², one run:
+
+| Condition (what the adapter is asked to locate) | Acc@0.5 [95% CI] | mIoU | McNemar vs bare |
+|---|---|---|---|
+| `bare` — the annotated expression | 0.807 [0.740, 0.867] | 0.704 | — |
+| `sentence` — wrapped as a user types it, passed unchanged (**pre-fix served path**) | 0.800 [0.733, 0.860] | 0.700 | 3 lost / 2 gained, n.s. |
+| `extracted` — the same sentence through `extract_object` + `referring_expression` (**served path now**) | 0.820 [0.760, 0.873] | 0.716 | 1 lost / 3 gained, n.s. |
+
+Reading, stated plainly: **the whole-sentence prompt cost less than the
+audit assumed** — 0.7 points on this subsample, inside the noise — because
+the language model reads through the wrapper. The extractor does no harm
+(+1.3 over bare, +2.0 over the sentence, both n.s.) and hands the adapter
+the phrase form it was trained on, which is the reason to keep it; it is
+not an accuracy lever. The first extractor version, which rebuilt the
+phrase from a bare object and a normalised position, was caught by this
+experiment's example dump before scoring (it dropped relational tails such
+as "of the tennis court at the bottom") and replaced by the residual-based
+one. The subsample scores above the full-test 0.732 because it is a
+subsample; it is a comparison of formats, not a benchmark.
 
 ### E3 — caption decoding
 
@@ -101,7 +120,7 @@ keeps the conversation and shows "Understood as …".
 | NL routing, dev 180 | 0.717 | 0.994 | +0.277 | +38.7% | classifier v2 | fitted at start | `evaluation/nl/queries.jsonl` | 20260829 (bank), 0 (split) | CPU |
 | NL routing, test 63 (single shot) | 0.667 | 0.841 | +0.174 | +26.1% | classifier v2 | — | `queries_test.jsonl` | — | CPU |
 | NL routing, test 63 (after folding) | 0.667 | 0.968 | +0.301 | +45.1% | classifier v2 | — | — | — | CPU |
-| Grounding phrase format (E2) | — | — | — | — | — | — | — | — | — |
+| Grounding, served prompt format (E2), DIOR-RSVG test subsample 150 | 0.800 (sentence) | 0.820 (extracted) | +0.020 | +2.5% (n.s.) | arm E, `min_pixels` 1048576 | `grounding_vlm_hires/adapter_best` | `data/dior_rsvg` test parquet | 0 | NF4, greedy, 4050 |
 | Caption decoding (E3) | — | — | — | — | — | — | — | — | — |
 
 (E2/E3 rows completed below when the runs finish.)

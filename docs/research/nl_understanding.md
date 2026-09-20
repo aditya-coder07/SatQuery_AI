@@ -145,9 +145,12 @@ Controlled comparison on the deployed grounding adapter
 DIOR-RSVG test: the annotated phrase (`bare`), the phrase wrapped the way
 a user types it and passed unchanged (`sentence` — the pre-fix served
 path), and the same sentence through the extractor (`extracted` — the
-served path now). Result table: see `artifacts/benchmark_reports/grounding_phrase_format.json`
-and the entry in `docs/research/queue_ledger.md`. A subsample is a
-comparison of prompt formats, not a benchmark number.
+served path now). Acc@0.5: bare 0.807, sentence 0.800, extracted 0.820;
+every pairwise McNemar n.s. (`artifacts/benchmark_reports/grounding_phrase_format.json`).
+So the wrapper cost about 0.7 points, inside the noise: the adapter reads
+through it. The extractor is kept because it does no harm and gives the
+adapter its training-time phrase form, not because it moves accuracy. A
+subsample is a comparison of prompt formats, not a benchmark number.
 
 ## 5. What did not change
 
