@@ -96,6 +96,18 @@ Two design details that matter more than the model choice:
 - **Train it as a per-config classifier.** The same sentence means different things depending on what was uploaded. Either include `config` as a feature or train three heads. This alone removes most of the hard cases.
 - **Expose the confusion matrix in the UI's model registry page.** It converts "we built a classifier" into "here is how well it works," which is what an evaluator wants.
 
+**As built (2026-09-20, `tfidf_cues_logreg_v2`).** The configuration is a
+token in front of the text (`[single]`, `[bitemporal]`, `[crossmodal]`),
+21 lexical cues are a feature block beside the n-grams, and a typed
+`QueryUnderstanding` (resolved query, object phrase, land-cover classes,
+spatial scope, quantity, which image, follow-up resolution) is produced
+for every run and carried in `trace.routing.understanding`. Follow-ups are
+rewritten against the previous turn (`history` on the run endpoints)
+before classification. Measured on a hand-written held-out benchmark
+(`evaluation/nl/`): v1 routed 71.7% of natural queries (two-image inputs
+58%), v2 99.4% on the tuned split and 84.1% single-shot on a fresh one.
+Design, protocol and numbers: `docs/research/nl_understanding.md`.
+
 ### 3.2 Tier 2 — the LLM tie-break, tightly leashed
 
 Fires only when the top-2 margin is below threshold (target: under 10 % of queries). A local 4-bit instruction model (Qwen2.5-3B-Instruct class, or Phi-family) with **grammar-constrained decoding** so the output is guaranteed-parseable JSON, and with the `task` field's enumeration **restricted to the already-legal set for this config**.

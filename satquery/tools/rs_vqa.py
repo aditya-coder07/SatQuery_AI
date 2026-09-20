@@ -33,7 +33,7 @@ from satquery.contracts.input_manifest import InputManifest
 from satquery.contracts.tool_result import ToolPayload, ToolResult
 from satquery.tools.base import ToolProtocol
 from satquery.tools.provenance import record
-from satquery.tools.imaging import to_rgb_preview
+from satquery.tools.imaging import selected_image, to_rgb_preview
 from satquery.tools.sidecars import readable_safetensors
 
 TOOL_NAME = "rs_vqa"
@@ -207,7 +207,7 @@ class RSVQATool(ToolProtocol):
         handle = _ModelHandle.get(base, adapter)
         torch = handle.torch
 
-        image_meta = manifest.images[0]
+        image_meta = selected_image(manifest, params)
         image, provenance = to_rgb_preview(image_meta)
 
         chat = [

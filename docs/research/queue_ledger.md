@@ -205,3 +205,31 @@ them. The 7B run (#26) keeps going unattended; its official eval lands
   run nothing. Its steps A and C are carried into night 3 (#15, #16); its
   step B (land-cover scratch on the geographic-prefix subset) is dropped
   because that subset is no longer a benchmark (audit L1, revised).
+
+## 7B grounding arm (#26) — result (read 2026-09-19 from `logs/queue_7b.log` on compute01)
+
+Qwen2.5-VL-7B-Instruct + QLoRA r16 on DIOR-RSVG train + hard + VRSBench at
+1024², 1 epoch (val@400 0.675 at step 800): **official DIOR-RSVG test
+Acc@0.5 0.7392** vs arm E (3B) 0.7323 — McNemar χ² 2.29, **not
+significant**. Not selected: 2.3× the weights and ≈ 2× the latency for a
+difference inside the noise, and the 3B base is shared by every VLM tool.
+The report JSON and adapter remain on compute01
+(`checkpoints/v3/grounding_7b_hires/`); only `docs/assets/phase6/grounding_7b_hires/{metrics,run_metadata}.json`
+(val history) were synced before the account expired — see below.
+
+## 2026-09-20 — cluster access lost; local-GPU experiments
+
+`ssh adi01@172.16.1.161` answers **"Your account has expired; please
+contact your system administrator."** No training arm can be launched or
+retrieved until the account is renewed. The deferred arms (F 1280²,
+seed-43 repeat) and the caption/change-caption training arms proposed in
+`docs/research/model_improvement_report.md` stay queued as scripts.
+
+What ran instead, on the laptop's RTX 4050 (6 GB, NF4 = the deployed
+precision), read-only against the deployed adapters:
+
+| Experiment | Script | Data | Result |
+|---|---|---|---|
+| Grounding phrase format (does the served prompt format cost accuracy?) | `evaluation/grounding_phrase_format.py` | seeded 150-expression subsample of the official DIOR-RSVG test, arm E adapter, 1024² | `artifacts/benchmark_reports/grounding_phrase_format.json` — filled in below when the run completes |
+| Caption decoding ablation (greedy vs beam vs no-repeat) | `evaluation/caption_decoding.py` | RSICD official val subsample (selection) then official test (report), `caption_vlm/adapter_best` | `artifacts/benchmark_reports/rsicd_decoding_{val,test}.json` |
+| NL understanding benchmark (routing + extraction) | `evaluation/nl_understanding_eval.py` | `evaluation/nl/queries{,_test}.jsonl` (hand-written, held out of the bank) | v1 71.7% / 66.7% → v2 99.4% / 84.1% single-shot (96.8% after folding shapes); `docs/research/nl_understanding.md` |

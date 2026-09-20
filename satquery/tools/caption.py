@@ -41,7 +41,7 @@ from satquery.contracts.tool_result import ToolPayload, ToolResult
 from satquery.tools.base import ToolProtocol
 from satquery.tools.provenance import record
 from satquery.tools.sidecars import readable_json
-from satquery.tools.imaging import to_rgb_preview
+from satquery.tools.imaging import selected_image, to_rgb_preview
 
 TOOL_NAME = "caption"
 TOOL_VERSION = "1.1.0"
@@ -189,7 +189,7 @@ class CaptionTool(ToolProtocol):
 
     def run(self, manifest: InputManifest, params: dict) -> ToolResult:
         if vlm_configured():
-            return self._run_vlm(manifest)
+            return self._run_vlm(manifest, params)
         started = time.perf_counter()
         checkpoint = Path(os.environ[ENV_CHECKPOINT])
         handle = _Handle.get(checkpoint)
@@ -197,7 +197,7 @@ class CaptionTool(ToolProtocol):
 
         from training.train_change_caption import EOS, PAD
 
-        array = _image_array(manifest.images[0], image_size())
+        array = _image_array(selected_image(manifest, params), image_size())
         batch = torch.from_numpy(array).unsqueeze(0).to(handle.device)
 
         with torch.no_grad():
@@ -241,13 +241,13 @@ class CaptionTool(ToolProtocol):
             warnings=warnings,
         )
 
-    def _run_vlm(self, manifest: InputManifest) -> ToolResult:
+    def _run_vlm(self, manifest: InputManifest, params: dict | None = None) -> ToolResult:
         """Caption through the shared Qwen2.5-VL base + the caption adapter,
         under the prompt the adapter was trained with."""
         from satquery.tools import vlm_text
 
         started = time.perf_counter()
-        image, _ = to_rgb_preview(manifest.images[0], max_edge=1024)
+        image, _ = to_rgb_preview(selected_image(manifest, params), max_edge=1024)
         caption, confidence, card = vlm_text.generate(ENV_VLM_ADAPTER, VLM_ADAPTER_NAME, [image],
                                                       vlm_text.CAPTION_QUESTION)
         warnings: list[str] = []

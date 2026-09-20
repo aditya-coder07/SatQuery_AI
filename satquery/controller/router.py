@@ -27,12 +27,18 @@ from dataclasses import dataclass
 
 from satquery.contracts.input_manifest import InputManifest
 from satquery.contracts.plan import Plan, PlanStep, RationaleTag, TaskID
-from satquery.controller.intent import (
+from satquery.controller.intent import (  # noqa: F401 - CONFIG_TO_LEGAL_TASKS re-exported
+    CONFIG_TO_LEGAL_TASKS,
     IntentClassifier,
     IntentPrediction,
     default_classifier,
 )
 from satquery.controller.matrix_loader import CapabilityMatrix
+from satquery.controller.understanding import (
+    QueryUnderstanding,
+    resolve_follow_up,
+    understand,
+)
 from satquery.controller.validator import assert_legal
 
 
@@ -49,22 +55,11 @@ class RouteDecision:
     plan: Plan
     prediction: IntentPrediction | None
     config_excluded: str | None
-
-CONFIG_TO_LEGAL_TASKS: dict[str, list[str]] = {
-    "SINGLE": [
-        "SINGLE_VQA", "SINGLE_CAPTION", "SINGLE_GROUND", "SINGLE_LANDCOVER",
-        "CLARIFY_OR_ABSTAIN",
-    ],
-    "CROSSMODAL_PAIR": [
-        "XMODAL_JOINT_EXTRACT", "SINGLE_VQA", "SINGLE_CAPTION", "SINGLE_GROUND",
-        "SINGLE_LANDCOVER", "CLARIFY_OR_ABSTAIN",
-    ],
-    "BITEMPORAL_PAIR": [
-        "TEMPORAL_CHANGE_DESC", "TEMPORAL_CHANGE_VQA", "TEMPORAL_CHANGE_MAP",
-        "SINGLE_VQA", "SINGLE_CAPTION", "SINGLE_GROUND", "SINGLE_LANDCOVER",
-        "CLARIFY_OR_ABSTAIN",
-    ],
-}
+    # What the query was understood to ask (2026-09-20): the resolved
+    # sentence, the object, the classes, the spatial scope ... Carried in the
+    # routing trace and handed to the tools as runtime parameters. None only
+    # on the blocking-failure path, where nothing was interpreted.
+    understanding: QueryUnderstanding | None = None
 
 # Where to fall back when the classifier is not confident enough to trust.
 CONFIG_DEFAULT_TASK: dict[str, TaskID] = {
@@ -233,18 +228,32 @@ class Router:
         return out
 
     # -- planning --------------------------------------------------------
-    def _default_params(self, task: TaskID) -> dict:
-        """Only ever emit parameters the matrix permits, using its defaults."""
+    def _default_params(self, task: TaskID, classes: list[str] | None = None) -> dict:
+        """Only ever emit parameters the matrix permits, using its defaults.
+
+        `classes` - the land-cover classes the query named - replaces the
+        default when the task permits a `classes` parameter and every named
+        class is in its `enum_subset`. A class the matrix does not know is
+        dropped rather than passed through; the validator would reject the
+        plan otherwise, and the query cannot widen the vocabulary.
+        """
         params: dict = {}
         for name, schema in self.matrix.tasks[task].permitted_params.items():
             if schema.default is not None:
                 params[name] = schema.default
+            if name == "classes" and classes:
+                allowed = list(getattr(schema, "enum_subset", None) or [])
+                chosen = [c for c in classes if c in allowed]
+                if chosen:
+                    params[name] = chosen
         return params
 
-    def _build_steps(self, task: TaskID, manifest: InputManifest) -> list[PlanStep]:
+    def _build_steps(
+        self, task: TaskID, manifest: InputManifest, classes: list[str] | None = None
+    ) -> list[PlanStep]:
         cfg = self.matrix.tasks[task]
         rationale = RATIONALE_BY_TASK.get(task, RationaleTag.VQA_INFERENCE)
-        params = self._default_params(task)
+        params = self._default_params(task, classes)
 
         steps: list[PlanStep] = []
         for i, tool in enumerate(cfg.tools, start=1):
@@ -275,7 +284,7 @@ class Router:
         return vram, runtime
 
     # -- entry point ------------------------------------------------------
-    def route(self, query: str, manifest: InputManifest) -> Plan:
+    def route(self, query: str, manifest: InputManifest, history: list[dict] | None = None) -> Plan:
         """The plan alone. Equivalent to `decide(...).plan`.
 
         Kept because most callers - the adversarial harness, the ablations,
@@ -284,9 +293,11 @@ class Router:
         in a single-threaded caller and unsafe across concurrent ones; that
         is exactly why the controller uses `decide` instead.
         """
-        return self.decide(query, manifest).plan
+        return self.decide(query, manifest, history=history).plan
 
-    def decide(self, query: str, manifest: InputManifest) -> RouteDecision:
+    def decide(
+        self, query: str, manifest: InputManifest, history: list[dict] | None = None
+    ) -> RouteDecision:
         """Plan plus everything the executor needs to explain it.
 
         The prediction and the config-excluded task are **returned**, not
@@ -304,6 +315,14 @@ class Router:
         config_excluded: str | None = None
         prediction: IntentPrediction | None = None
 
+        # A follow-up ("Where exactly?", "only buildings") is rewritten into
+        # a standalone sentence BEFORE anything is classified, so it goes
+        # through the same gates as a fresh query. `history` is the previous
+        # turns of this conversation as the API received them; without one
+        # the query is used as typed.
+        resolved = resolve_follow_up(query, history, manifest.config)
+        text = resolved[0] or query
+
         if manifest.blocking_failures:
             # Inputs failed validation: no amount of query understanding makes
             # an answer defensible, so abstain and say why.
@@ -316,11 +335,15 @@ class Router:
             # different task's output. Config gating guarantees the plan is
             # legal; it does not guarantee the user understands why they got
             # a land-cover map when they asked about change.
-            unconstrained = self.classifier.predict(query)
+            unconstrained = self.classifier.predict(text)
             if unconstrained.is_confident and unconstrained.task not in legal:
                 config_excluded = unconstrained.task
 
-            prediction = self.classifier.predict(query, candidates=legal)
+            # The constrained prediction sees the input configuration as a
+            # token (intent.CONFIG_TOKENS): "are there any new structures?"
+            # is a change question on a pair and a presence question on one
+            # image, and only the token tells the model which it is facing.
+            prediction = self.classifier.predict(text, candidates=legal, config=manifest.config)
             # A low-confidence pick is normally discarded in favour of the
             # configuration default, because a weak guess at *which* capability
             # to use still beats refusing. CLARIFY_OR_ABSTAIN is the one class
@@ -345,7 +368,11 @@ class Router:
         if task not in legal:
             task = "CLARIFY_OR_ABSTAIN"
 
-        steps = self._build_steps(task, manifest)
+        understanding = understand(
+            query, manifest.config, task, [img.role for img in manifest.images],
+            history=history, resolved=resolved,
+        )
+        steps = self._build_steps(task, manifest, classes=understanding.classes)
         if self.shed_tools:
             # Profile-level shedding (the cpu profile drops the 3B VLM). Same
             # degrade-not-fail contract as the budget below.
@@ -386,4 +413,5 @@ class Router:
             # prediction object.
             prediction=None if manifest.blocking_failures else prediction,
             config_excluded=config_excluded,
+            understanding=None if manifest.blocking_failures else understanding,
         )

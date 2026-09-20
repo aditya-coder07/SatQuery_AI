@@ -317,9 +317,9 @@
   "routing": {
     "capability_matrix_version": "cm-2026.11.02",
     "classifier": {
-      "margin": 0.9948,
-      "name": "tfidf_logreg_v1",
-      "top1": 0.9965
+      "margin": 0.9996,
+      "name": "tfidf_cues_logreg_v2",
+      "top1": 0.9998
     },
     "config_excluded_task": null,
     "legal_tasks": [
@@ -333,7 +333,32 @@
       "CLARIFY_OR_ABSTAIN"
     ],
     "llm_tiebreak_invoked": false,
-    "selected_task": "TEMPORAL_CHANGE_MAP"
+    "selected_task": "TEMPORAL_CHANGE_MAP",
+    "understanding": {
+      "classes": null,
+      "config": "BITEMPORAL_PAIR",
+      "cues": [
+        "change",
+        "mask"
+      ],
+      "follow_up": false,
+      "image_index": null,
+      "inputs": [
+        "t1",
+        "t2"
+      ],
+      "intent": "change_map",
+      "object_filter": null,
+      "quantity": null,
+      "query": "Produce a change mask.",
+      "referring_expression": null,
+      "requested_output": "change_mask",
+      "resolution": null,
+      "resolved_query": "Produce a change mask.",
+      "spatial_scope": null,
+      "task": "TEMPORAL_CHANGE_MAP",
+      "temporal_relation": "before_after"
+    }
   },
   "run_id": "<volatile>",
   "timestamp_utc": "<volatile>",

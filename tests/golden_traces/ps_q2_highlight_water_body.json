@@ -124,9 +124,9 @@
   "routing": {
     "capability_matrix_version": "cm-2026.11.02",
     "classifier": {
-      "margin": 0.9071,
-      "name": "tfidf_logreg_v1",
-      "top1": 0.9386
+      "margin": 0.9935,
+      "name": "tfidf_cues_logreg_v2",
+      "top1": 0.9958
     },
     "config_excluded_task": null,
     "legal_tasks": [
@@ -137,7 +137,32 @@
       "CLARIFY_OR_ABSTAIN"
     ],
     "llm_tiebreak_invoked": false,
-    "selected_task": "SINGLE_GROUND"
+    "selected_task": "SINGLE_GROUND",
+    "understanding": {
+      "classes": [
+        "water"
+      ],
+      "config": "SINGLE",
+      "cues": [
+        "locate"
+      ],
+      "follow_up": false,
+      "image_index": null,
+      "inputs": [
+        "single"
+      ],
+      "intent": "locate",
+      "object_filter": "water body",
+      "quantity": null,
+      "query": "Highlight the water body referred to in the query.",
+      "referring_expression": "the water body",
+      "requested_output": "boxes",
+      "resolution": null,
+      "resolved_query": "Highlight the water body referred to in the query.",
+      "spatial_scope": null,
+      "task": "SINGLE_GROUND",
+      "temporal_relation": null
+    }
   },
   "run_id": "<volatile>",
   "timestamp_utc": "<volatile>",

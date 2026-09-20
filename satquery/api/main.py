@@ -224,6 +224,42 @@ PROBE_PREVIEW_PX = 512
 MIN_AOI_PX = 64
 
 
+# Most turns a client may send back. The resolver only reads the latest
+# completed turn, so more is dead weight in the request.
+MAX_HISTORY_TURNS = 20
+
+
+def _parse_history(raw: str | None) -> list[dict] | None:
+    """Parse the optional `history` form field: the earlier turns of this
+    conversation, newest last, each `{"query": ..., "task": ..., "answer":
+    ..., "understanding": {...}}` as the client received them from a
+    previous run. Only what the follow-up resolver reads is kept; anything
+    else the client put in a turn is dropped here rather than carried into
+    the run."""
+    if raw is None or not raw.strip():
+        return None
+    try:
+        turns = json.loads(raw)
+    except json.JSONDecodeError as exc:
+        raise HTTPException(400, f"history is not valid JSON: {exc.msg}") from exc
+    if not isinstance(turns, list):
+        raise HTTPException(400, "history must be a list of turns")
+    kept: list[dict] = []
+    for turn in turns[-MAX_HISTORY_TURNS:]:
+        if not isinstance(turn, dict):
+            raise HTTPException(400, "each history turn must be an object")
+        u = turn.get("understanding")
+        kept.append({
+            "query": str(turn.get("query") or "")[:2000],
+            "task": str(turn.get("task") or "")[:40] or None,
+            "answer": str(turn.get("answer") or "")[:4000],
+            "understanding": {
+                k: u.get(k) for k in ("task", "object_filter", "classes", "resolved_query")
+            } if isinstance(u, dict) else None,
+        })
+    return kept or None
+
+
 def _parse_aoi(raw: str | None) -> tuple[float, float, float, float] | None:
     """Parse the optional `aoi` form field: [west, south, east, north] in EPSG:4326.
 
@@ -489,10 +525,12 @@ async def create_run(
     query: str = Form(...),
     images: list[UploadFile] = File(...),
     aoi: str | None = Form(None),
+    history: str | None = Form(None),
 ):
     """Run the pipeline synchronously and return the complete trace."""
     _validate_upload_shape(images)
     area = _parse_aoi(aoi)
+    turns = _parse_history(history)
 
     run_id = f"run_{uuid.uuid4().hex[:12]}"
     work_dir = Path(tempfile.mkdtemp(prefix=f"satquery_{run_id}_"))
@@ -501,7 +539,7 @@ async def create_run(
 
     try:
         paths = _apply_aoi(_save_uploads(images, work_dir), area)
-        trace = get_controller().run(paths, query, run_id=run_id)
+        trace = get_controller().run(paths, query, run_id=run_id, history=turns)
     except HTTPException as exc:
         # A deliberate status - 413 for an oversized upload - must survive.
         # The blanket handler below was converting it to a 500, which told the
@@ -522,10 +560,12 @@ async def stream_run(
     query: str = Form(...),
     images: list[UploadFile] = File(...),
     aoi: str | None = Form(None),
+    history: str | None = Form(None),
 ):
     """Run the pipeline and stream trace stages as server-sent events."""
     _validate_upload_shape(images)
     area = _parse_aoi(aoi)
+    turns = _parse_history(history)
 
     run_id = f"run_{uuid.uuid4().hex[:12]}"
     work_dir = Path(tempfile.mkdtemp(prefix=f"satquery_{run_id}_"))
@@ -549,6 +589,7 @@ async def stream_run(
                 manifest,
                 query,
                 on_event=lambda name, data: events.put((name, data)),
+                history=turns,
             )
             store.complete(run_id, trace)
             events.put(("complete", json.loads(trace.model_dump_json())))

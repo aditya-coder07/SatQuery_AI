@@ -110,6 +110,57 @@ _FALLBACK_CLASS_NAMES = [
 ]
 
 
+# The matrix's four request classes (`classes` in permitted_params, filled by
+# the router from the query since 2026-09-20) mapped onto the BigEarthNet-19
+# labels the head predicts. A question about "vegetation" is answered with
+# the vegetation labels first, and says which of them were absent or
+# undecided, instead of a flat list of whatever was asserted.
+REQUEST_CLASS_LABELS: dict[str, tuple[str, ...]] = {
+    "built_up": ("Urban fabric", "Industrial or commercial units"),
+    "water": ("Inland waters", "Marine waters", "Coastal wetlands", "Inland wetlands"),
+    "vegetation": (
+        "Arable land", "Pastures", "Permanent crops", "Complex cultivation patterns",
+        "Land principally occupied by agriculture, with significant areas of natural vegetation",
+        "Agro-forestry areas", "Broad-leaved forest", "Coniferous forest", "Mixed forest",
+        "Natural grassland and sparsely vegetated areas", "Moors, heathland and sclerophyllous vegetation",
+        "Transitional woodland, shrub",
+    ),
+    "bare_soil": ("Beaches, dunes, sands",),
+}
+
+
+def requested_summary(classes: list[str] | None, asserted: list[dict], denied: list[str],
+                      abstained: list[dict]) -> str | None:
+    """One sentence per requested class: which of its labels were asserted,
+    denied or left undecided. None when the query named no class."""
+    if not classes:
+        return None
+    present = {a["class"] for a in asserted}
+    undecided = {a["class"] for a in abstained}
+    absent = set(denied)
+    parts = []
+    for cls in classes:
+        labels = REQUEST_CLASS_LABELS.get(cls)
+        if not labels:
+            continue
+        found = [lab for lab in labels if lab in present]
+        open_ = [lab for lab in labels if lab in undecided]
+        gone = [lab for lab in labels if lab in absent]
+        human = cls.replace("_", " ")
+        if found:
+            parts.append(f"{human}: present as {', '.join(found)}")
+        elif open_ and not gone:
+            parts.append(f"{human}: undecided ({', '.join(open_)} below the assertion threshold)")
+        elif gone and not open_:
+            # "Not detected" would read as a measurement; the head's
+            # decision is about ITS labels, and the index engine's own
+            # fraction for the same class follows in the composed answer.
+            parts.append(f"{human}: none of its land-cover labels asserted by the head")
+        else:
+            parts.append(f"{human}: not asserted ({len(gone)} labels denied, {len(open_)} undecided)")
+    return ("Asked-for classes - " + "; ".join(parts) + ".") if parts else None
+
+
 def class_names() -> list[str]:
     """The label ordering the head was trained against."""
     try:
@@ -304,7 +355,9 @@ class LandcoverTool(ToolProtocol):
         from satquery.controller.calibration import load_registry
         from training.track_a_full import BEN_GSD_M
 
-        meta = manifest.images[0]
+        from satquery.tools.imaging import selected_image
+
+        meta = selected_image(manifest, params)
         cube, presence = _band_cube(meta, load_band_stats(handle.checkpoint))
         warnings: list[str] = []
         if presence.sum() == 0:
@@ -354,9 +407,17 @@ class LandcoverTool(ToolProtocol):
                 # The head cannot call this class at the measured risk budget.
                 abstained.append({"class": name, "probability": round(float(p), 4)})
 
+        # `_classes` is set by the router only when the QUERY named classes;
+        # the plan's `classes` carries the matrix default otherwise, and a
+        # default is not a question to answer.
+        requested = requested_summary(params.get("_classes"), asserted, denied, abstained)
         if asserted:
             listed = ", ".join(a["class"] for a in asserted)
             answer = f"Detected land-cover classes: {listed}."
+            if requested:
+                answer = f"{requested} {answer}"
+        elif requested:
+            answer = requested
         else:
             answer = (
                 "No land-cover class could be asserted at the measured "
@@ -384,6 +445,7 @@ class LandcoverTool(ToolProtocol):
                 data={
                     "answer": answer,
                     "labels": [a["class"] for a in asserted],
+                    "requested_classes": list(params.get("_classes") or []),
                     "asserted": asserted,
                     "abstained": abstained,
                     "n_denied": len(denied),

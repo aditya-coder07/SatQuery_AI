@@ -12,7 +12,8 @@ import Pipeline from '../components/Pipeline';
 import QueryComposer from '../components/QueryComposer';
 import RecentRuns from '../components/RecentRuns';
 import Telemetry from '../components/Telemetry';
-import type { Check, Confidence, TraceEvent, Verification } from '../lib/events';
+import Conversation from '../components/Conversation';
+import type { Check, Confidence, TraceEvent, Turn, Understanding, Verification } from '../lib/events';
 import { isCalibrated, parseSSE } from '../lib/events';
 import { hasGeoreference, sceneFootprint, type Bounds } from '../lib/footprint';
 import { focusQuery } from '../lib/focusQuery';
@@ -77,6 +78,12 @@ export default function Page() {
   // The area drawn on the map, [west, south, east, north] in EPSG:4326. The
   // composer owns picking it; the run sends it.
   const [aoi, setAoi] = useState<Bounds | null>(null);
+  // The conversation so far: every completed run since the scenes were
+  // attached, sent back with each request as `history` so "Where exactly?"
+  // is resolved against what was asked before. Attaching different scenes
+  // starts a new conversation - the turns were about the old ones.
+  const [turns, setTurns] = useState<Turn[]>([]);
+  const [understanding, setUnderstanding] = useState<Understanding | null>(null);
   const traceRef = useRef<HTMLDivElement>(null);
   const pipelineRef = useRef<HTMLDivElement>(null);
   const answerRef = useRef<HTMLDivElement>(null);
@@ -107,10 +114,12 @@ export default function Page() {
       setGeolocatable(false);
       setStartedAt(began);
       setElapsed(null);
+      setUnderstanding(null);
 
       const form = new FormData();
       form.append('query', query);
       files.forEach((f) => form.append('images', f));
+      if (turns.length > 0) form.append('history', JSON.stringify(turns));
       // Only when an area was actually drawn: an absent field means the whole
       // scene, which is what the API defaults to.
       if (aoi) form.append('aoi', JSON.stringify(aoi));
@@ -135,6 +144,7 @@ export default function Page() {
             setGeolocatable(hasGeoreference(event.data.images));
           } else if (event.name === 'routing') {
             setTask(event.data.selected_task ?? '');
+            setUnderstanding(event.data.understanding ?? null);
           } else if (event.name === 'verification') {
             // Previously dropped on the floor. It is the event that says
             // whether the sentences in the answer are supported by the
@@ -149,6 +159,19 @@ export default function Page() {
             setRunComplete(true);
             setAnswer(event.data.answer ?? '');
             setAbstained(Boolean(event.data.abstained));
+            // An abstention is not a turn worth resolving the next question
+            // against: "Where exactly?" after "hmm" has no referent.
+            if (!event.data.abstained) {
+              setTurns((prev) => [
+                ...prev,
+                {
+                  query,
+                  task: event.data.routing?.selected_task ?? '',
+                  answer: event.data.answer ?? '',
+                  understanding: event.data.routing?.understanding ?? null,
+                },
+              ]);
+            }
             if (event.data.abstained && event.data.abstain_reason) {
               setError(event.data.abstain_reason);
             }
@@ -170,8 +193,14 @@ export default function Page() {
         setElapsed((Date.now() - began) / 1000);
       }
     },
-    [files, query, aoi],
+    [files, query, aoi, turns],
   );
+
+  // New scenes, new conversation.
+  const changeFiles = useCallback((next: File[]) => {
+    setFiles(next);
+    setTurns([]);
+  }, []);
 
   /**
    * Move to the pipeline when a run opens — it is the thing that plays while
@@ -264,7 +293,7 @@ export default function Page() {
             query={query}
             onQueryChange={setQuery}
             files={files}
-            onFilesChange={setFiles}
+            onFilesChange={changeFiles}
             running={running}
             onSubmit={submit}
             error={error}
@@ -297,11 +326,38 @@ export default function Page() {
                   <span className="meta">streamed over SSE</span>
                 </div>
 
+                <Conversation
+                  turns={turns}
+                  current={running || answer ? query : ''}
+                  onClear={() => setTurns([])}
+                />
+
                 {task && (
                   <div className="taskline">
                     <span className="task">{task}</span>
                     {roles.length > 0 && <span className="rid">{roles.join(' · ')}</span>}
                   </div>
+                )}
+
+                {understanding && (
+                  <p className="understood">
+                    {understanding.follow_up && understanding.resolved_query !== understanding.query ? (
+                      <>
+                        Understood as <b>{understanding.resolved_query}</b>
+                      </>
+                    ) : (
+                      <>Understood as {understanding.intent.replace('_', ' ')}</>
+                    )}
+                    {understanding.intent === 'locate' && understanding.referring_expression ? (
+                      <span className="chip">{understanding.referring_expression}</span>
+                    ) : (
+                      understanding.object_filter && <span className="chip">{understanding.object_filter}</span>
+                    )}
+                    {understanding.spatial_scope && <span className="chip">{understanding.spatial_scope}</span>}
+                    {understanding.classes && understanding.classes.map((c) => <span className="chip" key={c}>{c}</span>)}
+                    {understanding.quantity && <span className="chip">{understanding.quantity}</span>}
+                    {understanding.image_index !== null && <span className="chip">image {understanding.image_index + 1}</span>}
+                  </p>
                 )}
 
                 <p className={`answer${answer ? '' : ' empty'}`}>

@@ -402,9 +402,9 @@
   "routing": {
     "capability_matrix_version": "cm-2026.11.02",
     "classifier": {
-      "margin": 0.9829,
-      "name": "tfidf_logreg_v1",
-      "top1": 0.987
+      "margin": 0.9892,
+      "name": "tfidf_cues_logreg_v2",
+      "top1": 0.9944
     },
     "config_excluded_task": null,
     "legal_tasks": [
@@ -416,7 +416,35 @@
       "CLARIFY_OR_ABSTAIN"
     ],
     "llm_tiebreak_invoked": false,
-    "selected_task": "XMODAL_JOINT_EXTRACT"
+    "selected_task": "XMODAL_JOINT_EXTRACT",
+    "understanding": {
+      "classes": [
+        "built_up",
+        "water"
+      ],
+      "config": "CROSSMODAL_PAIR",
+      "cues": [
+        "new",
+        "fuse"
+      ],
+      "follow_up": false,
+      "image_index": null,
+      "inputs": [
+        "optical",
+        "sar"
+      ],
+      "intent": "fuse",
+      "object_filter": null,
+      "quantity": null,
+      "query": "Use the optical and SAR images together to identify built-up and water-covered regions.",
+      "referring_expression": null,
+      "requested_output": "fused_map",
+      "resolution": null,
+      "resolved_query": "Use the optical and SAR images together to identify built-up and water-covered regions.",
+      "spatial_scope": null,
+      "task": "XMODAL_JOINT_EXTRACT",
+      "temporal_relation": null
+    }
   },
   "run_id": "<volatile>",
   "timestamp_utc": "<volatile>",

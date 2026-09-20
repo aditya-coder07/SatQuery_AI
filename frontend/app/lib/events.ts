@@ -42,6 +42,34 @@ export type EntailmentGate = {
   flagged_detail: { sentence: string; reason: string; backend: string; score: number | null }[];
 };
 
+/** What the router understood a query to ask (routing.understanding). */
+export type Understanding = {
+  query: string;
+  resolved_query: string;
+  config: string;
+  intent: string;
+  task: string;
+  requested_output: string;
+  object_filter: string | null;
+  referring_expression: string | null;
+  spatial_scope: string | null;
+  temporal_relation: string | null;
+  quantity: string | null;
+  classes: string[] | null;
+  image_index: number | null;
+  follow_up: boolean;
+  resolution: string | null;
+  cues: string[];
+};
+
+/** One completed turn of a conversation, sent back as `history`. */
+export type Turn = {
+  query: string;
+  task: string;
+  answer: string;
+  understanding: Understanding | null;
+};
+
 export type Verification = {
   physics_agreement: Record<string, number>;
   built_up_path: string;

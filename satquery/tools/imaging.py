@@ -20,7 +20,22 @@ import numpy as np
 import rasterio
 from rasterio.enums import Resampling
 
-from satquery.contracts.input_manifest import ImageMeta
+from satquery.contracts.input_manifest import ImageMeta, InputManifest
+
+
+def selected_image(manifest: InputManifest, params: dict | None) -> ImageMeta:
+    """The input a single-image tool should look at.
+
+    The first image by default. `_image_index` (set by the router from the
+    query's understanding - "in the second image", "the optical scene") picks
+    another input of a pair; out-of-range values fall back to the first
+    rather than raising, since the index came from language, not from the
+    caller's schema.
+    """
+    idx = (params or {}).get("_image_index")
+    if isinstance(idx, int) and 0 <= idx < len(manifest.images):
+        return manifest.images[idx]
+    return manifest.images[0]
 
 # Longest edge of the RGB preview handed to the model. Qwen2.5-VL uses dynamic
 # resolution, so this directly bounds the visual token count - and therefore

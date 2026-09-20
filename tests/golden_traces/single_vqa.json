@@ -115,9 +115,9 @@
   "routing": {
     "capability_matrix_version": "cm-2026.11.02",
     "classifier": {
-      "margin": 0.9249,
-      "name": "tfidf_logreg_v1",
-      "top1": 0.9543
+      "margin": 0.9948,
+      "name": "tfidf_cues_logreg_v2",
+      "top1": 0.9969
     },
     "config_excluded_task": null,
     "legal_tasks": [
@@ -128,7 +128,33 @@
       "CLARIFY_OR_ABSTAIN"
     ],
     "llm_tiebreak_invoked": false,
-    "selected_task": "SINGLE_VQA"
+    "selected_task": "SINGLE_VQA",
+    "understanding": {
+      "classes": [
+        "built_up"
+      ],
+      "config": "SINGLE",
+      "cues": [
+        "count",
+        "question"
+      ],
+      "follow_up": false,
+      "image_index": null,
+      "inputs": [
+        "single"
+      ],
+      "intent": "ask",
+      "object_filter": "buildings",
+      "quantity": "count",
+      "query": "How many buildings are visible?",
+      "referring_expression": "the buildings",
+      "requested_output": "short_answer",
+      "resolution": null,
+      "resolved_query": "How many buildings are visible?",
+      "spatial_scope": null,
+      "task": "SINGLE_VQA",
+      "temporal_relation": null
+    }
   },
   "run_id": "<volatile>",
   "timestamp_utc": "<volatile>",

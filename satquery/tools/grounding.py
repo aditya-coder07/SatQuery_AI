@@ -43,7 +43,7 @@ from satquery.contracts.tool_result import ToolPayload, ToolResult
 from satquery.tools.base import ToolProtocol
 from satquery.tools.provenance import record
 from satquery.tools.sidecars import readable_json, readable_safetensors
-from satquery.tools.imaging import to_rgb_preview
+from satquery.tools.imaging import selected_image, to_rgb_preview
 
 TOOL_NAME = "grounding"
 TOOL_VERSION = "1.1.0"
@@ -114,6 +114,30 @@ def is_available() -> tuple[bool, str]:
     except ImportError:
         return False, "torch is not installed"
     return True, "ready"
+
+
+def _phrase_from(params: dict) -> tuple[str, list[str]]:
+    """The referring expression the grounder is asked to locate.
+
+    `_phrase` is the object the router extracted from the query, with its
+    spatial qualifier, phrased the way the adapter's training expressions
+    read ("the airplane on the right"). Before 2026-09-20 the whole sentence
+    was used, so "Find the airport in this image." became the prompt
+    "Locate the Find the airport in this image in the image ..." - out of
+    the adapter's distribution and, for anything but a bare noun phrase,
+    a worse box than the benchmark number promises. The raw query remains
+    the fallback when nothing could be extracted.
+    """
+    warnings: list[str] = []
+    phrase = str(params.get("_phrase") or "").strip()
+    if not phrase:
+        phrase = str(params.get("_query") or "").strip()
+        if phrase:
+            warnings.append("no referring expression extracted from the query; used the sentence as typed")
+    if not phrase:
+        phrase = "the main object"
+        warnings.append("no referring expression supplied; used a generic one")
+    return phrase, warnings
 
 
 class _Handle:
@@ -187,13 +211,9 @@ class GroundingTool(ToolProtocol):
 
         from training.train_grounding import IMAGE_SIZE, encode_text
 
-        phrase = str(params.get("_query") or "").strip()
-        warnings: list[str] = []
-        if not phrase:
-            phrase = "the main object"
-            warnings.append("no referring expression supplied; used a generic one")
+        phrase, warnings = _phrase_from(params)
 
-        meta = manifest.images[0]
+        meta = selected_image(manifest, params)
         image, _ = to_rgb_preview(meta, max_edge=IMAGE_SIZE)
         image = image.resize((IMAGE_SIZE, IMAGE_SIZE))
         array = np.asarray(image, dtype="float32").transpose(2, 0, 1) / 255.0
@@ -267,11 +287,7 @@ class GroundingTool(ToolProtocol):
         )
 
         started = time.perf_counter()
-        warnings: list[str] = []
-        phrase = str(params.get("_query") or "").strip()
-        if not phrase:
-            phrase = "the main object"
-            warnings.append("no referring expression supplied; used a generic one")
+        phrase, warnings = _phrase_from(params)
 
         base = Path(os.environ[rs_vqa.ENV_BASE])
         adapter = Path(os.environ[ENV_VLM_ADAPTER])
@@ -285,7 +301,7 @@ class GroundingTool(ToolProtocol):
             set_pixel_budget(handle.processor, min_px, max_px)
             handle._grounding_pixel_budget = (min_px, max_px)
 
-        meta = manifest.images[0]
+        meta = selected_image(manifest, params)
         image, _ = to_rgb_preview(meta, max_edge=1024)
         chat = build_chat(image, phrase, None)
         text = handle.processor.apply_chat_template(chat, tokenize=False, add_generation_prompt=True)

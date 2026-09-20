@@ -115,9 +115,9 @@
   "routing": {
     "capability_matrix_version": "cm-2026.11.02",
     "classifier": {
-      "margin": 0.0291,
-      "name": "tfidf_logreg_v1",
-      "top1": 0.3022
+      "margin": 0.0455,
+      "name": "tfidf_cues_logreg_v2",
+      "top1": 0.3753
     },
     "config_excluded_task": null,
     "legal_tasks": [
@@ -128,7 +128,28 @@
       "CLARIFY_OR_ABSTAIN"
     ],
     "llm_tiebreak_invoked": false,
-    "selected_task": "SINGLE_VQA"
+    "selected_task": "SINGLE_VQA",
+    "understanding": {
+      "classes": null,
+      "config": "SINGLE",
+      "cues": [],
+      "follow_up": false,
+      "image_index": null,
+      "inputs": [
+        "single"
+      ],
+      "intent": "ask",
+      "object_filter": null,
+      "quantity": null,
+      "query": "SELECT * FROM images; DROP TABLE users;",
+      "referring_expression": null,
+      "requested_output": "short_answer",
+      "resolution": null,
+      "resolved_query": "SELECT * FROM images; DROP TABLE users;",
+      "spatial_scope": null,
+      "task": "SINGLE_VQA",
+      "temporal_relation": null
+    }
   },
   "run_id": "<volatile>",
   "timestamp_utc": "<volatile>",

@@ -351,9 +351,9 @@
   "routing": {
     "capability_matrix_version": "cm-2026.11.02",
     "classifier": {
-      "margin": 0.9761,
-      "name": "tfidf_logreg_v1",
-      "top1": 0.9827
+      "margin": 0.9955,
+      "name": "tfidf_cues_logreg_v2",
+      "top1": 0.9973
     },
     "config_excluded_task": null,
     "legal_tasks": [
@@ -367,7 +367,37 @@
       "CLARIFY_OR_ABSTAIN"
     ],
     "llm_tiebreak_invoked": false,
-    "selected_task": "TEMPORAL_CHANGE_VQA"
+    "selected_task": "TEMPORAL_CHANGE_VQA",
+    "understanding": {
+      "classes": [
+        "built_up"
+      ],
+      "config": "BITEMPORAL_PAIR",
+      "cues": [
+        "change",
+        "new",
+        "fraction",
+        "area",
+        "question"
+      ],
+      "follow_up": false,
+      "image_index": null,
+      "inputs": [
+        "t1",
+        "t2"
+      ],
+      "intent": "change_ask",
+      "object_filter": "built-up area",
+      "quantity": "fraction",
+      "query": "How much did the built-up area change?",
+      "referring_expression": "the built-up area",
+      "requested_output": "measurement",
+      "resolution": null,
+      "resolved_query": "How much did the built-up area change?",
+      "spatial_scope": null,
+      "task": "TEMPORAL_CHANGE_VQA",
+      "temporal_relation": "before_after"
+    }
   },
   "run_id": "<volatile>",
   "timestamp_utc": "<volatile>",
