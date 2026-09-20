@@ -124,9 +124,9 @@
   "routing": {
     "capability_matrix_version": "cm-2026.11.02",
     "classifier": {
-      "margin": 0.4106,
-      "name": "tfidf_logreg_v1",
-      "top1": 0.5842
+      "margin": 0.964,
+      "name": "tfidf_cues_logreg_v2",
+      "top1": 0.9744
     },
     "config_excluded_task": "XMODAL_JOINT_EXTRACT",
     "legal_tasks": [
@@ -137,7 +137,33 @@
       "CLARIFY_OR_ABSTAIN"
     ],
     "llm_tiebreak_invoked": false,
-    "selected_task": "SINGLE_GROUND"
+    "selected_task": "SINGLE_GROUND",
+    "understanding": {
+      "classes": [
+        "built_up"
+      ],
+      "config": "SINGLE",
+      "cues": [
+        "locate",
+        "fuse"
+      ],
+      "follow_up": false,
+      "image_index": null,
+      "inputs": [
+        "single"
+      ],
+      "intent": "locate",
+      "object_filter": null,
+      "quantity": null,
+      "query": "Combine the optical and radar images to find buildings.",
+      "referring_expression": null,
+      "requested_output": "boxes",
+      "resolution": null,
+      "resolved_query": "Combine the optical and radar images to find buildings.",
+      "spatial_scope": null,
+      "task": "SINGLE_GROUND",
+      "temporal_relation": null
+    }
   },
   "run_id": "<volatile>",
   "timestamp_utc": "<volatile>",

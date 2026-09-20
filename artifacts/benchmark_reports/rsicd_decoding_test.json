@@ -1,0 +1,78 @@
+{
+  "experiment": "caption decoding",
+  "split": "test",
+  "n": 1093,
+  "seed": 0,
+  "adapter": "checkpoints/v3/caption_vlm/adapter_best",
+  "quant": "4bit",
+  "max_new_tokens": 64,
+  "prompt": "Describe this remote-sensing image in one sentence.",
+  "limited_debug_run": false,
+  "conditions": {
+    "greedy": {
+      "generate_kwargs": {
+        "num_beams": 1
+      },
+      "corpus": {
+        "bleu1": 0.6482764308098301,
+        "bleu2": 0.45973072103918916,
+        "bleu3": 0.33781025069956166,
+        "bleu4": 0.2530480628205801,
+        "brevity_penalty": 1.0,
+        "rouge_l": 0.48286134264500125,
+        "cider_d": 0.8004231465504974,
+        "meteor_exact": 0.4796050494112358,
+        "n": 1093
+      },
+      "bleu4_ci95": [
+        0.2387,
+        0.2663
+      ],
+      "cider_d_ci95": [
+        0.7687,
+        0.8344
+      ],
+      "unique_fraction": 0.5883,
+      "unsupported_content_words": {
+        "micro": 0.3563,
+        "macro": 0.3454,
+        "captions_with_any": 0.7557
+      },
+      "mean_words": 11.55,
+      "s_per_item": 0.697
+    },
+    "beam5": {
+      "generate_kwargs": {
+        "num_beams": 5
+      },
+      "corpus": {
+        "bleu1": 0.6523813580983215,
+        "bleu2": 0.4616370782396321,
+        "bleu3": 0.3385457514943516,
+        "bleu4": 0.25861115849363486,
+        "brevity_penalty": 1.0,
+        "rouge_l": 0.4754291816562423,
+        "cider_d": 0.7879247907133892,
+        "meteor_exact": 0.46823182767409716,
+        "n": 1093
+      },
+      "bleu4_ci95": [
+        0.2429,
+        0.2722
+      ],
+      "cider_d_ci95": [
+        0.7568,
+        0.8225
+      ],
+      "unique_fraction": 0.5114,
+      "unsupported_content_words": {
+        "micro": 0.3514,
+        "macro": 0.337,
+        "captions_with_any": 0.7484
+      },
+      "mean_words": 10.9,
+      "s_per_item": 1.119
+    }
+  },
+  "peak_vram_gb": 3.31
+}

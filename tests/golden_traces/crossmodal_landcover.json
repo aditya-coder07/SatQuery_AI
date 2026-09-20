@@ -381,9 +381,9 @@
   "routing": {
     "capability_matrix_version": "cm-2026.11.02",
     "classifier": {
-      "margin": 0.9948,
-      "name": "tfidf_logreg_v1",
-      "top1": 0.9963
+      "margin": 0.9996,
+      "name": "tfidf_cues_logreg_v2",
+      "top1": 0.9997
     },
     "config_excluded_task": null,
     "legal_tasks": [
@@ -395,7 +395,31 @@
       "CLARIFY_OR_ABSTAIN"
     ],
     "llm_tiebreak_invoked": false,
-    "selected_task": "SINGLE_LANDCOVER"
+    "selected_task": "SINGLE_LANDCOVER",
+    "understanding": {
+      "classes": null,
+      "config": "CROSSMODAL_PAIR",
+      "cues": [
+        "classify"
+      ],
+      "follow_up": false,
+      "image_index": null,
+      "inputs": [
+        "optical",
+        "sar"
+      ],
+      "intent": "classify",
+      "object_filter": null,
+      "quantity": null,
+      "query": "Classify the land cover.",
+      "referring_expression": null,
+      "requested_output": "class_map",
+      "resolution": null,
+      "resolved_query": "Classify the land cover.",
+      "spatial_scope": null,
+      "task": "SINGLE_LANDCOVER",
+      "temporal_relation": null
+    }
   },
   "run_id": "<volatile>",
   "timestamp_utc": "<volatile>",

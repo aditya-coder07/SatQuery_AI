@@ -44,9 +44,36 @@ def available(env_adapter: str, what: str) -> tuple[bool, str]:
     return True, "ready"
 
 
+def _sequence_mean_probability(torch, model, batch, new_tokens) -> float:
+    """Mean probability the model assigns to each token of `new_tokens`,
+    teacher-forced in one forward pass. Used for beam-searched output,
+    where `generate()`'s per-step scores are beam log-scores over the
+    live hypotheses rather than a distribution over the chosen token, so
+    the greedy-path `_mean_token_probability` would read the wrong thing.
+    Greedy output keeps the cheaper per-step path (identical result)."""
+    if new_tokens.numel() == 0:
+        return 0.0
+    ids = torch.cat([batch["input_ids"], new_tokens.unsqueeze(0)], dim=1)
+    extra = {k: v for k, v in batch.items() if k not in ("input_ids", "attention_mask")}
+    attention = torch.ones_like(ids)
+    with torch.no_grad():
+        logits = model(input_ids=ids, attention_mask=attention, **extra).logits[0]
+    start = batch["input_ids"].shape[1]
+    probs = torch.softmax(logits[start - 1:start - 1 + new_tokens.shape[0]].float(), dim=-1)
+    chosen = probs.gather(1, new_tokens.unsqueeze(1)).squeeze(1)
+    return round(float(chosen.mean()), 6)
+
+
 def generate(env_adapter: str, adapter_name: str, images: list, question: str,
-             max_new_tokens: int = 64) -> tuple[str, float, str]:
-    """Greedy reply for `question` over `images` (PIL) -> (text, mean token probability, model card)."""
+             max_new_tokens: int = 64, num_beams: int = 1) -> tuple[str, float, str]:
+    """Reply for `question` over `images` (PIL) -> (text, mean token probability, model card).
+
+    `num_beams` 1 is greedy, the setting every VLM benchmark number in this
+    repository was measured with and the deployed default: beam 5 was
+    chosen on RSICD val and then did not hold on the official test
+    (evaluation/caption_decoding.py, 2026-09-20 - BLEU-4 up, CIDEr-D and
+    ROUGE-L down, captions more generic). The caption tool passes
+    `SATQUERY_CAPTION_BEAMS` when set."""
     from satquery.tools import rs_vqa
     from training.train_vlm_sft import VQA_SYSTEM_PROMPT
 
@@ -62,10 +89,15 @@ def generate(env_adapter: str, adapter_name: str, images: list, question: str,
     ]
     text = handle.processor.apply_chat_template(chat, tokenize=False, add_generation_prompt=True)
     batch = handle.processor(text=[text], images=images, return_tensors="pt").to(handle.model.device)
+    beams = max(1, int(num_beams))
     with torch.no_grad(), handle.using(adapter_name) as model:
         generated = model.generate(**batch, max_new_tokens=max_new_tokens, do_sample=False,
-                                   output_scores=True, return_dict_in_generate=True)
-    reply = handle.processor.decode(generated.sequences[0][batch["input_ids"].shape[1]:],
-                                    skip_special_tokens=True).strip()
-    confidence = rs_vqa._mean_token_probability(torch, generated.scores)
+                                   num_beams=beams, output_scores=(beams == 1),
+                                   return_dict_in_generate=True)
+        new_tokens = generated.sequences[0][batch["input_ids"].shape[1]:]
+        if beams == 1:
+            confidence = rs_vqa._mean_token_probability(torch, generated.scores)
+        else:
+            confidence = _sequence_mean_probability(torch, model, batch, new_tokens)
+    reply = handle.processor.decode(new_tokens, skip_special_tokens=True).strip()
     return reply, confidence, f"{base.name} + {adapter_name} adapter ({adapter.name})"

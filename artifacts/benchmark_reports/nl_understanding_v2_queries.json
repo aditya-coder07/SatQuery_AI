@@ -1,0 +1,67 @@
+{
+  "n": 180,
+  "summary": {
+    "classes": {
+      "n": 13,
+      "accuracy": 1.0
+    },
+    "image": {
+      "n": 6,
+      "accuracy": 1.0
+    },
+    "object": {
+      "n": 34,
+      "accuracy": 1.0
+    },
+    "quantity": {
+      "n": 20,
+      "accuracy": 1.0
+    },
+    "routing": {
+      "n": 180,
+      "accuracy": 0.9944
+    },
+    "routing/b": {
+      "n": 60,
+      "accuracy": 1.0
+    },
+    "routing/f": {
+      "n": 15,
+      "accuracy": 1.0
+    },
+    "routing/s": {
+      "n": 80,
+      "accuracy": 1.0
+    },
+    "routing/t": {
+      "n": 15,
+      "accuracy": 0.9333
+    },
+    "routing/x": {
+      "n": 10,
+      "accuracy": 1.0
+    },
+    "spatial": {
+      "n": 9,
+      "accuracy": 1.0
+    },
+    "temporal": {
+      "n": 54,
+      "accuracy": 1.0
+    }
+  },
+  "failures": [
+    {
+      "id": "t010",
+      "query": "were r the bildings",
+      "task": "SINGLE_VQA",
+      "accept": [
+        "SINGLE_GROUND"
+      ],
+      "top1": 0.570411,
+      "resolved": "were r the bildings",
+      "field": "routing"
+    }
+  ],
+  "queries": "evaluation\\nl\\queries.jsonl"
+}

@@ -1,6 +1,7 @@
 from typing import Literal
 from pydantic import BaseModel
 from .plan import TaskID, RationaleTag
+from .understanding import QueryUnderstanding
 
 class IngestTrace(BaseModel):
     mode: str
@@ -25,6 +26,10 @@ class RoutingTrace(BaseModel):
     # still legal; this records that the answer is not what was asked for.
     config_excluded_task: str | None = None
     capability_matrix_version: str
+    # What the query was understood to ask (2026-09-20): the resolved
+    # sentence, the object phrase, the classes, the spatial scope, which
+    # image. None when routing was forced by the input checks.
+    understanding: QueryUnderstanding | None = None
 
 class StepExecutionTrace(BaseModel):
     step: str

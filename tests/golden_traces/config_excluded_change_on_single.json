@@ -256,9 +256,9 @@
   "routing": {
     "capability_matrix_version": "cm-2026.11.02",
     "classifier": {
-      "margin": 0.1476,
-      "name": "tfidf_logreg_v1",
-      "top1": 0.376
+      "margin": 0.4734,
+      "name": "tfidf_cues_logreg_v2",
+      "top1": 0.6625
     },
     "config_excluded_task": "TEMPORAL_CHANGE_MAP",
     "legal_tasks": [
@@ -269,7 +269,32 @@
       "CLARIFY_OR_ABSTAIN"
     ],
     "llm_tiebreak_invoked": false,
-    "selected_task": "SINGLE_LANDCOVER"
+    "selected_task": "SINGLE_LANDCOVER",
+    "understanding": {
+      "classes": null,
+      "config": "SINGLE",
+      "cues": [
+        "change",
+        "two_images",
+        "mask"
+      ],
+      "follow_up": false,
+      "image_index": null,
+      "inputs": [
+        "single"
+      ],
+      "intent": "classify",
+      "object_filter": "images",
+      "quantity": null,
+      "query": "Produce a change mask for these images.",
+      "referring_expression": "the images",
+      "requested_output": "class_map",
+      "resolution": null,
+      "resolved_query": "Produce a change mask for these images.",
+      "spatial_scope": null,
+      "task": "SINGLE_LANDCOVER",
+      "temporal_relation": null
+    }
   },
   "run_id": "<volatile>",
   "timestamp_utc": "<volatile>",

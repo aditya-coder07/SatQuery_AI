@@ -1,0 +1,46 @@
+{
+  "experiment": "caption decoding",
+  "split": "val",
+  "n": 1094,
+  "seed": 0,
+  "adapter": "checkpoints/v3/caption_vlm/adapter_best",
+  "quant": "4bit",
+  "max_new_tokens": 64,
+  "prompt": "Describe this remote-sensing image in one sentence.",
+  "limited_debug_run": false,
+  "conditions": {
+    "greedy": {
+      "generate_kwargs": {
+        "num_beams": 1
+      },
+      "corpus": {
+        "bleu1": 0.7134479107273763,
+        "bleu2": 0.5901447119698442,
+        "bleu3": 0.4925670166002004,
+        "bleu4": 0.4149288152542549,
+        "brevity_penalty": 1.0,
+        "rouge_l": 0.6519587753553779,
+        "cider_d": 2.0797345010850843,
+        "meteor_exact": 0.7057443205931451,
+        "n": 1094
+      },
+      "bleu4_ci95": [
+        0.3993,
+        0.4308
+      ],
+      "cider_d_ci95": [
+        1.9663,
+        2.2032
+      ],
+      "unique_fraction": 0.5896,
+      "unsupported_content_words": {
+        "micro": 0.2673,
+        "macro": 0.2513,
+        "captions_with_any": 0.6673
+      },
+      "mean_words": 11.66,
+      "s_per_item": 0.623
+    }
+  },
+  "peak_vram_gb": 2.56
+}

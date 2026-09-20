@@ -124,9 +124,9 @@
   "routing": {
     "capability_matrix_version": "cm-2026.11.02",
     "classifier": {
-      "margin": 0.978,
-      "name": "tfidf_logreg_v1",
-      "top1": 0.9863
+      "margin": 0.9887,
+      "name": "tfidf_cues_logreg_v2",
+      "top1": 0.9929
     },
     "config_excluded_task": null,
     "legal_tasks": [
@@ -137,7 +137,30 @@
       "CLARIFY_OR_ABSTAIN"
     ],
     "llm_tiebreak_invoked": false,
-    "selected_task": "SINGLE_GROUND"
+    "selected_task": "SINGLE_GROUND",
+    "understanding": {
+      "classes": null,
+      "config": "SINGLE",
+      "cues": [
+        "locate"
+      ],
+      "follow_up": false,
+      "image_index": null,
+      "inputs": [
+        "single"
+      ],
+      "intent": "locate",
+      "object_filter": "roads",
+      "quantity": null,
+      "query": "Show me where the roads are.",
+      "referring_expression": "the roads",
+      "requested_output": "boxes",
+      "resolution": null,
+      "resolved_query": "Show me where the roads are.",
+      "spatial_scope": null,
+      "task": "SINGLE_GROUND",
+      "temporal_relation": null
+    }
   },
   "run_id": "<volatile>",
   "timestamp_utc": "<volatile>",

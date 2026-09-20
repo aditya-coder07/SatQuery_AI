@@ -34,6 +34,7 @@ from satquery.contracts.trace import (
 from satquery.controller.abstention import AbstentionPolicy, decide
 from satquery.controller.calibration import CALIBRATABLE_CONFIDENCE_METHODS
 from satquery.controller.confidence import compute_confidence
+from satquery.contracts.understanding import QueryUnderstanding
 from satquery.controller.intent import CLASSIFIER_NAME, IntentPrediction
 from satquery.geo import lookup as lookup_place
 from satquery.synth.narrative import compose_answer
@@ -166,6 +167,33 @@ def _location_disclosure(query: str, answer: str, manifest: InputManifest) -> st
     )
 
 
+def _understanding_params(u: QueryUnderstanding | None) -> dict:
+    """Runtime parameters derived from the query's understanding.
+
+    Reserved keys (underscore-prefixed, like `_query`): they are input data,
+    not matrix-governed parameters, and never enter the plan. A tool that
+    does not know a key ignores it.
+
+    * `_query` is overridden with the *resolved* sentence: a follow-up
+      ("Where exactly?") reaches the VQA model as the standalone question it
+      was rewritten into, and the sentence as typed stays in the trace.
+    * `_phrase` is the referring expression for the grounder.
+    * `_image_index` picks the input a single-image tool looks at.
+    """
+    if u is None:
+        return {}
+    out: dict = {"_query": u.resolved_query}
+    if u.referring_expression:
+        out["_phrase"] = u.referring_expression
+    if u.image_index is not None:
+        out["_image_index"] = u.image_index
+    if u.spatial_scope:
+        out["_spatial_scope"] = u.spatial_scope
+    if u.classes:
+        out["_classes"] = list(u.classes)
+    return out
+
+
 class Executor:
     """Runs plan steps and assembles the trace."""
 
@@ -192,6 +220,7 @@ class Executor:
         prediction: IntentPrediction | None = None,
         on_event: Callable[[str, dict], None] | None = None,
         config_excluded: str | None = None,
+        understanding: QueryUnderstanding | None = None,
     ) -> Trace:
         """Run the plan. `on_event(name, data)` fires as each stage completes,
         which is what lets the API stream the trace live rather than posting it
@@ -315,6 +344,7 @@ class Executor:
             llm_tiebreak_invoked=False,
             config_excluded_task=config_excluded,
             capability_matrix_version=plan.matrix_version,
+            understanding=understanding,
         )
 
         emit("routing", routing.model_dump())
@@ -328,7 +358,7 @@ class Executor:
             # gets validated for legality stays exactly what the matrix
             # permits, and the query is already recorded verbatim in the
             # trace's own `query` field.
-            runtime_params = {**step.params, "_query": query}
+            runtime_params = {**step.params, "_query": query, **_understanding_params(understanding)}
             try:
                 result = tool.run(manifest, runtime_params)
             except Exception as exc:  # noqa: BLE001 - degradation, not a crash

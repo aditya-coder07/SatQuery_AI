@@ -33,3 +33,4 @@ def test_v3_file_checkpoint_is_available_and_loads(tmp_path, monkeypatch):
     with torch.no_grad():
         out = handle.model(x, torch.ones(1, 12, device=handle.device))
     assert out.shape == (1, 19)
+

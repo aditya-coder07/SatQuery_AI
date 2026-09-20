@@ -54,7 +54,9 @@ Knobs for a CPU host: `SATQUERY_GROUNDING_MIN_PIXELS=262144` makes
 grounding ≈ 4× faster at some accuracy cost (the deployed number was
 measured at 1048576); `SATQUERY_VLM_CPU_DTYPE=float32` is faster on CPUs
 without bf16 arithmetic but needs ≈ 14 GB for the base model;
-`SATQUERY_THREADS` caps torch threads.
+`SATQUERY_THREADS` caps torch threads. `SATQUERY_CAPTION_BEAMS` sets the
+caption beam width (default 1 = greedy, the measured choice:
+`docs/research/model_improvement_report.md` E3).
 
 ## Option A — always-on free CPU: Lightning AI Studio
 

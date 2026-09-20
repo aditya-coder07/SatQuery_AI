@@ -99,9 +99,9 @@
   "routing": {
     "capability_matrix_version": "cm-2026.11.02",
     "classifier": {
-      "margin": 0.0494,
-      "name": "tfidf_logreg_v1",
-      "top1": 0.3597
+      "margin": 0.7193,
+      "name": "tfidf_cues_logreg_v2",
+      "top1": 0.8055
     },
     "config_excluded_task": null,
     "legal_tasks": [
@@ -112,7 +112,28 @@
       "CLARIFY_OR_ABSTAIN"
     ],
     "llm_tiebreak_invoked": false,
-    "selected_task": "CLARIFY_OR_ABSTAIN"
+    "selected_task": "CLARIFY_OR_ABSTAIN",
+    "understanding": {
+      "classes": null,
+      "config": "SINGLE",
+      "cues": [],
+      "follow_up": false,
+      "image_index": null,
+      "inputs": [
+        "single"
+      ],
+      "intent": "unclear",
+      "object_filter": null,
+      "quantity": null,
+      "query": "   ",
+      "referring_expression": null,
+      "requested_output": "clarification",
+      "resolution": null,
+      "resolved_query": "   ",
+      "spatial_scope": null,
+      "task": "CLARIFY_OR_ABSTAIN",
+      "temporal_relation": null
+    }
   },
   "run_id": "<volatile>",
   "timestamp_utc": "<volatile>",

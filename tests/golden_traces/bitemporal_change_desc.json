@@ -332,9 +332,9 @@
   "routing": {
     "capability_matrix_version": "cm-2026.11.02",
     "classifier": {
-      "margin": 0.9892,
-      "name": "tfidf_logreg_v1",
-      "top1": 0.9931
+      "margin": 0.9997,
+      "name": "tfidf_cues_logreg_v2",
+      "top1": 0.9998
     },
     "config_excluded_task": null,
     "legal_tasks": [
@@ -348,7 +348,33 @@
       "CLARIFY_OR_ABSTAIN"
     ],
     "llm_tiebreak_invoked": false,
-    "selected_task": "TEMPORAL_CHANGE_DESC"
+    "selected_task": "TEMPORAL_CHANGE_DESC",
+    "understanding": {
+      "classes": null,
+      "config": "BITEMPORAL_PAIR",
+      "cues": [
+        "change",
+        "two_images",
+        "caption"
+      ],
+      "follow_up": false,
+      "image_index": null,
+      "inputs": [
+        "t1",
+        "t2"
+      ],
+      "intent": "change_describe",
+      "object_filter": null,
+      "quantity": null,
+      "query": "Describe what changed between the two images.",
+      "referring_expression": null,
+      "requested_output": "prose",
+      "resolution": null,
+      "resolved_query": "Describe what changed between the two images.",
+      "spatial_scope": null,
+      "task": "TEMPORAL_CHANGE_DESC",
+      "temporal_relation": "before_after"
+    }
   },
   "run_id": "<volatile>",
   "timestamp_utc": "<volatile>",

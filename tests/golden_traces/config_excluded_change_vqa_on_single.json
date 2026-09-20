@@ -115,9 +115,9 @@
   "routing": {
     "capability_matrix_version": "cm-2026.11.02",
     "classifier": {
-      "margin": 0.5918,
-      "name": "tfidf_logreg_v1",
-      "top1": 0.715
+      "margin": 0.8341,
+      "name": "tfidf_cues_logreg_v2",
+      "top1": 0.9162
     },
     "config_excluded_task": "TEMPORAL_CHANGE_VQA",
     "legal_tasks": [
@@ -128,7 +128,36 @@
       "CLARIFY_OR_ABSTAIN"
     ],
     "llm_tiebreak_invoked": false,
-    "selected_task": "SINGLE_VQA"
+    "selected_task": "SINGLE_VQA",
+    "understanding": {
+      "classes": [
+        "built_up"
+      ],
+      "config": "SINGLE",
+      "cues": [
+        "change",
+        "new",
+        "fraction",
+        "area",
+        "question"
+      ],
+      "follow_up": false,
+      "image_index": null,
+      "inputs": [
+        "single"
+      ],
+      "intent": "ask",
+      "object_filter": "built-up area",
+      "quantity": "fraction",
+      "query": "How much did the built-up area change?",
+      "referring_expression": "the built-up area",
+      "requested_output": "short_answer",
+      "resolution": null,
+      "resolved_query": "How much did the built-up area change?",
+      "spatial_scope": null,
+      "task": "SINGLE_VQA",
+      "temporal_relation": null
+    }
   },
   "run_id": "<volatile>",
   "timestamp_utc": "<volatile>",

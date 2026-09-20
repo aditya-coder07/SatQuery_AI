@@ -1260,6 +1260,85 @@
   }
 
   /* ---------------- answer ---------------- */
+  .conversation {
+    margin: 0 0 var(--s3);
+    padding: 0 0 var(--s2);
+    border-bottom: 1px solid var(--hair);
+  }
+  .conversation-head {
+    display: flex;
+    align-items: center;
+    gap: var(--s2);
+    margin-bottom: var(--s1);
+  }
+  .conversation-clear {
+    font-family: var(--f-mono);
+    font-size: 10.5px;
+    letter-spacing: 0.06em;
+    color: var(--muted);
+    background: none;
+    border: 1px solid var(--hair);
+    border-radius: 3px;
+    padding: 2px 8px;
+    cursor: pointer;
+  }
+  .conversation-clear:hover {
+    color: var(--champ);
+    border-color: var(--champ);
+  }
+  .turns {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    gap: 6px;
+  }
+  .turn {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 2px var(--s2);
+    font-size: 13px;
+    line-height: 1.45;
+  }
+  .turn-q {
+    color: var(--ink);
+    font-weight: 400;
+  }
+  .turn-task {
+    font-family: var(--f-mono);
+    font-size: 10px;
+    letter-spacing: 0.06em;
+    color: var(--champ);
+    align-self: start;
+  }
+  .turn-a {
+    grid-column: 1 / -1;
+    color: var(--muted);
+    font-weight: 300;
+  }
+  .turn.current .turn-q {
+    color: var(--champ);
+  }
+  .understood {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+    margin: 0 0 var(--s2);
+    font-family: var(--f-mono);
+    font-size: 11px;
+    color: var(--muted);
+  }
+  .understood b {
+    font-weight: 500;
+    color: var(--ink);
+  }
+  .understood .chip {
+    padding: 1px 7px;
+    border: 1px solid var(--hair);
+    border-radius: 999px;
+    color: var(--dim);
+  }
   .taskline {
     display: flex;
     align-items: center;

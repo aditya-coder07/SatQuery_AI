@@ -332,9 +332,9 @@
   "routing": {
     "capability_matrix_version": "cm-2026.11.02",
     "classifier": {
-      "margin": 0.2318,
-      "name": "tfidf_logreg_v1",
-      "top1": 0.5347
+      "margin": 0.8706,
+      "name": "tfidf_cues_logreg_v2",
+      "top1": 0.9287
     },
     "config_excluded_task": null,
     "legal_tasks": [
@@ -348,7 +348,34 @@
       "CLARIFY_OR_ABSTAIN"
     ],
     "llm_tiebreak_invoked": false,
-    "selected_task": "TEMPORAL_CHANGE_DESC"
+    "selected_task": "TEMPORAL_CHANGE_DESC",
+    "understanding": {
+      "classes": null,
+      "config": "BITEMPORAL_PAIR",
+      "cues": [
+        "change",
+        "two_images",
+        "locate",
+        "question"
+      ],
+      "follow_up": false,
+      "image_index": null,
+      "inputs": [
+        "t1",
+        "t2"
+      ],
+      "intent": "change_describe",
+      "object_filter": null,
+      "quantity": null,
+      "query": "What changed between these two dates, and where did the change occur?",
+      "referring_expression": null,
+      "requested_output": "prose",
+      "resolution": null,
+      "resolved_query": "What changed between these two dates, and where did the change occur?",
+      "spatial_scope": null,
+      "task": "TEMPORAL_CHANGE_DESC",
+      "temporal_relation": "before_after"
+    }
   },
   "run_id": "<volatile>",
   "timestamp_utc": "<volatile>",

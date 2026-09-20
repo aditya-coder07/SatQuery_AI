@@ -41,7 +41,7 @@ from satquery.contracts.tool_result import ToolPayload, ToolResult
 from satquery.tools.base import ToolProtocol
 from satquery.tools.provenance import record
 from satquery.tools.sidecars import readable_json
-from satquery.tools.imaging import to_rgb_preview
+from satquery.tools.imaging import selected_image, to_rgb_preview
 
 TOOL_NAME = "caption"
 TOOL_VERSION = "1.1.0"
@@ -71,6 +71,26 @@ def image_size() -> int:
 
 class CaptionPayload(ToolPayload):
     data: dict[str, Any]
+
+
+# Beam width for the VLM caption path. Greedy by default, and measured to
+# stay so (evaluation/caption_decoding.py, 2026-09-20, NF4): beam 5 won on
+# RSICD val (0.403 -> 0.452 BLEU-4) and on the val images whose references
+# are not memorisable from train (0.285 -> 0.308), and then on the official
+# test gave BLEU-4 0.253 -> 0.259 against CIDEr-D 0.800 -> 0.788, ROUGE-L
+# 0.483 -> 0.475 and a unique-caption fraction of 0.59 -> 0.51 - shorter,
+# more generic captions, which is the opposite of the goal. A trade-off
+# inside the CIs is not an improvement, so the deployed decode is unchanged;
+# SATQUERY_CAPTION_BEAMS keeps the knob for anyone who wants BLEU-4 alone.
+ENV_CAPTION_BEAMS = "SATQUERY_CAPTION_BEAMS"
+DEFAULT_BEAMS = 1
+
+
+def caption_beams() -> int:
+    raw = os.getenv(ENV_CAPTION_BEAMS, "").strip()
+    if raw:
+        return max(1, int(raw))
+    return DEFAULT_BEAMS
 
 
 def vlm_configured() -> bool:
@@ -189,7 +209,7 @@ class CaptionTool(ToolProtocol):
 
     def run(self, manifest: InputManifest, params: dict) -> ToolResult:
         if vlm_configured():
-            return self._run_vlm(manifest)
+            return self._run_vlm(manifest, params)
         started = time.perf_counter()
         checkpoint = Path(os.environ[ENV_CHECKPOINT])
         handle = _Handle.get(checkpoint)
@@ -197,7 +217,7 @@ class CaptionTool(ToolProtocol):
 
         from training.train_change_caption import EOS, PAD
 
-        array = _image_array(manifest.images[0], image_size())
+        array = _image_array(selected_image(manifest, params), image_size())
         batch = torch.from_numpy(array).unsqueeze(0).to(handle.device)
 
         with torch.no_grad():
@@ -241,15 +261,15 @@ class CaptionTool(ToolProtocol):
             warnings=warnings,
         )
 
-    def _run_vlm(self, manifest: InputManifest) -> ToolResult:
+    def _run_vlm(self, manifest: InputManifest, params: dict | None = None) -> ToolResult:
         """Caption through the shared Qwen2.5-VL base + the caption adapter,
         under the prompt the adapter was trained with."""
         from satquery.tools import vlm_text
 
         started = time.perf_counter()
-        image, _ = to_rgb_preview(manifest.images[0], max_edge=1024)
+        image, _ = to_rgb_preview(selected_image(manifest, params), max_edge=1024)
         caption, confidence, card = vlm_text.generate(ENV_VLM_ADAPTER, VLM_ADAPTER_NAME, [image],
-                                                      vlm_text.CAPTION_QUESTION)
+                                                      vlm_text.CAPTION_QUESTION, num_beams=caption_beams())
         warnings: list[str] = []
         if not caption:
             caption = "No caption could be generated for this image."

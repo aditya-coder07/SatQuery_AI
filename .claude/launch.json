@@ -4,13 +4,38 @@
     {
       "name": "api-v3",
       "runtimeExecutable": "python",
-      "runtimeArgs": ["scripts/serve_local.py", "--map", "configs/deploy.v3.yaml", "--port", "8000"],
+      "runtimeArgs": [
+        "scripts/serve_local.py",
+        "--map",
+        "configs/deploy.v3.yaml",
+        "--port",
+        "8000"
+      ],
       "port": 8000
+    },
+    {
+      "name": "api-cpu",
+      "runtimeExecutable": "python",
+      "runtimeArgs": [
+        "scripts/serve_local.py",
+        "--map",
+        "configs/deploy.cpu.yaml",
+        "--profile",
+        "cpu",
+        "--port",
+        "8010"
+      ],
+      "port": 8010
     },
     {
       "name": "web",
       "runtimeExecutable": "npm",
-      "runtimeArgs": ["--prefix", "frontend", "run", "dev"],
+      "runtimeArgs": [
+        "--prefix",
+        "frontend",
+        "run",
+        "dev"
+      ],
       "port": 3000
     }
   ]

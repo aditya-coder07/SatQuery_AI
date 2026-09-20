@@ -1,0 +1,137 @@
+{
+  "n": 50,
+  "summary": {
+    "classes": {
+      "n": 5,
+      "accuracy": 1.0
+    },
+    "image": {
+      "n": 4,
+      "accuracy": 1.0
+    },
+    "object": {
+      "n": 9,
+      "accuracy": 0.8889
+    },
+    "quantity": {
+      "n": 7,
+      "accuracy": 1.0
+    },
+    "routing": {
+      "n": 50,
+      "accuracy": 0.9
+    },
+    "routing/z": {
+      "n": 50,
+      "accuracy": 0.9
+    },
+    "spatial": {
+      "n": 3,
+      "accuracy": 1.0
+    },
+    "temporal": {
+      "n": 11,
+      "accuracy": 0.8182
+    }
+  },
+  "failures": [
+    {
+      "id": "z001",
+      "query": "Could you look for a helipad?",
+      "task": "CLARIFY_OR_ABSTAIN",
+      "accept": [
+        "SINGLE_GROUND",
+        "SINGLE_VQA"
+      ],
+      "top1": 0.853073,
+      "resolved": "Could you look for a helipad?",
+      "field": "routing"
+    },
+    {
+      "id": "z028",
+      "query": "How much land got paved?",
+      "task": "CLARIFY_OR_ABSTAIN",
+      "accept": [
+        "TEMPORAL_CHANGE_VQA"
+      ],
+      "top1": 0.418119,
+      "resolved": "How much land got paved?",
+      "field": "routing"
+    },
+    {
+      "id": "z028",
+      "query": "How much land got paved?",
+      "task": "CLARIFY_OR_ABSTAIN",
+      "accept": [
+        "TEMPORAL_CHANGE_VQA"
+      ],
+      "top1": 0.418119,
+      "resolved": "How much land got paved?",
+      "field": "temporal",
+      "expected": "before_after",
+      "got": null
+    },
+    {
+      "id": "z034",
+      "query": "Is there any deforestation?",
+      "task": "SINGLE_VQA",
+      "accept": [
+        "TEMPORAL_CHANGE_VQA",
+        "TEMPORAL_CHANGE_DESC"
+      ],
+      "top1": 0.708879,
+      "resolved": "Is there any deforestation?",
+      "field": "routing"
+    },
+    {
+      "id": "z034",
+      "query": "Is there any deforestation?",
+      "task": "SINGLE_VQA",
+      "accept": [
+        "TEMPORAL_CHANGE_VQA",
+        "TEMPORAL_CHANGE_DESC"
+      ],
+      "top1": 0.708879,
+      "resolved": "Is there any deforestation?",
+      "field": "temporal",
+      "expected": "before_after",
+      "got": null
+    },
+    {
+      "id": "z043",
+      "query": "show me",
+      "task": "CLARIFY_OR_ABSTAIN",
+      "accept": [
+        "SINGLE_GROUND"
+      ],
+      "top1": 0.891466,
+      "resolved": "show me",
+      "field": "routing"
+    },
+    {
+      "id": "z043",
+      "query": "show me",
+      "task": "CLARIFY_OR_ABSTAIN",
+      "accept": [
+        "SINGLE_GROUND"
+      ],
+      "top1": 0.891466,
+      "resolved": "show me",
+      "field": "object",
+      "expected": "bridge",
+      "got": "me"
+    },
+    {
+      "id": "z049",
+      "query": "Object detection for windmills.",
+      "task": "CLARIFY_OR_ABSTAIN",
+      "accept": [
+        "SINGLE_GROUND"
+      ],
+      "top1": 0.681318,
+      "resolved": "Object detection for windmills.",
+      "field": "routing"
+    }
+  ],
+  "queries": "evaluation\\nl\\queries_final.jsonl"
+}

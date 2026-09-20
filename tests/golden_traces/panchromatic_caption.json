@@ -152,9 +152,9 @@
   "routing": {
     "capability_matrix_version": "cm-2026.11.02",
     "classifier": {
-      "margin": 0.9736,
-      "name": "tfidf_logreg_v1",
-      "top1": 0.9862
+      "margin": 0.9783,
+      "name": "tfidf_cues_logreg_v2",
+      "top1": 0.989
     },
     "config_excluded_task": null,
     "legal_tasks": [
@@ -165,7 +165,30 @@
       "CLARIFY_OR_ABSTAIN"
     ],
     "llm_tiebreak_invoked": false,
-    "selected_task": "SINGLE_CAPTION"
+    "selected_task": "SINGLE_CAPTION",
+    "understanding": {
+      "classes": null,
+      "config": "SINGLE",
+      "cues": [
+        "caption"
+      ],
+      "follow_up": false,
+      "image_index": null,
+      "inputs": [
+        "single"
+      ],
+      "intent": "describe",
+      "object_filter": null,
+      "quantity": null,
+      "query": "Describe this image.",
+      "referring_expression": null,
+      "requested_output": "prose",
+      "resolution": null,
+      "resolved_query": "Describe this image.",
+      "spatial_scope": null,
+      "task": "SINGLE_CAPTION",
+      "temporal_relation": null
+    }
   },
   "run_id": "<volatile>",
   "timestamp_utc": "<volatile>",

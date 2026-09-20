@@ -62,10 +62,11 @@ class Controller:
         benchmark: str | None = None,
         run_id: str | None = None,
         tool_params: dict | None = None,
+        history: list[dict] | None = None,
     ) -> Trace:
         """Full pipeline from raster paths and a query to a validated Trace."""
         manifest = ingest(paths, mode=mode, benchmark=benchmark, run_id=run_id)
-        return self.run_on_manifest(manifest, query, tool_params=tool_params)
+        return self.run_on_manifest(manifest, query, tool_params=tool_params, history=history)
 
     def run_on_manifest(
         self,
@@ -73,6 +74,7 @@ class Controller:
         query: str,
         tool_params: dict | None = None,
         on_event=None,
+        history: list[dict] | None = None,
     ) -> Trace:
         """Route and execute against an already-built manifest.
 
@@ -91,7 +93,11 @@ class Controller:
         # `router.last_*` here could pick up another run's values - which
         # would put another user's "this input cannot support X" notice into
         # this answer with nothing in the trace to show for it.
-        decision = self.router.decide(query, manifest)
+        # `history`: the earlier turns of this conversation (query, task,
+        # answer, understanding), so "Where exactly?" is resolved against
+        # what was asked before. Optional; the API passes it when the client
+        # sends one.
+        decision = self.router.decide(query, manifest, history=history)
         plan = decision.plan
 
         if tool_params:
@@ -101,6 +107,7 @@ class Controller:
             plan, manifest, query, prediction=decision.prediction,
             on_event=on_event,
             config_excluded=decision.config_excluded,
+            understanding=decision.understanding,
         )
 
     def _apply_tool_params(self, plan: Plan, tool_params: dict) -> Plan:

@@ -231,8 +231,7 @@
       },
       "params": {
         "classes": [
-          "built_up",
-          "water"
+          "built_up"
         ],
         "fusion_mode": "cross_attn",
         "mode": "triad",
@@ -252,8 +251,7 @@
       },
       "params": {
         "classes": [
-          "built_up",
-          "water"
+          "built_up"
         ],
         "fusion_mode": "cross_attn",
         "mode": "triad",
@@ -402,9 +400,9 @@
   "routing": {
     "capability_matrix_version": "cm-2026.11.02",
     "classifier": {
-      "margin": 0.9925,
-      "name": "tfidf_logreg_v1",
-      "top1": 0.9953
+      "margin": 0.9927,
+      "name": "tfidf_cues_logreg_v2",
+      "top1": 0.9963
     },
     "config_excluded_task": null,
     "legal_tasks": [
@@ -416,7 +414,34 @@
       "CLARIFY_OR_ABSTAIN"
     ],
     "llm_tiebreak_invoked": false,
-    "selected_task": "XMODAL_JOINT_EXTRACT"
+    "selected_task": "XMODAL_JOINT_EXTRACT",
+    "understanding": {
+      "classes": [
+        "built_up"
+      ],
+      "config": "CROSSMODAL_PAIR",
+      "cues": [
+        "locate",
+        "fuse"
+      ],
+      "follow_up": false,
+      "image_index": null,
+      "inputs": [
+        "optical",
+        "sar"
+      ],
+      "intent": "fuse",
+      "object_filter": null,
+      "quantity": null,
+      "query": "Combine the optical and radar images to find buildings.",
+      "referring_expression": null,
+      "requested_output": "fused_map",
+      "resolution": null,
+      "resolved_query": "Combine the optical and radar images to find buildings.",
+      "spatial_scope": null,
+      "task": "XMODAL_JOINT_EXTRACT",
+      "temporal_relation": null
+    }
   },
   "run_id": "<volatile>",
   "timestamp_utc": "<volatile>",

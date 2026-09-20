@@ -314,3 +314,53 @@ class TestOverlayRendering:
         response = client.get("/runs/run_ndvitest/overlay/ndvi")
         assert response.status_code == 200
         assert response.headers["X-Overlay-Rendering"] == "continuous"
+
+
+class TestConversationHistory:
+    """`history` (2026-09-20): the earlier turns of a conversation, so a
+    follow-up is resolved against them and the trace says how."""
+
+    def test_follow_up_is_resolved_against_the_previous_turn(self, client, msi_6band):
+        first = client.post("/runs", data={"query": "How many ships are there?"}, files=[upload(msi_6band)])
+        assert first.status_code == 200
+        turn = first.json()
+        history = [{"query": turn["query"], "task": turn["routing"]["selected_task"],
+                    "answer": turn["answer"], "understanding": turn["routing"]["understanding"]}]
+        second = client.post(
+            "/runs",
+            data={"query": "Where are they?", "history": json.dumps(history)},
+            files=[upload(msi_6band)],
+        )
+        assert second.status_code == 200
+        trace = second.json()
+        assert trace["query"] == "Where are they?"
+        u = trace["routing"]["understanding"]
+        assert u["follow_up"] is True
+        assert u["resolved_query"] == "Where are the ships?"
+        assert trace["routing"]["selected_task"] == "SINGLE_GROUND"
+
+    def test_understanding_is_in_every_trace(self, client, msi_6band):
+        r = client.post("/runs", data={"query": "Find the airport in this image."}, files=[upload(msi_6band)])
+        u = r.json()["routing"]["understanding"]
+        assert u["task"] == "SINGLE_GROUND"
+        assert u["referring_expression"] == "the airport"
+        assert u["follow_up"] is False
+
+    def test_malformed_history_is_a_400(self, client, msi_6band):
+        r = client.post("/runs", data={"query": "hi", "history": "{not json"}, files=[upload(msi_6band)])
+        assert r.status_code == 400
+        r = client.post("/runs", data={"query": "hi", "history": json.dumps({"a": 1})}, files=[upload(msi_6band)])
+        assert r.status_code == 400
+
+    def test_history_is_optional_on_the_stream_endpoint(self, client, msi_6band):
+        history = [{"query": "Where is the airport?", "task": "SINGLE_GROUND", "answer": "box"}]
+        r = client.post(
+            "/runs/stream",
+            data={"query": "Is it near the coast?", "history": json.dumps(history)},
+            files=[upload(msi_6band)],
+        )
+        assert r.status_code == 200
+        events = [line for line in r.text.splitlines() if line.startswith("event: ")]
+        assert "event: routing" in events and "event: complete" in events
+        complete = [json.loads(line[6:]) for line in r.text.splitlines() if line.startswith("data: ")][-1]
+        assert complete["routing"]["understanding"]["resolved_query"] == "Is the airport near the coast?"
