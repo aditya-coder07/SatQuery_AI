@@ -40,6 +40,38 @@
       },
       "mean_words": 11.85,
       "s_per_item": 1.921
+    },
+    "beam3": {
+      "generate_kwargs": {
+        "num_beams": 3
+      },
+      "corpus": {
+        "bleu1": 0.734959349593496,
+        "bleu2": 0.6184192393009066,
+        "bleu3": 0.5265561527966339,
+        "bleu4": 0.4531752974974326,
+        "brevity_penalty": 1.0,
+        "rouge_l": 0.6623089990253017,
+        "cider_d": 2.2053213068926816,
+        "meteor_exact": 0.7040188111106428,
+        "n": 400
+      },
+      "bleu4_ci95": [
+        0.4266,
+        0.4804
+      ],
+      "cider_d_ci95": [
+        2.0342,
+        2.3991
+      ],
+      "unique_fraction": 0.685,
+      "unsupported_content_words": {
+        "micro": 0.2493,
+        "macro": 0.2343,
+        "captions_with_any": 0.64
+      },
+      "mean_words": 10.97,
+      "s_per_item": 2.227
     }
   }
 }

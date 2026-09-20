@@ -126,7 +126,7 @@
     "classifier": {
       "margin": 0.9935,
       "name": "tfidf_cues_logreg_v2",
-      "top1": 0.9958
+      "top1": 0.9957
     },
     "config_excluded_task": null,
     "legal_tasks": [
