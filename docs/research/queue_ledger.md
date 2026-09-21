@@ -233,3 +233,26 @@ precision), read-only against the deployed adapters:
 | Grounding phrase format (does the served prompt format cost accuracy?) | `evaluation/grounding_phrase_format.py` | seeded 150-expression subsample of the official DIOR-RSVG test, arm E adapter, 1024² | bare 0.807 / sentence 0.800 / extracted 0.820 Acc@0.5, all pairwise McNemar n.s. — the whole-sentence prompt cost ≈ 0.7 pt; the extractor is hygiene, not a lever (`grounding_phrase_format.json`, 12:20) |
 | Caption decoding ablation (greedy vs beam vs no-repeat) | `evaluation/caption_decoding.py` | RSICD official val subsample (selection) then official test (report), `caption_vlm/adapter_best` | val 400: greedy 0.403 / 1.97 → beam 5 0.452 / 2.24 (BLEU-4 / CIDEr-D); **official test 1,093: greedy 0.253 / 0.800, beam 5 0.259 / 0.788**, ROUGE-L and unique fraction down — **not adopted**, greedy stays (`rsicd_decoding_{val,test}.json`, 13:42) |
 | NL understanding benchmark (routing + extraction) | `evaluation/nl_understanding_eval.py` | `evaluation/nl/queries{,_test}.jsonl` (hand-written, held out of the bank) | v1 71.7% / 66.7% → v2 99.4% / 84.1% single-shot (96.8% after folding shapes); `docs/research/nl_understanding.md` |
+
+## 2026-09-21 — access restored as `dev01`; SOTA arms
+
+`adi01` stays expired; the user provisioned `dev01@172.16.1.161` (key
+login). `adi01`'s home is unreadable to it, so the tree was rebuilt under
+`~/satquery/repo` (branch checkout, env `~/satquery/env`: torch 2.13.0+cu126,
+transformers 5.15.1; base model from the Hub; champion checkpoints and
+LEVIR-CD tiles copied from the workstation; DIOR-RSVG from the authors'
+Drive release and VRSBench from the Hub, re-prepared — manifest hashes
+identical to the recorded ones, e.g. DIOR-RSVG test `ed017203…`).
+`scripts/cluster_unit_lib.sh` now takes `SATQUERY_ROOT/PY/BASE`.
+
+**Measured before any training (workstation GPU, reproduced on the L40S in
+33 s):** LEVIR-CD official test with 8-fold dihedral TTA
+(`evaluation/change_mask_official_eval.py --tta`, same champion, same
+loader): F1 **0.9101** [0.906, 0.914] at 0.5; **0.9139 / IoU 0.8414** at the
+val-selected threshold 0.75 (P 0.920 / R 0.908). Deployed number 0.9038 /
+0.8244. `levircd_test_tta_v3.json`.
+
+| Unit | Steps | Expected | Log |
+|---|---|---|---|
+| `sq-levir-sota` (`scripts/cluster_unit_levir_sota.sh`) | TTA baseline → fine-tune champion 12 ep, `bce_dice_boundary`, lr 5e-5, val-selected → eval plain + TTA | ≈ 4 h | `logs/queue_levir_sota.log` |
+| `sq-ground-sota` (`scripts/cluster_unit_ground_sota.sh`) | arm F (E continued at 1280², train 0.5 + hard 0.5 + VRSBench 0.2) → official test + VRSBench val → F2 (one more epoch) → same evals | ≈ 14 h + 1.5 h + 10 h + 1.5 h | `logs/queue_ground_sota.log` |
