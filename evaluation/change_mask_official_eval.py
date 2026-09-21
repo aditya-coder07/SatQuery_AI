@@ -55,6 +55,25 @@ def prf(c: np.ndarray) -> dict:
             "precision": tp / (tp + fp) if tp + fp else 0.0, "recall": tp / (tp + fn) if tp + fn else 0.0}
 
 
+def dihedral_tta(model, a, b):
+    """Mean sigmoid over the 8 dihedral transforms (4 rotations x flip),
+    each applied to both dates and undone on the output."""
+    import torch
+
+    acc = None
+    for k in range(4):
+        for flip in (False, True):
+            ta, tb = torch.rot90(a, k, (2, 3)), torch.rot90(b, k, (2, 3))
+            if flip:
+                ta, tb = torch.flip(ta, (3,)), torch.flip(tb, (3,))
+            pr = torch.sigmoid(model(ta, tb))
+            if flip:
+                pr = torch.flip(pr, (3,))
+            pr = torch.rot90(pr, -k, (2, 3))
+            acc = pr if acc is None else acc + pr
+    return (acc / 8)[:, 0].cpu().numpy()
+
+
 def main() -> int:
     p = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     p.add_argument("--checkpoint", type=Path, required=True)
@@ -65,6 +84,10 @@ def main() -> int:
     p.add_argument("--bootstrap", type=int, default=1000)
     p.add_argument("--limit", type=int, default=None)
     p.add_argument("--val-split", default=None, help="also pick the F1-maximising threshold on this split")
+    p.add_argument("--tta", action="store_true",
+                   help="8-fold dihedral test-time augmentation: both dates transformed identically, "
+                        "probabilities inverse-transformed and averaged (2026-09-21 arm; the headline "
+                        "number is the plain forward pass, this is reported beside it)")
     args = p.parse_args()
 
     import torch
@@ -88,9 +111,12 @@ def main() -> int:
                 a = np.stack([np.asarray(Image.open(index_path(r["a"])).convert("RGB"), dtype="float32") / 255.0 for r in chunk])
                 b = np.stack([np.asarray(Image.open(index_path(r["b"])).convert("RGB"), dtype="float32") / 255.0 for r in chunk])
                 m = np.stack([(np.asarray(Image.open(index_path(r["label"])).convert("L")) > 127).astype("float32") for r in chunk])
-                logits = model(torch.from_numpy(a.transpose(0, 3, 1, 2)).to(device),
-                               torch.from_numpy(b.transpose(0, 3, 1, 2)).to(device))
-                prob = torch.sigmoid(logits)[:, 0].cpu().numpy()
+                ta = torch.from_numpy(a.transpose(0, 3, 1, 2)).to(device)
+                tb = torch.from_numpy(b.transpose(0, 3, 1, 2)).to(device)
+                if args.tta:
+                    prob = dihedral_tta(model, ta, tb)
+                else:
+                    prob = torch.sigmoid(model(ta, tb))[:, 0].cpu().numpy()
                 for j in range(len(chunk)):
                     for t in thresholds:
                         per_tile[t][s + j] = counts(prob[j], m[j], t)
@@ -121,7 +147,7 @@ def main() -> int:
         "loader": "satquery.tools.change_mask._Handle (deployed path)", "index": str(args.index),
         "index_sha256": registry.sha256_file(args.index), "split": args.split, "n_tiles": len(rows),
         "n_tiles_with_change": int(has_change.sum()), "git_commit": registry.git_commit(),
-        "headline_threshold": 0.5, "pooled": pooled, "val_selected_threshold": val_choice,
+        "headline_threshold": 0.5, "tta": bool(args.tta), "pooled": pooled, "val_selected_threshold": val_choice,
         "ci95_f1": [float(np.percentile(boots["f1"], 2.5)), float(np.percentile(boots["f1"], 97.5))],
         "ci95_iou": [float(np.percentile(boots["iou"], 2.5)), float(np.percentile(boots["iou"], 97.5))],
         "per_tile_f1_quantiles_changed_tiles": {q: float(np.percentile(tile_f1[has_change], int(q))) for q in ("10", "25", "50", "75", "90")},

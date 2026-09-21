@@ -7,9 +7,12 @@
 # loading weights (three VLM jobs passed the check within 30 s of each other
 # on 2026-09-14 10:12 and two of them OOM'd).
 set -u
-cd /scratch/home/adi01/satquery
-PY=/scratch/home/adi01/satquery/.conda-env/bin/python
-BASE=models/qwen25_vl_3b
+# Overridable (2026-09-21): the dev01 account rebuilt the tree under
+# ~/satquery/repo with its own env and a Hub copy of the base model.
+cd "${SATQUERY_ROOT:-/scratch/home/adi01/satquery}"
+PY=${SATQUERY_PY:-/scratch/home/adi01/satquery/.conda-env/bin/python}
+BASE=${SATQUERY_BASE:-models/qwen25_vl_3b}
+mkdir -p logs
 LAUNCH_HOLD_S=${LAUNCH_HOLD_S:-300}
 log() { echo "$(date '+%F %T') $*" | tee -a "$LOG"; }
 free_gb() {

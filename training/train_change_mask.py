@@ -127,6 +127,18 @@ class LevirCD:
         return a.transpose(2, 0, 1), b.transpose(2, 0, 1), m[None]
 
 
+def boundary_weight(target, band: int = 3, weight: float = 3.0):
+    """Per-pixel weights: `weight` inside a `band`-px ring around every
+    label edge (dilation minus erosion of the change mask), 1 elsewhere."""
+    import torch.nn.functional as F
+
+    k = 2 * band + 1
+    dil = F.max_pool2d(target, k, stride=1, padding=band)
+    ero = 1 - F.max_pool2d(1 - target, k, stride=1, padding=band)
+    ring = (dil - ero).clamp(0, 1)
+    return 1 + (weight - 1) * ring
+
+
 def dice_loss(logits, target, eps: float = 1.0):
     """Soft Dice on the change class, pooled over the batch so that tiles
     with no change do not each contribute a degenerate term."""
@@ -195,7 +207,13 @@ def main() -> int:
     )
     p.add_argument("--no-pretrained", action="store_true",
                    help="ablation: the v3 trunk from scratch instead of ImageNet")
-    p.add_argument("--loss", choices=["bce", "bce_dice"], default="bce")
+    p.add_argument("--loss", choices=["bce", "bce_dice", "bce_dice_boundary"], default="bce",
+                   help="bce_dice_boundary (2026-09-21): bce_dice plus BCE re-weighted x3 on a 3-px band "
+                        "around every label edge - the thin-structure / boundary tail the LEVIR-CD "
+                        "re-score found (10th-percentile per-tile F1 0.42 on changed tiles)")
+    p.add_argument("--init-weights", type=Path, default=None,
+                   help="start from this checkpoint's model weights with a fresh optimiser and "
+                        "schedule (a fine-tune arm), unlike --resume which continues the run")
     p.add_argument("--augment", action="store_true", help="dihedral + date-swap augmentation")
     p.add_argument("--cosine", action="store_true", help="cosine LR with a one-epoch warmup")
     p.add_argument("--amp", action="store_true", help="bf16 autocast")
@@ -242,8 +260,14 @@ def main() -> int:
     ).to(device)
     print(f"change-pixel rate {positive_rate:.4f} -> pos_weight {float(pos_weight):.1f}")
 
+    if args.init_weights is not None:
+        from training.common.checkpointing import safe_torch_load
+
+        payload = safe_torch_load(args.init_weights)
+        model.load_state_dict(payload["model_state_dict"] if "model_state_dict" in payload else payload)
+        print(f"initialised weights from {args.init_weights}")
     optimizer = torch.optim.AdamW(model.parameters(), lr=args.lr)
-    criterion = nn.BCEWithLogitsLoss(pos_weight=pos_weight)
+    criterion = nn.BCEWithLogitsLoss(pos_weight=pos_weight, reduction="none")
     state = resume_or_load_for_eval(args, model, optimizer)
 
     write_run_metadata_unless_eval(args, {
@@ -252,6 +276,7 @@ def main() -> int:
         "n_params": n_params, "pos_weight": float(pos_weight), "arch": args.arch,
         "pretrained": not args.no_pretrained,
         "loss": args.loss, "augment": args.augment, "cosine": args.cosine,
+        "init_weights": str(args.init_weights) if args.init_weights else None,
         "amp": args.amp, "select_on_val": args.select_on_val,
     })
 
@@ -289,9 +314,13 @@ def main() -> int:
                                 enabled=bool(args.amp and device == "cuda")):
                 logits = model(ab, bb)
             logits = logits.float()
-            loss = criterion(logits, mb)
-            if args.loss == "bce_dice":
-                loss = loss + dice_loss(logits, mb)
+            per_pixel = criterion(logits, mb)
+            if args.loss == "bce_dice_boundary":
+                loss = (per_pixel * boundary_weight(mb)).mean() + dice_loss(logits, mb)
+            elif args.loss == "bce_dice":
+                loss = per_pixel.mean() + dice_loss(logits, mb)
+            else:
+                loss = per_pixel.mean()
             optimizer.zero_grad(set_to_none=True)
             loss.backward()
             optimizer.step()
