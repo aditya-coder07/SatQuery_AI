@@ -41,13 +41,41 @@ from satquery.tools.base import ToolProtocol
 from satquery.tools.provenance import record
 
 TOOL_NAME = "change_mask"
-TOOL_VERSION = "1.0.0"
+TOOL_VERSION = "1.1.0"  # 1.1.0: dihedral TTA (2026-09-21)
 ENV_CHECKPOINT = "SATQUERY_CHANGE_MASK"
 
 # The detector was trained on 256px RGB tiles; inference tiles at the same
 # size so the model sees the scale it learned.
 TILE = 256
 DEFAULT_THRESHOLD = 0.5
+# 8-fold dihedral test-time augmentation (2026-09-21). Measured on the
+# official LEVIR-CD test with the deployed champion and loader: F1 0.9038 ->
+# 0.9101 at threshold 0.5 (0.9139 / IoU 0.8414 at the val-selected 0.75);
+# two retrains of the champion did not beat it, so the gain is inference-
+# side. Eight passes of a 24M-parameter net: well under a second on a GPU,
+# a few seconds on a CPU host. SATQUERY_CHANGE_MASK_TTA=0 disables it.
+ENV_TTA = "SATQUERY_CHANGE_MASK_TTA"
+
+
+def tta_enabled() -> bool:
+    return os.getenv(ENV_TTA, "1").strip().lower() not in ("0", "false", "no", "off")
+
+
+def dihedral_probability(torch, model, a, b):
+    """Mean sigmoid over the 8 dihedral transforms, both dates transformed
+    identically and the output undone - the evaluator's `dihedral_tta`."""
+    acc = None
+    for k in range(4):
+        for flip in (False, True):
+            ta, tb = torch.rot90(a, k, (2, 3)), torch.rot90(b, k, (2, 3))
+            if flip:
+                ta, tb = torch.flip(ta, (3,)), torch.flip(tb, (3,))
+            pr = torch.sigmoid(model(ta, tb))
+            if flip:
+                pr = torch.flip(pr, (3,))
+            pr = torch.rot90(pr, -k, (2, 3))
+            acc = pr if acc is None else acc + pr
+    return acc / 8
 
 
 class ChangeMaskPayload(ToolPayload):
@@ -148,16 +176,21 @@ class ChangeMaskTool(ToolProtocol):
         t1, t2 = manifest.images
         handle = _Handle.get(Path(os.environ[ENV_CHECKPOINT]))
         torch = handle.torch
-        threshold = float(params.get("threshold", DEFAULT_THRESHOLD))
+        # The matrix names the parameter `change_threshold`; `threshold` is
+        # kept for callers that passed it directly. Before 2026-09-21 only
+        # the latter was read, so the matrix default never reached here.
+        threshold = float(params.get("change_threshold", params.get("threshold", DEFAULT_THRESHOLD)))
+        tta = tta_enabled()
 
         a = _read_rgb(t1, TILE)[None]
         b = _read_rgb(t2, TILE)[None]
         with torch.no_grad():
-            logits = handle.model(
-                torch.from_numpy(a).to(handle.device),
-                torch.from_numpy(b).to(handle.device),
-            )
-            probability = torch.sigmoid(logits)[0, 0].cpu().numpy()
+            ta = torch.from_numpy(a).to(handle.device)
+            tb = torch.from_numpy(b).to(handle.device)
+            if tta:
+                probability = dihedral_probability(torch, handle.model, ta, tb)[0, 0].cpu().numpy()
+            else:
+                probability = torch.sigmoid(handle.model(ta, tb))[0, 0].cpu().numpy()
 
         mask = (probability >= threshold).astype("uint8")
         changed_fraction = float(mask.mean())
@@ -196,6 +229,7 @@ class ChangeMaskTool(ToolProtocol):
             "changed_fraction": round(changed_fraction, 6),
             "changed_area_km2": round(area_km2, 4),
             "threshold": threshold,
+            "tta": "dihedral8" if tta else "none",
             "mean_change_probability": round(float(probability.mean()), 6),
             "answer": (
                 f"About {changed_fraction:.1%} of the scene changed "
