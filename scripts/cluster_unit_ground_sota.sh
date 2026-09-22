@@ -20,7 +20,7 @@ run train_ground_hires1280 $PY training/train_vlm_sft.py --model $BASE \
   --val data/dior_rsvg_official/manifests/val.jsonl --val-limit 400 \
   --init-adapter checkpoints/v3/grounding_vlm_hires/adapter_best \
   --ckpt-dir checkpoints/v3/grounding_vlm_hires1280 --epochs 1 --batch-size 1 --grad-accum 16 --lr 2e-5 \
-  --min-pixels 1638400 --val-every 400 --save-every 200 --workers 6 --quant none \
+  --min-pixels 1638400 --val-every 400 --save-every 200 --workers 6 --quant none ${RESUME_F:-} \
   --notes "arm F: arm E continued at min_pixels 1280x1280, train 0.5x + hard 0.5x + VRSBench 0.2x"
 if [ -f checkpoints/v3/grounding_vlm_hires1280/adapter_best/adapter_model.safetensors ]; then
 run eval_ground_armF $PY evaluation/grounding_official_eval.py --base $BASE --data data/dior_rsvg_official \

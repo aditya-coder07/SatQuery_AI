@@ -29,7 +29,7 @@ run train_caption_e3 $PY training/train_vlm_sft.py --model $BASE \
   --train data/rsicd/manifests/train.jsonl \
   --val data/rsicd/manifests/val_unseen.jsonl --val-limit 100000 \
   --ckpt-dir checkpoints/v3/caption_vlm_e3 --epochs 3 --batch-size 16 --grad-accum 1 --lr 1e-4 \
-  --val-every 800 --save-every 400 --workers 8 --quant none --eval-batch 32 \
+  --val-every 800 --save-every 400 --workers 8 --quant none --eval-batch 32 ${RESUME_C3:-} \
   --notes "caption arm C3: deployed recipe x3 epochs, checkpoint selected on val_unseen (no memorisable references)"
 if [ -f checkpoints/v3/caption_vlm_e3/adapter_best/adapter_model.safetensors ]; then
 run eval_caption_e3 $PY evaluation/vlm_task_eval.py --base $BASE --manifest data/rsicd/manifests/test.jsonl \
