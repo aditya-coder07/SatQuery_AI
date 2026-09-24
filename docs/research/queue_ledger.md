@@ -256,3 +256,10 @@ val-selected threshold 0.75 (P 0.920 / R 0.908). Deployed number 0.9038 /
 |---|---|---|---|
 | `sq-levir-sota` (`scripts/cluster_unit_levir_sota.sh`) | TTA baseline → fine-tune champion 12 ep, `bce_dice_boundary`, lr 5e-5, val-selected → eval plain + TTA | ≈ 4 h | `logs/queue_levir_sota.log` |
 | `sq-ground-sota` (`scripts/cluster_unit_ground_sota.sh`) | arm F (E continued at 1280², train 0.5 + hard 0.5 + VRSBench 0.2) → official test + VRSBench val → F2 (one more epoch) → same evals | ≈ 14 h + 1.5 h + 10 h + 1.5 h | `logs/queue_ground_sota.log` |
+
+## 2026-09-24 — dev01 expired, back on `adi01`; arm F restarted
+
+- Logins flipped: `adi01` works again, `dev01` reports "account has expired". dev01's home is unreadable from adi01 and none of its units survive, so arm F's first run (resumed, last seen at step 480/1684, val acc@0.5 0.71 at step 400) is lost with its checkpoints. C3 (step 440/8187) is lost the same way.
+- Production check (Lightning Studio, CPU): `/models` serves `configs/deploy.v3.yaml` with all v3 checkpoints present; the NL layer is live (`tfidf_cues_logreg_v2`, `understanding` block in the trace); `change_mask_v1` is **1.0.0** — the TTA tool (1.1.0) is on this branch, not yet on main.
+- adi01's `~/satquery` is not a git checkout. Code shipped as a git bundle of d3ad6cf into `~/satquery/repo`, with `data/ models/ checkpoints/ artifacts/` symlinked to the adi01 tree (same files the v3 map was measured with).
+- 22:37 IST: `sq-ground-sota-adi` launched `scripts/cluster_unit_ground_sota.sh` from scratch (arm F from arm E's `adapter_best`, 1684 steps at ~25.6 s/step ≈ 12 h, then official test + VRSBench val, then F2). GPU was otherwise empty at launch.
