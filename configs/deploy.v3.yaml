@@ -19,7 +19,7 @@ tools:
   change_mask:
     env: {SATQUERY_CHANGE_MASK: checkpoints/v3/change_mask/best.pt}
     status: selected
-    note: "LEVIR-CD test F1 0.9038 / IoU 0.8244 (Phase 5 0.855 / 0.747); independently verified 2026-09-12 (levircd_test_independent_v3.json); calibration v3 fitted on val"
+    note: "LEVIR-CD test F1 0.9038 / IoU 0.8244 (Phase 5 0.855 / 0.747); independently verified 2026-09-12 (levircd_test_independent_v3.json); calibration v3 fitted on val. Served with 8-fold dihedral TTA since 2026-09-21 (tool 1.1.0): test F1 0.9101 at 0.5, 0.9139 / IoU 0.8414 at the val-selected change_threshold 0.75 (levircd_test_tta_v3.json); two retrains (boundary loss, plain continuation) did not beat the champion"
   optsar_fusion:
     env: {SATQUERY_FUSION: checkpoints/v3/optsar_fusion/best.pt}
     status: selected
