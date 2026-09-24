@@ -338,6 +338,33 @@ def extract_image_index(text: str, config: str) -> int | None:
     return 0 if first else 1
 
 
+# A comparison request that names no subject: "compare the scenes", "show me
+# the difference". On one image there is nothing to compare; on a dated pair
+# it can only mean "describe the change". The classifier cannot learn that
+# split, because the same words would need two labels and the pair token alone
+# would carry the difference (it then sent "hmm" on a pair to change).
+_COMPARE_WORDS = frozenset({
+    "compare", "comparing", "comparison", "contrast", "difference", "differences",
+    "differ", "diff", "different",
+})
+_COMPARE_FILLER = frozenset({
+    "please", "pls", "plz", "can", "could", "would", "you", "i", "want", "to", "me",
+    "us", "just", "the", "a", "these", "those", "them", "they", "both", "two",
+    "image", "images", "scene", "scenes", "picture", "pictures", "photo", "photos",
+    "tile", "tiles", "date", "dates", "pair", "show", "tell", "give", "do", "does",
+    "make", "spot", "find", "what", "whats", "what's", "is", "are", "how", "and",
+    "between", "of", "for", "in", "it", "now", "there", "see", "let", "know",
+})
+
+
+def is_bare_comparison(text: str) -> bool:
+    words = re.findall(r"[a-z']+", (text or "").lower())
+    return (
+        any(w in _COMPARE_WORDS for w in words)
+        and all(w in _COMPARE_WORDS or w in _COMPARE_FILLER for w in words)
+    )
+
+
 # ---------------------------------------------------------------------------
 # Follow-up resolution
 # ---------------------------------------------------------------------------
