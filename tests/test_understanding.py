@@ -195,6 +195,41 @@ class TestRouterIntegration:
         decision = router.decide("Produce a change mask for these images.", by_config["SINGLE"])
         assert decision.config_excluded == "TEMPORAL_CHANGE_MAP"
 
+    BARE_COMPARISONS = (
+        "compare the scenes", "Compare them.", "compare", "show me the difference",
+        "Can you compare these two images please?", "how do they differ?",
+        "spot the differences", "what's the difference between them",
+    )
+
+    @pytest.mark.parametrize("query", BARE_COMPARISONS)
+    def test_bare_comparison_on_a_pair_describes_the_change(self, router, by_config, query):
+        # run_875f94d9fa16 (2026-09-24): "compare the scenes" on a pair abstained.
+        decision = router.decide(query, by_config["BITEMPORAL_PAIR"])
+        assert decision.plan.tasks[0] == "TEMPORAL_CHANGE_DESC"
+        assert decision.understanding.intent == "change_describe"
+
+    # "spot the differences" on one image is routed to grounding by the
+    # classifier (unchanged by the pair rule), so it is not asserted here.
+    @pytest.mark.parametrize("query", [q for q in BARE_COMPARISONS if q != "spot the differences"])
+    def test_bare_comparison_on_one_image_still_abstains(self, router, by_config, query):
+        assert router.decide(query, by_config["SINGLE"]).plan.tasks[0] == "CLARIFY_OR_ABSTAIN"
+
+    @pytest.mark.parametrize("query", ["thx", "hmm", "ok", "hello", "which one is better?", "nice"])
+    def test_filler_on_a_pair_still_abstains(self, router, by_config, query):
+        assert router.decide(query, by_config["BITEMPORAL_PAIR"]).plan.tasks[0] == "CLARIFY_OR_ABSTAIN"
+
+    @pytest.mark.parametrize("query,expected", [
+        ("compare the scenes", True),
+        ("Show me the differences, please.", True),
+        ("compare the vegetation in both", False),  # has a subject: the classifier's job
+        ("which one is better", False),
+        ("thanks", False),
+        ("", False),
+    ])
+    def test_is_bare_comparison(self, query, expected):
+        from satquery.controller.understanding import is_bare_comparison
+        assert is_bare_comparison(query) is expected
+
 
 def _norm(text: str) -> str:
     return re.sub(r"[^a-z0-9 ]", "", text.lower()).strip()

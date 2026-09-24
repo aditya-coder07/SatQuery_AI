@@ -36,6 +36,7 @@ from satquery.controller.intent import (  # noqa: F401 - CONFIG_TO_LEGAL_TASKS r
 from satquery.controller.matrix_loader import CapabilityMatrix
 from satquery.controller.understanding import (
     QueryUnderstanding,
+    is_bare_comparison,
     resolve_follow_up,
     understand,
 )
@@ -364,6 +365,12 @@ class Router:
                 task = CONFIG_DEFAULT_TASK.get(manifest.config, "SINGLE_VQA")
                 if task not in legal:
                     task = "CLARIFY_OR_ABSTAIN"
+            if (
+                task == "CLARIFY_OR_ABSTAIN"
+                and manifest.config == "BITEMPORAL_PAIR"
+                and is_bare_comparison(text)
+            ):
+                task = "TEMPORAL_CHANGE_DESC"
 
         if task not in legal:
             task = "CLARIFY_OR_ABSTAIN"
