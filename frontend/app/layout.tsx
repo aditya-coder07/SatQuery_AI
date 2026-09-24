@@ -1,6 +1,7 @@
 import './globals.css';
 import { GeistMono } from 'geist/font/mono';
 import { IBM_Plex_Sans, JetBrains_Mono, Manrope } from 'next/font/google';
+import { Analytics } from '@vercel/analytics/next';
 
 import Nav from './Nav';
 import DotField from './components/DotField';
@@ -68,6 +69,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             were reachable only by typing their URLs. */}
         <Nav />
         {children}
+        <Analytics />
       </body>
     </html>
   );
