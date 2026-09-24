@@ -42,6 +42,9 @@ export type EntailmentGate = {
   flagged_detail: { sentence: string; reason: string; backend: string; score: number | null }[];
 };
 
+/** `answer_details` on the complete event: the findings as labelled sections. */
+export type AnswerDetails = { sections: { title: string; items: string[] }[] };
+
 /** What the router understood a query to ask (routing.understanding). */
 export type Understanding = {
   query: string;

@@ -37,6 +37,7 @@ from satquery.controller.matrix_loader import CapabilityMatrix
 from satquery.controller.understanding import (
     QueryUnderstanding,
     is_bare_comparison,
+    is_open_scene_question,
     resolve_follow_up,
     understand,
 )
@@ -206,6 +207,13 @@ class Router:
 
         return unmet
 
+    def _captioner_loaded(self) -> bool:
+        from satquery.tools.stubs import REGISTRY, CaptionStub
+
+        if self.shed_tools and "caption_v1" in self.shed_tools:
+            return False
+        return not isinstance(REGISTRY.get("caption_v1"), CaptionStub)
+
     def legal_tasks(self, manifest: InputManifest) -> list[str]:
         """Tasks permitted by the input configuration AND the matrix.
 
@@ -371,6 +379,15 @@ class Router:
                 and is_bare_comparison(text)
             ):
                 task = "TEMPORAL_CHANGE_DESC"
+            if (
+                task == "SINGLE_VQA"
+                and "SINGLE_CAPTION" in legal
+                and is_open_scene_question(text)
+                and self._captioner_loaded()
+            ):
+                # Only with the real captioner: when it is a stub the VQA
+                # adapter is still the better of the two answers.
+                task = "SINGLE_CAPTION"
 
         if task not in legal:
             task = "CLARIFY_OR_ABSTAIN"

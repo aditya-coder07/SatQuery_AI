@@ -134,6 +134,7 @@ def decide(
     gate_flagged: int,
     tool_failure: str | None = None,
     profile_degraded: str | None = None,
+    tool_deferral: str | None = None,
 ) -> AbstentionDecision:
     """Decide whether to answer, and if not, say what would change it.
 
@@ -209,6 +210,22 @@ def decide(
             "cleaner or higher-resolution input is what changes this, not a "
             "rephrasing",
             "agreement",
+        )
+
+    if final_confidence < policy.min_final_confidence and tool_deferral:
+        # The tool said why it could not answer; that beats a generic
+        # "the model was uncertain", which here would be untrue.
+        return AbstentionDecision(
+            True, "low_confidence",
+            f"the tool for this question declined it ({tool_deferral})",
+            (
+                "ask about what the change mask measures - how much changed, "
+                "where, or whether buildings appeared; comparing vegetation or "
+                "water needs multispectral imagery with near-infrared bands"
+                if tool_deferral.startswith("change_vqa")
+                else "ask a narrower question of the kind this tool answers"
+            ),
+            "model",
         )
 
     if final_confidence < policy.min_final_confidence:

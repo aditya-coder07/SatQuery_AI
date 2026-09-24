@@ -616,6 +616,15 @@ class Executor:
             gate_flagged=gate.flagged,
             tool_failure=tool_failure,
             profile_degraded=profile_degraded,
+            tool_deferral=next(
+                (
+                    f"{t.tool}: {t.outputs['reason']}"
+                    for t in execution_traces
+                    if isinstance(t.outputs, dict)
+                    and t.outputs.get("deferred") and t.outputs.get("reason")
+                ),
+                None,
+            ),
         )
         abstained = decision.abstained
         abstain_reason = decision.reason

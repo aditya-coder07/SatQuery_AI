@@ -14,6 +14,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import json
 import sys
 from pathlib import Path
 
@@ -27,7 +28,7 @@ from evaluation.abstention import (  # noqa: E402
     risk_coverage_svg,
     write_results,
 )
-from evaluation.calibration import sigmoid, softmax  # noqa: E402
+from evaluation.calibration import sigmoid  # noqa: E402
 
 REPORT_DIR = Path("docs/assets/abstention")
 CACHE_DIR = Path("artifacts/calibration/logits")
@@ -49,56 +50,86 @@ def landcover_signal(logits: np.ndarray, labels: np.ndarray):
     return confidence, correct
 
 
-def intent_signal(logits: np.ndarray, labels: np.ndarray):
-    """Top-1 softmax probability against top-1 correctness."""
-    probs = softmax(logits)
-    confidence = probs.max(axis=1)
-    correct = (probs.argmax(axis=1) == np.asarray(labels).ravel()).astype("float64")
-    return confidence, correct
+NL_SPLITS = ("queries.jsonl", "queries_test.jsonl", "queries_final.jsonl")
+
+LANDCOVER_NOTE = (
+    "Phase 3 land-cover head (Track A, ckpt_step_2814), per (patch, class) "
+    "decision on the official BigEarthNet test shard: does the head's own "
+    "sigmoid confidence rank its correct calls above its incorrect ones. The "
+    "deployed v3 head (landcover_full) has not been re-scored here. The "
+    "deployed tool reports the mean calibrated probability of the classes it "
+    "asserts as its confidence and abstains per class below its decision "
+    "threshold (configs/thresholds.v3.yaml)."
+)
+ROUTER_NOTE = (
+    "Deployed router ({classifier}: config gate + classifier + rules), top-1 "
+    "probability against whether the chosen task is in the query's accepted "
+    "set, on the three hand-written NL splits (evaluation/nl/, never used "
+    "to build the template bank), n={n}."
+)
 
 
-SIGNALS = {
-    "landcover": (
-        landcover_signal,
-        "Track A land-cover head, per (patch, class) decision on the official "
-        "BigEarthNet test shard. Measures whether the head's own sigmoid "
-        "confidence ranks its correct calls above its incorrect ones. It says "
-        "nothing about the SYSTEM's abstention, because no tool currently "
-        "feeds this head's probability into the confidence combiner - see the "
-        "runtime calibration note for task 3.3.",
-    ),
-    "intent": (
-        intent_signal,
-        "Tier-1 router on CLEAN_HOLDOUT, n=29. Far too small for a stable "
-        "AURC - the curve is visibly stepped and a single item moves it - but "
-        "this is the signal the router's LOW_CONFIDENCE_TOP1 gate actually "
-        "uses, so its shape is worth seeing even at this n.",
-    ),
-}
+def router_signal():
+    """The live router over the held-out NL benchmark splits."""
+    import json as _json
+    import tempfile
+
+    from evaluation.nl_understanding_eval import manifests
+    from satquery.controller.intent import CLASSIFIER_NAME
+    from satquery.controller.matrix_loader import load_matrix
+    from satquery.controller.router import Router
+
+    nl_dir = Path(__file__).resolve().parent / "nl"
+    rows = []
+    for name in NL_SPLITS:
+        text = (nl_dir / name).read_text(encoding="utf-8")
+        rows += [_json.loads(line) for line in text.splitlines() if line.strip()]
+    router = Router(load_matrix(Path("configs/capability_matrix.yaml")))
+    confidence, correct = [], []
+    with tempfile.TemporaryDirectory() as tmp:
+        by_config = manifests(Path(tmp))
+        for row in rows:
+            decision = router.decide(row["query"], by_config[row["config"]], history=row.get("history"))
+            confidence.append(decision.prediction.top1 if decision.prediction else 0.0)
+            correct.append(float(decision.plan.tasks[0] in row["accept"]))
+    note = ROUTER_NOTE.format(classifier=CLASSIFIER_NAME, n=len(rows))
+    return np.asarray(confidence), np.asarray(correct), note
+
+
+SIGNALS = {"landcover": landcover_signal}
 
 
 def main() -> int:
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--cache-dir", type=Path, default=CACHE_DIR)
     p.add_argument("--out-dir", type=Path, default=REPORT_DIR)
-    p.add_argument("--signals", nargs="+", default=sorted(SIGNALS),
-                   choices=sorted(SIGNALS))
+    p.add_argument("--signals", nargs="+", default=["router", *sorted(SIGNALS)],
+                   choices=["router", *sorted(SIGNALS)])
     args = p.parse_args()
 
-    results: list[SelectiveResult] = []
-    for name in args.signals:
-        cached = args.cache_dir / f"{name}.npz"
-        if not cached.exists():
-            print(
-                f"skipping {name}: no cached logits at {cached}. "
-                f"Run evaluation/calibrate.py --heads {name} first.",
-                file=sys.stderr,
-            )
-            continue
+    out = args.out_dir / "selective.json"
+    previous = {}
+    if out.exists():
+        previous = {r["name"]: r for r in json.loads(out.read_text(encoding="utf-8"))}
 
-        blob = np.load(cached, allow_pickle=False)
-        signal_fn, note = SIGNALS[name]
-        confidence, correct = signal_fn(blob["logits"], blob["labels"])
+    results: list[SelectiveResult] = []
+    carried: list[dict] = []
+    for name in args.signals:
+        if name == "router":
+            confidence, correct, note = router_signal()
+        else:
+            cached = args.cache_dir / f"{name}.npz"
+            if not cached.exists():
+                if name in previous:
+                    # Keep the measured result; only its description is refreshed.
+                    print(f"{name}: no cached logits at {cached}; keeping the recorded result")
+                    carried.append({**previous[name], "note": LANDCOVER_NOTE})
+                else:
+                    print(f"skipping {name}: no cached logits at {cached}.", file=sys.stderr)
+                continue
+            blob = np.load(cached, allow_pickle=False)
+            confidence, correct = SIGNALS[name](blob["logits"], blob["labels"])
+            note = LANDCOVER_NOTE
         result = evaluate_selective(confidence, correct, name, note)
         results.append(result)
         print(result.summary())
@@ -111,12 +142,14 @@ def main() -> int:
         path.write_text(risk_coverage_svg(result), encoding="utf-8")
         print(f"    wrote {path}")
 
-    if not results:
+    if not results and not carried:
         print("no signals scored", file=sys.stderr)
         return 1
 
-    out = args.out_dir / "selective.json"
     write_results(results, out)
+    if carried:
+        merged = json.loads(out.read_text(encoding="utf-8")) + carried
+        out.write_text(json.dumps(merged, indent=2), encoding="utf-8")
     print(f"\nWrote {out}")
     return 0
 

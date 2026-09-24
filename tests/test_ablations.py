@@ -67,12 +67,27 @@ class TestAgentVsMonolith:
 
 
 class TestTriad:
-    def test_reports_the_negative_result_without_softening_it(self):
+    def test_verdict_follows_the_measured_sign(self):
+        """Read from the deployed head's metrics; the wording may not outrun the number."""
+        import json
+
+        from evaluation.run_ablations import TRIAD_METRICS
+
         result = ablation_triad()
         if result.status == "not_run":
-            pytest.skip("no fusion checkpoint on disk")
-        assert result.arms["complementarity"]["gain"] < 0
-        assert "does NOT beat" in result.verdict
+            pytest.skip("no fusion metrics on disk")
+        gain = json.loads(TRIAD_METRICS.read_text(encoding="utf-8"))["complementarity_gain_miou"]
+        assert result.arms["complementarity"]["gain_miou"] == gain
+        if gain > 0:
+            assert result.verdict.startswith("Fusion beats optical alone")
+        else:
+            assert "does NOT beat" in result.verdict
+
+    def test_caveat_names_the_selection_bias(self):
+        result = ablation_triad()
+        if result.status == "not_run":
+            pytest.skip("no fusion metrics on disk")
+        assert "chose the epoch" in result.caveat
 
 
 class TestTwoTrack:

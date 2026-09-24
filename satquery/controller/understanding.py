@@ -357,6 +357,28 @@ _COMPARE_FILLER = frozenset({
 })
 
 
+# "What is in this picture?" names nothing to look for, so it asks for a
+# description. Sent to the VQA adapter (trained on presence, count and
+# rural/urban questions) it answered "I cannot answer that from this image"
+# at 0.93 confidence (live, 2026-09-25).
+_OPEN_FILLER = frozenset({
+    "what", "whats", "what's", "is", "are", "in", "on", "this", "the", "that",
+    "image", "images", "picture", "pic", "photo", "scene", "tile", "area", "place",
+    "here", "there", "do", "does", "you", "see", "can", "show", "shows", "am", "i",
+    "looking", "at", "going", "happening", "satellite", "aerial", "it", "tell",
+    "me", "please", "of", "about", "visible", "we", "one", "overall",
+})
+
+
+def is_open_scene_question(text: str) -> bool:
+    words = re.findall(r"[a-z']+", (text or "").lower())
+    return (
+        bool(words)
+        and any(w in ("what", "whats", "what's") for w in words)
+        and all(w in _OPEN_FILLER for w in words)
+    )
+
+
 def is_bare_comparison(text: str) -> bool:
     words = re.findall(r"[a-z']+", (text or "").lower())
     return (

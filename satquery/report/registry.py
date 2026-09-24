@@ -273,13 +273,20 @@ def official_benchmarks() -> list[dict]:
         "a second benchmark the adapter was not tuned on",
         REPORTS / "vrsbench_val_grounding_armE_subsets.json")
 
-    r = _read_json(REPORTS / "levircd_test_independent_v3.json")
+    # The served configuration: tool 1.1.0, 8-fold dihedral TTA at the
+    # served threshold (0.5). The single-pass number stays in the note.
+    r = _read_json(REPORTS / "levircd_test_tta_v3.json")
     head = _g(r, "pooled", "0.5")
+    plain = _g(_read_json(REPORTS / "levircd_test_independent_v3.json"), "pooled", "0.5", "f1")
+    at_val = _g(r, "val_selected_threshold", "test_at_val_threshold", "f1")
     add("Change mask", "change_mask", "LEVIR-CD test", "F1 (change class)",
         _g(head, "f1"), _g(r, "ci95_f1"), _g(r, "n_tiles"),
-        "IoU %s; re-scored independently through the deployed loader" % (
-            f"{_g(head, 'iou'):.4f}" if _g(head, "iou") is not None else "n/a"),
-        REPORTS / "levircd_test_independent_v3.json")
+        "8-fold dihedral TTA at the served threshold 0.5; IoU %s; single pass %s; %s at the val-selected %s" % (
+            f"{_g(head, 'iou'):.4f}" if _g(head, "iou") is not None else "n/a",
+            f"{plain:.4f}" if plain is not None else "n/a",
+            f"{at_val:.4f}" if at_val is not None else "n/a",
+            _g(r, "val_selected_threshold", "threshold")),
+        REPORTS / "levircd_test_tta_v3.json")
 
     m = _read_json(PHASE6 / "landcover_full" / "metrics.json")
     t = _g(m, "test_at_best_val") or {}

@@ -229,6 +229,13 @@ MIN_AOI_PX = 64
 MAX_HISTORY_TURNS = 20
 
 
+def _with_details(trace: dict) -> dict:
+    """The trace plus `answer_details`: its findings as labelled sections."""
+    from satquery.synth.answer_details import answer_details
+
+    return {**trace, "answer_details": answer_details(trace)}
+
+
 def _parse_history(raw: str | None) -> list[dict] | None:
     """Parse the optional `history` form field: the earlier turns of this
     conversation, newest last, each `{"query": ..., "task": ..., "answer":
@@ -552,7 +559,7 @@ async def create_run(
 
     store.complete(run_id, trace)
     _prune_run_dirs()
-    return json.loads(trace.model_dump_json())
+    return _with_details(json.loads(trace.model_dump_json()))
 
 
 @app.post("/runs/stream")
@@ -592,7 +599,7 @@ async def stream_run(
                 history=turns,
             )
             store.complete(run_id, trace)
-            events.put(("complete", json.loads(trace.model_dump_json())))
+            events.put(("complete", _with_details(json.loads(trace.model_dump_json()))))
         except Exception as exc:  # noqa: BLE001 - surfaced to the client
             store.fail(run_id, str(exc))  # full detail retained server-side
             events.put(
@@ -905,6 +912,11 @@ def get_run(run_id: str):
     record = get_store().get(run_id)
     if record is None:
         raise HTTPException(404, f"no such run: {run_id}")
+    trace = record.get("trace")
+    if isinstance(trace, str):
+        trace = json.loads(trace)
+    if isinstance(trace, dict):
+        record = {**record, "trace": _with_details(trace)}
     return record
 
 

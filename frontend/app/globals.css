@@ -1372,6 +1372,31 @@
   .answer.empty {
     color: var(--dim);
   }
+  .answer-details {
+    display: grid;
+    gap: var(--s2);
+    margin: 0 0 var(--s3);
+    max-width: 62ch;
+  }
+  .detail-title {
+    margin: 0 0 4px;
+    font-family: var(--f-mono);
+    font-size: 10.5px;
+    font-weight: 500;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+  .detail-section ul {
+    margin: 0;
+    padding-left: 1.1em;
+    font-size: 14px;
+    line-height: 1.55;
+    font-weight: 300;
+  }
+  .detail-section li::marker {
+    color: var(--dim);
+  }
   .permalink {
     font-family: var(--f-mono);
     font-size: 11px;

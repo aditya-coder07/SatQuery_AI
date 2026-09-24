@@ -12,7 +12,7 @@ waiting on:
 |---|---|---|
 | 1 | verifier on/off | **measured**, with a stated limitation |
 | 2 | agent vs monolith | **measured** end to end |
-| 3 | triad (optical / SAR / fused) | **measured offline** in task 2.3 |
+| 3 | triad (optical / SAR / fused) | **measured offline** from the deployed fusion head |
 | 4 | two-track (specialist vs VLM) | **not comparable yet** - see below |
 
 Usage:
@@ -132,6 +132,9 @@ def ablation_verifier(manifests) -> Ablation:
         controller.run_on_manifest(manifests["SINGLE"], ROUTINE_QUERIES[0][1])
         started = time.perf_counter()
         sentences = flagged = modified = 0
+        learned: set[str] = set()
+        stubbed: set[str] = set()
+        flagged_examples: list[dict] = []
         for config, query in ROUTINE_QUERIES:
             trace = controller.run_on_manifest(manifests[config], query)
             gate = trace.verification.entailment_gate
@@ -139,6 +142,15 @@ def ablation_verifier(manifests) -> Ablation:
             flagged += gate.flagged
             if gate.flagged:
                 modified += 1
+            for f in gate.flagged_detail:
+                flagged_examples.append({
+                    "query": query, "sentence": f.sentence,
+                    "reason": f.reason, "backend": f.backend,
+                })
+            for step in trace.execution:
+                if step.tool == "index_engine_v1":
+                    continue
+                (stubbed if step.confidence_method == "stub" else learned).add(step.tool)
         elapsed = (time.perf_counter() - started) * 1000
         arms[label] = {
             "queries": len(ROUTINE_QUERIES),
@@ -147,6 +159,9 @@ def ablation_verifier(manifests) -> Ablation:
             "answers_modified": modified,
             "total_runtime_ms": round(elapsed, 1),
             "ms_per_query": round(elapsed / len(ROUTINE_QUERIES), 1),
+            "learned_tools": sorted(learned),
+            "stub_tools": sorted(stubbed - learned),
+            "flagged_examples": flagged_examples,
         }
 
     if nli_env:
@@ -207,26 +222,46 @@ def ablation_verifier(manifests) -> Ablation:
             f"{caught}/{caught + missed} "
             f"sentences that contradict the measured indices; with the gate off "
             f"all {caught + missed} reach the user. The deterministic backend "
-            f"costs {overhead:+.1f} ms per query"
             + (
-                f"; adding NLI costs {nli_overhead:+.1f} ms per query, which "
-                f"is {nli_overhead / max(base, 1e-6):.0f}x the whole "
-                f"unverified pipeline and is too slow for an interactive demo "
-                f"on CPU."
+                f"costs {overhead:+.1f} ms per query"
+                if abs(overhead) >= 0.05 * base
+                else f"costs nothing measurable ({overhead:+.1f} ms, within run-to-run noise)"
+            )
+            + (
+                f"; adding NLI costs {nli_overhead:+.1f} ms per query, "
+                f"{nli_overhead / max(base, 1e-6):.1f}x the unverified pipeline on this machine."
                 if nli_overhead is not None
                 else "."
             )
         ),
-        caveat=(
-            "The END-TO-END arm currently flags almost nothing, and that is a "
-            "property of the system's current state rather than of the gate: "
-            "eight of the nine tools are stubs returning fixed strings, and a "
-            "fixed string does not contradict anything. The gate's value "
-            "cannot be demonstrated end to end until the learned tools "
-            "replace the stubs. The controlled arm is what shows the gate "
-            "works; the end-to-end arm is reported so the difference is "
-            "visible rather than glossed."
-        ),
+        caveat=_verifier_caveat(arms["verifier_on"], arms.get("verifier_on_with_nli")),
+    )
+
+
+def _verifier_caveat(arm: dict, nli_arm: dict | None = None) -> str:
+    learned, stubs = arm["learned_tools"], arm["stub_tools"]
+    if stubs:
+        return (
+            f"The end-to-end arm ran with {len(stubs)} placeholder tool(s) "
+            f"({', '.join(stubs)}) that return fixed strings, and a fixed string "
+            "contradicts nothing, so end-to-end flags understate the gate. The "
+            "controlled arm is what shows the gate works."
+        )
+    text = (
+        f"The end-to-end arm ran the learned tools ({', '.join(learned)}) on "
+        f"{arm['queries']} routine queries over synthetic scenes. The deterministic "
+        f"backend flagged {arm['sentences_flagged']} of {arm['sentences_examined']} sentences"
+    )
+    if nli_arm:
+        text += (
+            f"; with NLI, {nli_arm['sentences_flagged']} of {nli_arm['sentences_examined']} "
+            f"were flagged in {nli_arm['answers_modified']} answers (listed under "
+            "flagged_examples). These are unlabelled, so a flag here is not by itself "
+            "a caught error"
+        )
+    return text + (
+        ". The controlled arm, where contradictions are planted, is what "
+        "measures what the gate catches."
     )
 
 
@@ -293,9 +328,10 @@ def ablation_agent_monolith(manifests, matrix) -> Ablation:
             f"model, is what produces the guarantee."
         ),
         caveat=(
-            "This measures LEGALITY, not answer quality. It shows the guards "
-            "prevent impossible plans; it does not show the agent answers "
-            "better, which needs the learned tools and a labelled set."
+            "This measures LEGALITY, not answer quality: the guards prevent "
+            "impossible plans. Answer quality is measured separately - each "
+            "deployed tool on its official test split (the table above) and "
+            "routing on the held-out NL benchmark (evaluation/nl/)."
         ),
     )
 
@@ -303,43 +339,62 @@ def ablation_agent_monolith(manifests, matrix) -> Ablation:
 # --- 3. Triad ----------------------------------------------------------------
 
 
-def ablation_triad() -> Ablation:
-    """Optical-only vs SAR-only vs fused, from the task 2.3 training run."""
-    path = Path("checkpoints/optsar_fusion/metrics.json")
-    if not path.exists():
-        return Ablation(
-            name="triad (optical / SAR / fused)",
-            question="Does optical-SAR fusion beat the better single modality?",
-            status="not_run",
-            caveat=f"no metrics at {path}; run training/train_optsar_fusion.py",
-        )
+TRIAD_METRICS = Path("docs/assets/phase6/optsar_fusion/metrics.json")
 
-    metrics = json.loads(path.read_text(encoding="utf-8"))
+
+def ablation_triad() -> Ablation:
+    """Optical-only vs SAR-only vs fused, from the deployed segmentation head."""
+    name = "triad (optical / SAR / fused)"
+    question = "Does optical-SAR fusion beat the better single modality?"
+    if not TRIAD_METRICS.exists():
+        return Ablation(name=name, question=question, status="not_run",
+                        caveat=f"no metrics at {TRIAD_METRICS}")
+
+    m = json.loads(TRIAD_METRICS.read_text(encoding="utf-8"))
+    arms = m["arms"]
+    tile = m.get("per_tile", {})
+    ci = tile.get("gain_ci95")
+    gain = m["complementarity_gain_miou"]
     return Ablation(
-        name="triad (optical / SAR / fused)",
-        question="Does optical-SAR fusion beat the better single modality?",
+        name=name,
+        question=question,
         status="measured_offline",
         arms={
-            "optical only": {"score": metrics["optical"]},
-            "sar only": {"score": metrics["sar"]},
-            "fused": {"score": metrics["fused"]},
+            "optical only": {"miou": arms["optical"]["miou"]},
+            "sar only": {"miou": arms["sar"]["miou"]},
+            "fused": {"miou": arms["fused"]["miou"]},
+            "fused, SAR zeroed": {"miou": arms["fused_no_sar"]["miou"]},
             "complementarity": {
-                "best_single": metrics["best_single"],
-                "gain": metrics["complementarity_gain"],
+                "gain_miou": gain,
+                "per_tile_gain_ci95": ci,
+                "tiles_where_fused_better": tile.get("tiles_where_fused_better"),
+                "n_tiles": m.get("n_tiles"),
             },
         },
         verdict=(
-            f"Gain is {metrics['complementarity_gain']:+.4f} - fusion does NOT "
-            f"beat optical alone ({metrics['fused']:.4f} against "
-            f"{metrics['optical']:.4f}). Reported as a negative result."
+            (
+                f"Fusion beats optical alone: fused mIoU {arms['fused']['miou']:.4f} "
+                f"against {arms['optical']['miou']:.4f} ({gain:+.4f}"
+                + (f"; per-tile gain 95 % CI [{ci[0]:+.4f}, {ci[1]:+.4f}]" if ci else "")
+                + f"), better on {tile.get('tiles_where_fused_better', 0):.0%} of tiles. "
+                f"Zeroing the SAR input drops the fused head to "
+                f"{arms['fused_no_sar']['miou']:.4f}, so the gain comes from the SAR."
+            )
+            if gain > 0
+            else (
+                f"Gain is {gain:+.4f} - fusion does NOT beat optical alone "
+                f"({arms['fused']['miou']:.4f} against {arms['optical']['miou']:.4f}). "
+                "Reported as a negative result."
+            )
         ),
         caveat=(
-            "Measured on WHU-OPT-SAR scene-level multi-label classification, "
-            "where both modalities can independently answer 'is there water "
-            "somewhere in this tile', leaving nothing for fusion to add. "
-            "Complementarity is inherently spatial, so demonstrating it needs "
-            "a per-pixel segmentation head. The triad machinery is correct and "
-            "reports the honest number; the number is ~zero."
+            "Per-pixel segmentation on WHU-OPT-SAR, split by scene (29 train / 7 "
+            "validation scenes). The same 7 scenes also chose the epoch (fused "
+            "mIoU), so the fused number carries a small selection bias; the "
+            "gain is small in absolute terms. The earlier "
+            "scene-level classification version of this ablation found no gain "
+            "(-0.0064): at scene level either sensor alone can say 'there is "
+            "water in this tile', so fusion only shows up per pixel."
         ),
     )
 
@@ -396,7 +451,21 @@ def main() -> int:
         default=["verifier", "agent_monolith", "triad", "two_track"],
     )
     p.add_argument("--out-dir", type=Path, default=REPORT_DIR)
+    p.add_argument(
+        "--deploy-map", type=Path, default=None,
+        help="export a deploy map (e.g. configs/deploy.v3.yaml) so the verifier arm runs the learned tools",
+    )
     args = p.parse_args()
+
+    if args.deploy_map:
+        from scripts.serve_local import export
+
+        from satquery.tools.stubs import refresh_registry
+
+        missing = export(args.deploy_map)
+        if missing:
+            print("deploy map entries missing on disk:", *missing, sep="\n  ")
+        refresh_registry()
 
     import tempfile
 
@@ -422,15 +491,22 @@ def main() -> int:
 
     args.out_dir.mkdir(parents=True, exist_ok=True)
     out = args.out_dir / "ablations.json"
+    rows = [a.to_dict() for a in results]
+    if out.exists():
+        # Ablations not re-run this time keep their recorded result.
+        rerun = {r["name"] for r in rows}
+        previous = json.loads(out.read_text(encoding="utf-8"))["ablations"]
+        order = [r["name"] for r in previous]
+        rows += [r for r in previous if r["name"] not in rerun]
+        rows.sort(key=lambda r: order.index(r["name"]) if r["name"] in order else len(order))
     out.write_text(
         json.dumps(
             {
-                "ablations": [a.to_dict() for a in results],
+                "ablations": rows,
                 "note": (
-                    "Each arm reports its own status. Two of the four are "
-                    "measured, one is a negative result measured offline in "
-                    "task 2.3, and one is not comparable yet with the reason "
-                    "and the missing run named. Four tables of equal apparent "
+                    "Each arm reports its own status: measured end to end, "
+                    "measured offline from a training run, or not comparable "
+                    "with the missing run named. Four tables of equal apparent "
                     "authority would have been the dishonest presentation."
                 ),
             },
