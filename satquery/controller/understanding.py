@@ -613,6 +613,98 @@ def resolve_follow_up(query: str, history: list[dict[str, Any]] | None, config: 
 # Assembly
 # ---------------------------------------------------------------------------
 
+# ---------------------------------------------------------------------------
+# Hinglish / Hindi -> English rendering
+# ---------------------------------------------------------------------------
+# The router can classify Hinglish and Hindi, but the VLM adapters were
+# fine-tuned on English: "क्या यहाँ पानी है?" reached rs_vqa_v1 as typed and
+# came back "Yes, I can answer that from this image." three times (live,
+# 2026-09-25). Common shapes are rendered into the English the tools were
+# trained on; anything else is left as typed.
+
+_HI_NOUNS: list[tuple[str, str]] = [
+    (r"paani|pani|पानी", "water"),
+    (r"pedh?|ped[oe]n?|पेड़\w*|पेड\w*", "trees"),
+    (r"imara?t\w*|इमारत\w*|buildings?", "buildings"),
+    (r"makaa?n\w*|ghar|gharon|मकान\w*|घर\w*|houses?", "houses"),
+    (r"sadak\w*|सड़क\w*|सडक\w*|roads?", "road"),
+    (r"nadi|नदी|rivers?", "river"),
+    (r"pul|पुल|bridges?", "bridge"),
+    (r"gaa?di\w*|गाड़ि\w*|गाड़ी|vehicles?|cars?", "vehicles"),
+    (r"jahaa?z\w*|जहाज़?\w*|ships?", "ships"),
+    (r"khet\w*|खेत\w*", "farmland"),
+    (r"jungle|jangal|जंगल", "forest"),
+    (r"talaa?b|तालाब|ponds?", "pond"),
+    (r"hariyali|हरियाली", "vegetation"),
+    (r"stadium|स्टेडियम", "stadium"),
+    (r"airport|हवाई ?अड्डा", "airport"),
+]
+_HI_MARKERS = re.compile(
+    r"[ऀ-ॿ]|\b(kya|hai|hain|kitne|kitni|kitna|kahan|kahaan|kidhar|karo|mein|dikhao|batao|dhundo|dhoondho|khojo|dono|badh\w*|ghat\w*|badl\w*|hariyali|paani|pani|jagah|tasve+r\w*)\b",
+    re.IGNORECASE,
+)
+_HI_COUNT = re.compile(r"\b(kitne|kitni)\b|कितने|कितनी", re.IGNORECASE)
+_HI_WHERE = re.compile(r"\b(kahan|kahaan|kidhar|dh[ou]+n?dh?o|khojo|locate karo)\b|कहाँ|कहां|किधर|ढूंढ|ढूँढ|खोज", re.IGNORECASE)
+_HI_YESNO = re.compile(r"\bkya\b|क्या", re.IGNORECASE)
+_HI_CHANGE = re.compile(r"\b(badl\w*|badal\w*|fa?rak|fark|antar|change)\b|बदल|अंतर|फर्क", re.IGNORECASE)
+_HI_FUSE = re.compile(r"\b(radar|sar|optical|milake|milakar|jodke|jodkar)\b|रडार|ऑप्टिकल|मिलाकर|जोड़कर", re.IGNORECASE)
+_HI_AMOUNT = re.compile(r"\b(kitna|kitni)\b|कितना|कितनी", re.IGNORECASE)
+_HI_LESS = re.compile(r"\bkam (hu\w*|ho\w*)|\bghat\w*|\bkata\b|\bkat gay\w*|कम हु|घट|कटा|कट गय", re.IGNORECASE)
+_HI_MORE = re.compile(r"\bbadh\w*|\bnay[aie]\b.*\bban\w*|बढ़|नई?\s.*बन|नए\s.*बन", re.IGNORECASE)
+_HI_DESCRIBE = re.compile(r"\b(varnan|vivran|describe karo)\b|वर्णन|विवरण", re.IGNORECASE)
+_HI_LANDCOVER = re.compile(r"\b(bhoomi|bhumi|zameen|classify karo)\b|भूमि|वर्गीकरण", re.IGNORECASE)
+_HI_URBAN_RURAL = re.compile(r"(shehri|shahri|शहरी|shehar|शहर).*(gaon|gaa?nv|gramin|ग्रामीण|गाँव|गांव)", re.IGNORECASE)
+
+
+def _hi_noun(text: str) -> str | None:
+    for pattern, english in _HI_NOUNS:
+        if re.search(rf"(?<![\wऀ-ॿ])(?:{pattern})(?![\w])", text, re.IGNORECASE):
+            return english
+    return None
+
+
+def to_english(text: str) -> str | None:
+    """An English rendering of a Hinglish/Hindi query, or None to keep it."""
+    t = text or ""
+    if not _HI_MARKERS.search(t):
+        return None
+    noun = _hi_noun(t)
+    if _HI_URBAN_RURAL.search(t):
+        return "Is this an urban or rural area?"
+    if _HI_FUSE.search(t):
+        return f"Combine the optical and radar images to find the {noun}." if noun else None
+    if _HI_AMOUNT.search(t) and _HI_CHANGE.search(t):
+        return "How much area changed between the two images?"
+    less, more = bool(_HI_LESS.search(t)), bool(_HI_MORE.search(t))
+    if noun and less and more:
+        return f"Did the {noun} extent increase or decrease between the two dates?"
+    if noun and less:
+        return f"Did the {noun} extent decrease between the two dates?"
+    if noun and more:
+        if noun in ("buildings", "houses", "road", "bridge"):
+            return f"Were new {noun} built between the two dates?"
+        return f"Did the {noun} extent increase between the two dates?"
+    if _HI_CHANGE.search(t):
+        if _HI_WHERE.search(t) or re.search(r"\bdikhao\b|दिखाओ|दिखाइए", t, re.IGNORECASE):
+            return "Show me where the changes are."
+        if noun and _HI_YESNO.search(t):
+            return f"Has the {noun} changed between the two images?"
+        return "What changed between the two images?"
+    if _HI_DESCRIBE.search(t):
+        return "Describe this image."
+    if _HI_LANDCOVER.search(t):
+        return "Classify the land cover."
+    if noun is None:
+        return None
+    if _HI_COUNT.search(t):
+        return f"How many {noun} are there in this image?"
+    if _HI_WHERE.search(t):
+        return f"Where is the {noun}?"
+    if _HI_YESNO.search(t):
+        return f"Is there any {noun} in this image?"
+    return None
+
+
 def understand(
     query: str,
     config: str,
@@ -651,7 +743,7 @@ def understand(
         quantity=extract_quantity(text),
         classes=classes,
         image_index=extract_image_index(text, config) if task not in TEMPORAL_TASKS and task != "XMODAL_JOINT_EXTRACT" else None,
-        follow_up=note is not None,
+        follow_up=note is not None and not note.startswith("translated"),
         resolution=note,
         cues=cues(text),
     )

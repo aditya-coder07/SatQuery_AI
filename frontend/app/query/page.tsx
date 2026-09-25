@@ -353,7 +353,7 @@ export default function Page() {
 
                 {understanding && (
                   <p className="understood">
-                    {understanding.follow_up && understanding.resolved_query !== understanding.query ? (
+                    {understanding.resolved_query !== understanding.query ? (
                       <>
                         Understood as <b>{understanding.resolved_query}</b>
                       </>

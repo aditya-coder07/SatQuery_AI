@@ -41,6 +41,7 @@ from satquery.controller.understanding import (
     is_open_scene_question,
     is_overall_change_amount,
     resolve_follow_up,
+    to_english,
     understand,
 )
 from satquery.controller.validator import assert_legal
@@ -332,6 +333,11 @@ class Router:
         # turns of this conversation as the API received them; without one
         # the query is used as typed.
         resolved = resolve_follow_up(query, history, manifest.config)
+        if resolved[1] is None:
+            english = to_english(query)
+            if english:
+                # The tools were fine-tuned on English; they get this rendering.
+                resolved = (english, "translated from Hinglish/Hindi")
         text = resolved[0] or query
 
         if manifest.blocking_failures:
@@ -386,7 +392,7 @@ class Router:
             ):
                 task = "TEMPORAL_CHANGE_DESC"
             if (
-                task == "TEMPORAL_CHANGE_VQA"
+                task in ("TEMPORAL_CHANGE_VQA", "TEMPORAL_CHANGE_DESC")
                 and "TEMPORAL_CHANGE_MAP" in legal
                 and is_overall_change_amount(text)
             ):

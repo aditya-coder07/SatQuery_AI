@@ -231,3 +231,36 @@ class TestCodeShapedQueries:
     def test_not_code_like(self, query):
         from satquery.controller.understanding import is_code_like
         assert not is_code_like(query)
+
+
+class TestEnglishRendering:
+    """Hinglish/Hindi rendered into the English the VLM adapters were tuned on."""
+
+    @pytest.mark.parametrize("query,expected", [
+        ("क्या यहाँ पानी है?", "Is there any water in this image?"),
+        ("is image mein kitni buildings hain?", "How many buildings are there in this image?"),
+        ("sadak kahan hai?", "Where is the road?"),
+        ("इस चित्र का वर्णन करो", "Describe this image."),
+        ("kya badla hai dono tasveeron mein?", "What changed between the two images?"),
+        ("क्या हरियाली कम हुई है?", "Did the vegetation extent decrease between the two dates?"),
+        ("कितना क्षेत्र बदला?", "How much area changed between the two images?"),
+        ("optical aur radar dono milake buildings dhundo", "Combine the optical and radar images to find the buildings."),
+    ])
+    def test_rendering(self, query, expected):
+        from satquery.controller.understanding import to_english
+        assert to_english(query) == expected
+
+    @pytest.mark.parametrize("query", ["what is in this picture?", "how much area changed?", "namaste", "kya haal hai"])
+    def test_english_and_unmapped_queries_are_left_alone(self, query):
+        from satquery.controller.understanding import to_english
+        assert to_english(query) is None
+
+    def test_translation_is_not_reported_as_a_follow_up(self, tmp_path):
+        from evaluation.nl_understanding_eval import manifests
+        from satquery.controller.matrix_loader import load_matrix
+        from satquery.controller.router import Router
+
+        d = Router(load_matrix("configs/capability_matrix.yaml")).decide("क्या यहाँ पानी है?", manifests(tmp_path)["SINGLE"])
+        assert d.understanding.resolved_query == "Is there any water in this image?"
+        assert d.understanding.follow_up is False
+        assert d.understanding.resolution == "translated from Hinglish/Hindi"
