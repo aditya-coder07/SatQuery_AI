@@ -13,7 +13,16 @@ import QueryComposer from '../components/QueryComposer';
 import RecentRuns from '../components/RecentRuns';
 import Telemetry from '../components/Telemetry';
 import Conversation from '../components/Conversation';
-import type { Check, Confidence, TraceEvent, Turn, Understanding, Verification } from '../lib/events';
+import AnswerDetails from '../components/AnswerDetails';
+import type {
+  AnswerDetails as AnswerDetailsData,
+  Check,
+  Confidence,
+  TraceEvent,
+  Turn,
+  Understanding,
+  Verification,
+} from '../lib/events';
 import { isCalibrated, parseSSE } from '../lib/events';
 import { hasGeoreference, sceneFootprint, type Bounds } from '../lib/footprint';
 import { focusQuery } from '../lib/focusQuery';
@@ -58,6 +67,7 @@ export default function Page() {
   const [files, setFiles] = useState<File[]>([]);
   const [events, setEvents] = useState<TraceEvent[]>([]);
   const [answer, setAnswer] = useState<string>('');
+  const [details, setDetails] = useState<AnswerDetailsData | null>(null);
   const [task, setTask] = useState<string>('');
   const [confidence, setConfidence] = useState<Confidence | null>(null);
   const [verification, setVerification] = useState<Verification | null>(null);
@@ -103,6 +113,7 @@ export default function Page() {
       setAbstained(false);
       setEvents([]);
       setAnswer('');
+      setDetails(null);
       setTask('');
       setConfidence(null);
       setVerification(null);
@@ -158,6 +169,7 @@ export default function Page() {
             // endpoints will answer.
             setRunComplete(true);
             setAnswer(event.data.answer ?? '');
+            setDetails(event.data.answer_details ?? null);
             setAbstained(Boolean(event.data.abstained));
             // An abstention is not a turn worth resolving the next question
             // against: "Where exactly?" after "hmm" has no referent.
@@ -363,6 +375,8 @@ export default function Page() {
                 <p className={`answer${answer ? '' : ' empty'}`}>
                   {answer || (running ? 'Working…' : 'No run yet — choose imagery above.')}
                 </p>
+
+                <AnswerDetails details={details} />
 
                 {/* The run is stored the moment it completes, and
                     docs/rehearsal.md recommends presenting the two 56 s

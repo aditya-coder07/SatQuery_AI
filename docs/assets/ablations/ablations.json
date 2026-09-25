@@ -10,24 +10,94 @@
           "sentences_examined": 0,
           "sentences_flagged": 0,
           "answers_modified": 0,
-          "total_runtime_ms": 984.3,
-          "ms_per_query": 123.0
+          "total_runtime_ms": 20429.1,
+          "ms_per_query": 2553.6,
+          "learned_tools": [
+            "caption_v1",
+            "change_caption_v1",
+            "change_mask_v1",
+            "grounding_v1",
+            "landcover_v1",
+            "optsar_fusion_v1",
+            "rs_vqa_v1"
+          ],
+          "stub_tools": [],
+          "flagged_examples": []
         },
         "verifier_on": {
           "queries": 8,
-          "sentences_examined": 10,
+          "sentences_examined": 22,
           "sentences_flagged": 0,
           "answers_modified": 0,
-          "total_runtime_ms": 992.0,
-          "ms_per_query": 124.0
+          "total_runtime_ms": 19638.7,
+          "ms_per_query": 2454.8,
+          "learned_tools": [
+            "caption_v1",
+            "change_caption_v1",
+            "change_mask_v1",
+            "grounding_v1",
+            "landcover_v1",
+            "optsar_fusion_v1",
+            "rs_vqa_v1"
+          ],
+          "stub_tools": [],
+          "flagged_examples": []
         },
         "verifier_on_with_nli": {
           "queries": 8,
-          "sentences_examined": 10,
-          "sentences_flagged": 0,
-          "answers_modified": 0,
-          "total_runtime_ms": 19337.7,
-          "ms_per_query": 2417.2
+          "sentences_examined": 22,
+          "sentences_flagged": 6,
+          "answers_modified": 5,
+          "total_runtime_ms": 74391.7,
+          "ms_per_query": 9299.0,
+          "learned_tools": [
+            "caption_v1",
+            "change_caption_v1",
+            "change_mask_v1",
+            "grounding_v1",
+            "landcover_v1",
+            "optsar_fusion_v1",
+            "rs_vqa_v1"
+          ],
+          "stub_tools": [],
+          "flagged_examples": [
+            {
+              "query": "Classify the land cover.",
+              "sentence": "Detected land-cover classes: Urban fabric.",
+              "reason": "contradicts a measured premise (p=0.79): The MNDWI index measures 82% water coverage in this scene. This index is thresholded independently of the others and says nothing about how much of any other class is present.",
+              "backend": "nli"
+            },
+            {
+              "query": "Describe this image.",
+              "sentence": "Detected land-cover class: Urban fabric.",
+              "reason": "contradicts a measured premise (p=0.87): The MNDWI index measures 82% water coverage in this scene. This index is thresholded independently of the others and says nothing about how much of any other class is present.",
+              "backend": "nli"
+            },
+            {
+              "query": "Produce a change mask.",
+              "sentence": "About 0.0% of the scene changed (0.00 km2), detected at threshold 0.5.",
+              "reason": "contradicts a measured premise (p=0.98): The NDVI index measures 18% vegetation coverage in this scene. This index is thresholded independently of the others and says nothing about how much of any other class is present.",
+              "backend": "nli"
+            },
+            {
+              "query": "Combine the optical and radar images to find buildings.",
+              "sentence": "I cannot answer that from this image.",
+              "reason": "contradicts a measured premise (p=0.97): The NDBI index measures 82% built up coverage in this scene. This index is thresholded independently of the others and says nothing about how much of any other class is present.",
+              "backend": "nli"
+            },
+            {
+              "query": "Combine the optical and radar images to find buildings.",
+              "sentence": "That feature is not present in this scene.",
+              "reason": "contradicts a measured premise (p=0.88): The NDWI index measures 82% water coverage in this scene. This index is thresholded independently of the others and says nothing about how much of any other class is present.",
+              "backend": "nli"
+            },
+            {
+              "query": "Classify the land cover.",
+              "sentence": "Detected land-cover classes: Urban fabric.",
+              "reason": "contradicts a measured premise (p=0.79): The MNDWI index measures 82% water coverage in this scene. This index is thresholded independently of the others and says nothing about how much of any other class is present.",
+              "backend": "nli"
+            }
+          ]
         },
         "controlled_false_sentences": {
           "false_sentences_presented": 9,
@@ -36,8 +106,8 @@
           "reached_the_user_if_gate_off": 9
         }
       },
-      "verdict": "On the controlled set the best backend catches 9/9 sentences that contradict the measured indices; with the gate off all 9 reach the user. The deterministic backend costs +1.0 ms per query; adding NLI costs +2294.2 ms per query, which is 19x the whole unverified pipeline and is too slow for an interactive demo on CPU.",
-      "caveat": "The END-TO-END arm currently flags almost nothing, and that is a property of the system's current state rather than of the gate: eight of the nine tools are stubs returning fixed strings, and a fixed string does not contradict anything. The gate's value cannot be demonstrated end to end until the learned tools replace the stubs. The controlled arm is what shows the gate works; the end-to-end arm is reported so the difference is visible rather than glossed."
+      "verdict": "On the controlled set the best backend catches 9/9 sentences that contradict the measured indices; with the gate off all 9 reach the user. The deterministic backend costs nothing measurable (-98.8 ms, within run-to-run noise); adding NLI costs +6745.4 ms per query, 2.6x the unverified pipeline on this machine.",
+      "caveat": "The end-to-end arm ran the learned tools (caption_v1, change_caption_v1, change_mask_v1, grounding_v1, landcover_v1, optsar_fusion_v1, rs_vqa_v1) on 8 routine queries over synthetic scenes. The deterministic backend flagged 0 of 22 sentences; with NLI, 6 of 22 were flagged in 5 answers (listed under flagged_examples). These are unlabelled, so a flag here is not by itself a caught error. The controlled arm, where contradictions are planted, is what measures what the gate catches."
     },
     {
       "name": "agent vs monolith",
@@ -51,8 +121,8 @@
         },
         "monolith (classifier alone)": {
           "plans": 600,
-          "illegal_plans": 148,
-          "illegal_plan_rate": 0.24666666666666667,
+          "illegal_plans": 104,
+          "illegal_plan_rate": 0.17333333333333334,
           "example_impossible_selections": [
             "BITEMPORAL:XMODAL_JOINT_EXTRACT",
             "CROSSMODAL:TEMPORAL_CHANGE_DESC",
@@ -63,8 +133,8 @@
           ]
         }
       },
-      "verdict": "The same classifier, ungated, selects an impossible task on 148/600 plans (24.7%) - change detection on a single image, fusion without SAR. Gated, the rate is 0/600. The structure, not the model, is what produces the guarantee.",
-      "caveat": "This measures LEGALITY, not answer quality. It shows the guards prevent impossible plans; it does not show the agent answers better, which needs the learned tools and a labelled set."
+      "verdict": "The same classifier, ungated, selects an impossible task on 104/600 plans (17.3%) - change detection on a single image, fusion without SAR. Gated, the rate is 0/600. The structure, not the model, is what produces the guarantee.",
+      "caveat": "This measures LEGALITY, not answer quality: the guards prevent impossible plans. Answer quality is measured separately - each deployed tool on its official test split (the table above) and routing on the held-out NL benchmark (evaluation/nl/)."
     },
     {
       "name": "triad (optical / SAR / fused)",
@@ -72,21 +142,29 @@
       "status": "measured_offline",
       "arms": {
         "optical only": {
-          "score": 0.7777944611792945
+          "miou": 0.44670984313729406
         },
         "sar only": {
-          "score": 0.7409939886934886
+          "miou": 0.388282716118238
         },
         "fused": {
-          "score": 0.7714183422364739
+          "miou": 0.4681400462469013
+        },
+        "fused, SAR zeroed": {
+          "miou": 0.409034689078306
         },
         "complementarity": {
-          "best_single": 0.7777944611792945,
-          "gain": -0.006376118942820641
+          "gain_miou": 0.02143020310960725,
+          "per_tile_gain_ci95": [
+            0.005694965560630064,
+            0.01239328975878554
+          ],
+          "tiles_where_fused_better": 0.656084656084656,
+          "n_tiles": 378
         }
       },
-      "verdict": "Gain is -0.0064 - fusion does NOT beat optical alone (0.7714 against 0.7778). Reported as a negative result.",
-      "caveat": "Measured on WHU-OPT-SAR scene-level multi-label classification, where both modalities can independently answer 'is there water somewhere in this tile', leaving nothing for fusion to add. Complementarity is inherently spatial, so demonstrating it needs a per-pixel segmentation head. The triad machinery is correct and reports the honest number; the number is ~zero."
+      "verdict": "Fusion beats optical alone: fused mIoU 0.4681 against 0.4467 (+0.0214; per-tile gain 95 % CI [+0.0057, +0.0124]), better on 66% of tiles. Zeroing the SAR input drops the fused head to 0.4090, so the gain comes from the SAR.",
+      "caveat": "Per-pixel segmentation on WHU-OPT-SAR, split by scene (29 train / 7 validation scenes). The same 7 scenes also chose the epoch (fused mIoU), so the fused number carries a small selection bias; the gain is small in absolute terms. The earlier scene-level classification version of this ablation found no gain (-0.0064): at scene level either sensor alone can say 'there is water in this tile', so fusion only shows up per pixel."
     },
     {
       "name": "two-track (specialist vs VLM)",
@@ -110,5 +188,5 @@
       "caveat": "What would make this a real ablation, stated so it can be built: one task both tracks can perform, on one split, with one metric. Land-cover classification is the natural choice - ask the VLM 'which of these 19 classes are present' on the same BigEarthNet test shard the specialist head is scored on. That is a Phase 3 run that has not happened, not a number that is missing."
     }
   ],
-  "note": "Each arm reports its own status. Two of the four are measured, one is a negative result measured offline in task 2.3, and one is not comparable yet with the reason and the missing run named. Four tables of equal apparent authority would have been the dishonest presentation."
+  "note": "Each arm reports its own status: measured end to end, measured offline from a training run, or not comparable with the missing run named. Four tables of equal apparent authority would have been the dishonest presentation."
 }

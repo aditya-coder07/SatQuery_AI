@@ -16,6 +16,7 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import MapView from '@/MapView';
+import AnswerDetails from '@/components/AnswerDetails';
 import Checks from '@/components/Checks';
 import ConfidenceCard from '@/components/ConfidenceCard';
 import { hasGeoreference, sceneFootprint } from '@/lib/footprint';
@@ -132,7 +133,10 @@ export default function RunPage() {
                 </p>
               </>
             ) : (
-              <p className="answer">{record.answer}</p>
+              <>
+                <p className="answer">{record.answer}</p>
+                <AnswerDetails details={record.answer_details ?? null} />
+              </>
             )}
 
             {gate && (

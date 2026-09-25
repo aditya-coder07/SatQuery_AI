@@ -82,7 +82,12 @@ def describe_indices(index_payload: dict, scene_area_m2: float | None = None) ->
         parts.append(described)
 
     if not parts:
-        return "No dominant land-cover class exceeded its detection threshold."
+        # About the spectral indices, not the land-cover model: worded as a
+        # land-cover claim it contradicted a class the model had asserted, and
+        # it was said even when no index could be computed (RGB-only input).
+        if not indices:
+            return ""
+        return "No spectral index (vegetation, water or built-up) covered 5% or more of the scene."
 
     if len(parts) == 1:
         return f"Index thresholds indicate {parts[0]} coverage."
@@ -96,6 +101,19 @@ def describe_indices(index_payload: dict, scene_area_m2: float | None = None) ->
         f"Index thresholds indicate {body}. These classes are measured "
         "independently and may overlap."
     )
+
+
+def describe_change_extent(step_outputs: list[dict]) -> str:
+    for out in step_outputs:
+        fraction = out.get("changed_fraction")
+        if fraction is None:
+            continue
+        sentence = f"The change detector marks {fraction * 100:.1f}% of the scene as changed"
+        km2 = out.get("changed_area_km2")
+        if km2 is not None:
+            sentence += f" (about {_area(km2 * 1_000_000.0)})"
+        return sentence + "."
+    return ""
 
 
 def describe_labels(labels: list[str]) -> str:
@@ -129,6 +147,8 @@ def synthesise_answer(
         boxes.extend(out.get("bounding_boxes", []) or [])
 
     if task == "SINGLE_LANDCOVER":
+        # landcover_v1's own answer already lists its classes; when that is
+        # present, compose_answer drops this label sentence as a repeat.
         pieces = [describe_labels(labels), describe_indices(index_payload, scene_area_m2)]
         return " ".join(p for p in pieces if p)
 
@@ -147,7 +167,10 @@ def synthesise_answer(
         return " ".join(p for p in pieces if p)
 
     if task == "TEMPORAL_CHANGE_DESC":
-        return describe_indices(index_payload, scene_area_m2)
+        # The change mask's measured extent: without it "what changed?" got
+        # the caption alone, never how much of the scene it was.
+        pieces = [describe_change_extent(step_outputs), describe_indices(index_payload, scene_area_m2)]
+        return " ".join(p for p in pieces if p)
 
     if task == "TEMPORAL_CHANGE_MAP":
         # `artifacts` also carries the index engine's own COGs, so a bare
@@ -353,11 +376,21 @@ def compose_answer(
     )
     tool_answer = tool_answer.strip()
 
-    if task not in ENRICHABLE_TASKS or not synthesised:
+    if task not in ENRICHABLE_TASKS or not (tool_answer or synthesised):
         # Replace-only, exactly as before: the tool's answer if it produced
-        # one, otherwise whatever the synthesiser could say.
+        # one, otherwise whatever the synthesiser could say. Both empty stays
+        # empty - the executor's signal to abstain.
         return tool_answer or synthesised
 
+    labels_sentence = describe_labels(
+        [label for out in step_outputs for label in (out.get("labels") or [])]
+    )
+    if labels_sentence and tool_answer and all(
+        str(label).replace("_", " ").lower() in tool_answer.lower()
+        for out in step_outputs for label in (out.get("labels") or [])
+    ):
+        # The tool already named every class; do not list them twice.
+        synthesised = synthesised.replace(labels_sentence, "").strip()
     parts = [_terminated(tool_answer), _terminated(synthesised)]
     parts.append(
         describe_location(georeferenced, container_format, centroid, extent_m)

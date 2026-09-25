@@ -346,14 +346,29 @@ def _change_caption_tool():
     return ChangeCaptionTool() if is_available()[0] else ChangeCaptionStub()
 
 
-REGISTRY = {
-    "rs_vqa_v1": _vqa_tool(),
-    "caption_v1": _caption_tool(),
-    "grounding_v1": _grounding_tool(),
-    "landcover_v1": _landcover_tool(),
-    "optsar_fusion_v1": _fusion_tool(),
-    "change_mask_v1": _change_mask_tool(),
-    "change_caption_v1": _change_caption_tool(),
-    "change_vqa_v1": _change_vqa_tool(),
-    "index_engine_v1": IndexEngine(),
-}
+def _build() -> dict:
+    return {
+        "rs_vqa_v1": _vqa_tool(),
+        "caption_v1": _caption_tool(),
+        "grounding_v1": _grounding_tool(),
+        "landcover_v1": _landcover_tool(),
+        "optsar_fusion_v1": _fusion_tool(),
+        "change_mask_v1": _change_mask_tool(),
+        "change_caption_v1": _change_caption_tool(),
+        "change_vqa_v1": _change_vqa_tool(),
+        "index_engine_v1": IndexEngine(),
+    }
+
+
+REGISTRY = _build()
+
+
+def refresh_registry() -> dict:
+    """Re-resolve every tool from the current environment, in place.
+
+    For a caller that sets the checkpoint variables after this module was
+    imported; importers hold a reference to REGISTRY, so it is updated, not
+    replaced.
+    """
+    REGISTRY.update(_build())
+    return REGISTRY
