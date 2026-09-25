@@ -1,0 +1,36 @@
+{"id": "mt01", "config": "SINGLE", "lang": "hinglish", "query": "kitne makaan hain is tasveer mein", "accept": ["SINGLE_VQA"]}
+{"id": "mt02", "config": "SINGLE", "lang": "hinglish", "query": "koi nadi dikh rahi hai?", "accept": ["SINGLE_VQA", "SINGLE_GROUND"]}
+{"id": "mt03", "config": "SINGLE", "lang": "hinglish", "query": "stadium kidhar hai", "accept": ["SINGLE_GROUND"]}
+{"id": "mt04", "config": "SINGLE", "lang": "hinglish", "query": "tank ki location batao", "accept": ["SINGLE_GROUND"]}
+{"id": "mt05", "config": "SINGLE", "lang": "hinglish", "query": "is jagah ke baare mein thoda batao", "accept": ["SINGLE_CAPTION", "SINGLE_VQA"]}
+{"id": "mt06", "config": "SINGLE", "lang": "hinglish", "query": "ek line mein caption do", "accept": ["SINGLE_CAPTION"]}
+{"id": "mt07", "config": "SINGLE", "lang": "hinglish", "query": "khet aur jungle ka classification karo", "accept": ["SINGLE_LANDCOVER"]}
+{"id": "mt08", "config": "SINGLE", "lang": "hinglish", "query": "kitne pratishat hissa pani hai", "accept": ["SINGLE_VQA", "SINGLE_LANDCOVER"]}
+{"id": "mt09", "config": "SINGLE", "lang": "hinglish", "query": "upar right corner mein kya hai", "accept": ["SINGLE_VQA"]}
+{"id": "mt10", "config": "SINGLE", "lang": "hinglish", "query": "kaise ho", "accept": ["CLARIFY_OR_ABSTAIN"]}
+{"id": "mt11", "config": "SINGLE", "lang": "hinglish", "query": "iski keemat kitni hogi", "accept": ["CLARIFY_OR_ABSTAIN"]}
+{"id": "mt12", "config": "SINGLE", "lang": "hinglish", "query": "saari gaadiyon ko mark karo", "accept": ["SINGLE_GROUND"]}
+{"id": "mt13", "config": "BITEMPORAL_PAIR", "lang": "hinglish", "query": "pehle aur baad mein kya farak hai", "accept": ["TEMPORAL_CHANGE_DESC"]}
+{"id": "mt14", "config": "BITEMPORAL_PAIR", "lang": "hinglish", "query": "koi nayi sadak bani kya", "accept": ["TEMPORAL_CHANGE_VQA", "TEMPORAL_CHANGE_DESC"]}
+{"id": "mt15", "config": "BITEMPORAL_PAIR", "lang": "hinglish", "query": "jahan badlav hua wo jagah highlight karo", "accept": ["TEMPORAL_CHANGE_MAP"]}
+{"id": "mt16", "config": "BITEMPORAL_PAIR", "lang": "hinglish", "query": "jungle kitna kata hai", "accept": ["TEMPORAL_CHANGE_VQA"]}
+{"id": "mt17", "config": "BITEMPORAL_PAIR", "lang": "hinglish", "query": "dusri photo ka description do", "accept": ["SINGLE_CAPTION", "SINGLE_VQA"], "image": 1}
+{"id": "mt18", "config": "BITEMPORAL_PAIR", "lang": "hinglish", "query": "time ke saath kya kya badla samjhao", "accept": ["TEMPORAL_CHANGE_DESC"]}
+{"id": "mt19", "config": "BITEMPORAL_PAIR", "lang": "hinglish", "query": "construction badha hai ya nahi", "accept": ["TEMPORAL_CHANGE_VQA"]}
+{"id": "mt20", "config": "BITEMPORAL_PAIR", "lang": "hinglish", "query": "ok theek hai", "accept": ["CLARIFY_OR_ABSTAIN"]}
+{"id": "mt21", "config": "CROSSMODAL_PAIR", "lang": "hinglish", "query": "radar data ke saath optical ko combine karke pani dhundo", "accept": ["XMODAL_JOINT_EXTRACT"]}
+{"id": "mt22", "config": "SINGLE", "lang": "hindi", "query": "कितने मकान दिखाई दे रहे हैं", "accept": ["SINGLE_VQA"]}
+{"id": "mt23", "config": "SINGLE", "lang": "hindi", "query": "नदी किधर है", "accept": ["SINGLE_GROUND"]}
+{"id": "mt24", "config": "SINGLE", "lang": "hindi", "query": "इस जगह के बारे में बताइए", "accept": ["SINGLE_CAPTION", "SINGLE_VQA"]}
+{"id": "mt25", "config": "SINGLE", "lang": "hindi", "query": "खेत और जंगल का वर्गीकरण कीजिए", "accept": ["SINGLE_LANDCOVER"]}
+{"id": "mt26", "config": "SINGLE", "lang": "hindi", "query": "क्या यहाँ कोई स्टेडियम है?", "accept": ["SINGLE_VQA", "SINGLE_GROUND"]}
+{"id": "mt27", "config": "SINGLE", "lang": "hindi", "query": "सभी गाड़ियों को चिह्नित करो", "accept": ["SINGLE_GROUND"]}
+{"id": "mt28", "config": "SINGLE", "lang": "hindi", "query": "आप कैसे हैं", "accept": ["CLARIFY_OR_ABSTAIN"]}
+{"id": "mt29", "config": "BITEMPORAL_PAIR", "lang": "hindi", "query": "पहले और बाद में क्या अंतर है", "accept": ["TEMPORAL_CHANGE_DESC"]}
+{"id": "mt30", "config": "BITEMPORAL_PAIR", "lang": "hindi", "query": "जहाँ बदलाव हुआ वो जगह दिखाइए", "accept": ["TEMPORAL_CHANGE_MAP"]}
+{"id": "mt31", "config": "BITEMPORAL_PAIR", "lang": "hindi", "query": "क्या कोई नई सड़क बनी है", "accept": ["TEMPORAL_CHANGE_VQA", "TEMPORAL_CHANGE_DESC"]}
+{"id": "mt32", "config": "BITEMPORAL_PAIR", "lang": "hindi", "query": "जंगल कितना कटा है", "accept": ["TEMPORAL_CHANGE_VQA"]}
+{"id": "mt33", "config": "BITEMPORAL_PAIR", "lang": "hindi", "query": "दूसरी तस्वीर का विवरण दीजिए", "accept": ["SINGLE_CAPTION", "SINGLE_VQA"], "image": 1}
+{"id": "mt34", "config": "CROSSMODAL_PAIR", "lang": "hindi", "query": "रडार और ऑप्टिकल को जोड़कर पानी ढूंढिए", "accept": ["XMODAL_JOINT_EXTRACT"]}
+{"id": "mt35", "config": "SINGLE", "lang": "hindi", "query": "ठीक है", "accept": ["CLARIFY_OR_ABSTAIN"]}
+{"id": "mt36", "config": "SINGLE", "lang": "hindi", "query": "इसकी कीमत कितनी होगी", "accept": ["CLARIFY_OR_ABSTAIN"]}

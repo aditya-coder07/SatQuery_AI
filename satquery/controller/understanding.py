@@ -103,13 +103,62 @@ _CUE_PATTERNS: dict[str, str] = {
     "greeting": r"^\s*(hi|hello|hey|thanks|thank you|ok|okay|cheers|yo|sup)\b",
     "anaphor": r"\b(it|its|that|those|them|they|there|this one|that one|the same|the other|and the|what about|only|just|also|again|exactly|why)\b",
 }
+# The same cues in Hinglish (Latin script, word-bounded) and Hindi
+# (Devanagari, matched as substrings: its vowel signs are combining marks, so
+# `\b` does not fall where a reader sees a word edge).
+_CUE_PATTERNS_HINGLISH: dict[str, str] = {
+    "change": r"\b(badl[aie]|badal|badla[a]?v|fa?rak|fark|antar)\w*",
+    "new": r"\b(nay[aie]|ban[aie]|banaya|badh[aie])\b",
+    "gone": r"\b(kam (hu[aie]|ho gay)|ghat[aie]|hata(ya|ye)?|tod[aie]|gayab)\b",
+    "two_images": r"\b(dono|pehl[aie]|dusr[aie]|doosr[aie]|baad|pehle)\b",
+    "first_image": r"\bpehl[aie] (image|photo|tasveer|tasvir)\b",
+    "second_image": r"\b(dusr[aie]|doosr[aie]|baad wal[aie]) (image|photo|tasveer|tasvir)\b",
+    "locate": r"\b(kahan|kahaan|dh[ou]+n?dh?o|khojo|dikhao|locate karo)\b",
+    "caption": r"\b(varnan|describe karo|likho|caption|batao sab)\b",
+    "classify": r"\b(zameen|bhoomi|bhumi|upyog|vargikaran|classify karo)\b",
+    "fuse": r"\b(milake|milakar|jodke|jodkar)\b",
+    "mask": r"\b(mask banao)\b",
+    "count": r"\b(kitne|kitni|ginti|gino)\b",
+    "fraction": r"\b(kitna|hissa|pratishat)\b",
+    "area": r"\b(kshetra|kshetrafal)\b",
+    "comparison": r"\b(zyada|jyada|tulna|compare karo)\b",
+    "question": r"\b(kya|kaun|kaunsa|kaunsi|kaise)\b",
+    "greeting": r"^\s*(namaste|namaskar|shukriya|dhanyavad|dhanyawad)\b",
+    "anaphor": r"\b(woh|wahi|usme|usmein|sirf|bas)\b",
+}
+_CUE_PATTERNS_HINDI: dict[str, str] = {
+    "change": r"(बदल|अंतर|फ़र्क|फर्क)",
+    "new": r"(नया|नई|नए|बना|बनी|बने|बढ़)",
+    "gone": r"(कम हु|घट|हटा|गायब|टूट)",
+    "two_images": r"(दोनों|पहली|पहले|दूसरी|बाद)",
+    "first_image": r"पहली (तस्वीर|फोटो|छवि)",
+    "second_image": r"दूसरी (तस्वीर|फोटो|छवि)",
+    "locate": r"(कहाँ|कहां|ढूंढ|ढूँढ|खोज|दिखाओ|दिखाइए)",
+    "caption": r"(वर्णन|विवरण|कैप्शन|लिखो|लिखिए)",
+    "classify": r"(वर्गीकरण|भूमि|आवरण|उपयोग)",
+    "fuse": r"(रडार|ऑप्टिकल|मिलाकर|जोड़कर)",
+    "count": r"(कितने|कितनी|गिन)",
+    "fraction": r"(कितना|हिस्सा|प्रतिशत)",
+    "area": r"(क्षेत्र)",
+    "comparison": r"(ज़्यादा|ज्यादा|तुलना)",
+    "question": r"(क्या|कौन|कैसे)",
+    "greeting": r"^\s*(नमस्ते|नमस्कार|धन्यवाद|शुक्रिया)",
+}
 _CUES = {name: re.compile(pattern, re.IGNORECASE) for name, pattern in _CUE_PATTERNS.items()}
+_CUES_ML = {
+    name: [re.compile(p, re.IGNORECASE) for p in (_CUE_PATTERNS_HINGLISH.get(name), _CUE_PATTERNS_HINDI.get(name)) if p]
+    for name in _CUE_PATTERNS
+}
 CUE_NAMES: tuple[str, ...] = tuple(_CUE_PATTERNS)
 
 
 def cues(text: str) -> list[str]:
     """Names of the lexical cues present in `text`, in a fixed order."""
-    return [name for name in CUE_NAMES if _CUES[name].search(text or "")]
+    text = text or ""
+    return [
+        name for name in CUE_NAMES
+        if _CUES[name].search(text) or any(p.search(text) for p in _CUES_ML[name])
+    ]
 
 
 def cue_vector(text: str) -> list[float]:
@@ -407,6 +456,19 @@ def is_overall_change_amount(text: str) -> bool:
         and bool(re.search(r"chang", t, re.IGNORECASE))
         and not _CHANGE_SUBJECT.search(t)
     )
+
+
+_CODE_SHAPE = re.compile(
+    r"\b(select|drop|insert|delete|union|update)\b[^.?!]*\b(from|table|into|set|select)\b"
+    r"|;\s*--|<\s*script|\{\{|\$\{|\$\(|`|__import__|\beval\s*\(|\.\./|file://|%[sn]"
+    r"|'\s*or\s*'",
+    re.IGNORECASE,
+)
+
+
+def is_code_like(text: str) -> bool:
+    """SQL, shell, template or path-traversal syntax in the query."""
+    return bool(_CODE_SHAPE.search(text or ""))
 
 
 def is_bare_comparison(text: str) -> bool:

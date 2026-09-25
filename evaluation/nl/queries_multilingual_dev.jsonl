@@ -1,0 +1,48 @@
+{"id": "m001", "config": "SINGLE", "lang": "hinglish", "query": "is image mein kitni buildings hain?", "accept": ["SINGLE_VQA"]}
+{"id": "m002", "config": "SINGLE", "lang": "hinglish", "query": "yahan paani hai kya?", "accept": ["SINGLE_VQA"]}
+{"id": "m003", "config": "SINGLE", "lang": "hinglish", "query": "sadak kahan hai?", "accept": ["SINGLE_GROUND"]}
+{"id": "m004", "config": "SINGLE", "lang": "hinglish", "query": "airport dhundo is photo mein", "accept": ["SINGLE_GROUND"]}
+{"id": "m005", "config": "SINGLE", "lang": "hinglish", "query": "is image ka caption likho", "accept": ["SINGLE_CAPTION"]}
+{"id": "m006", "config": "SINGLE", "lang": "hinglish", "query": "is scene ko describe karo", "accept": ["SINGLE_CAPTION", "SINGLE_VQA"]}
+{"id": "m007", "config": "SINGLE", "lang": "hinglish", "query": "land cover classify karo", "accept": ["SINGLE_LANDCOVER"]}
+{"id": "m008", "config": "SINGLE", "lang": "hinglish", "query": "yeh area shehri hai ya gaon?", "accept": ["SINGLE_VQA"]}
+{"id": "m009", "config": "SINGLE", "lang": "hinglish", "query": "kitne ped dikh rahe hain", "accept": ["SINGLE_VQA"]}
+{"id": "m010", "config": "SINGLE", "lang": "hinglish", "query": "pul ko locate karo", "accept": ["SINGLE_GROUND"]}
+{"id": "m011", "config": "SINGLE", "lang": "hinglish", "query": "zameen ka upyog kya hai yahan", "accept": ["SINGLE_LANDCOVER", "SINGLE_VQA"]}
+{"id": "m012", "config": "SINGLE", "lang": "hinglish", "query": "kitna hissa hara hai?", "accept": ["SINGLE_VQA", "SINGLE_LANDCOVER"]}
+{"id": "m013", "config": "SINGLE", "lang": "hinglish", "query": "namaste", "accept": ["CLARIFY_OR_ABSTAIN"]}
+{"id": "m014", "config": "SINGLE", "lang": "hinglish", "query": "kal mausam kaisa rahega", "accept": ["CLARIFY_OR_ABSTAIN"]}
+{"id": "m015", "config": "SINGLE", "lang": "hinglish", "query": "neeche left mein kya hai?", "accept": ["SINGLE_VQA"]}
+{"id": "m016", "config": "SINGLE", "lang": "hinglish", "query": "saare ships ke boxes banao", "accept": ["SINGLE_GROUND"]}
+{"id": "m017", "config": "BITEMPORAL_PAIR", "lang": "hinglish", "query": "kya badla hai dono tasveeron mein?", "accept": ["TEMPORAL_CHANGE_DESC"]}
+{"id": "m018", "config": "BITEMPORAL_PAIR", "lang": "hinglish", "query": "naye ghar bane hain kya?", "accept": ["TEMPORAL_CHANGE_VQA", "TEMPORAL_CHANGE_DESC"]}
+{"id": "m019", "config": "BITEMPORAL_PAIR", "lang": "hinglish", "query": "change kahan hua hai dikhao", "accept": ["TEMPORAL_CHANGE_MAP"]}
+{"id": "m020", "config": "BITEMPORAL_PAIR", "lang": "hinglish", "query": "kitna area badla?", "accept": ["TEMPORAL_CHANGE_MAP", "TEMPORAL_CHANGE_VQA"]}
+{"id": "m021", "config": "BITEMPORAL_PAIR", "lang": "hinglish", "query": "hariyali badhi ya ghati?", "accept": ["TEMPORAL_CHANGE_VQA"]}
+{"id": "m022", "config": "BITEMPORAL_PAIR", "lang": "hinglish", "query": "change mask banao", "accept": ["TEMPORAL_CHANGE_MAP"]}
+{"id": "m023", "config": "BITEMPORAL_PAIR", "lang": "hinglish", "query": "pehli image ko describe karo", "accept": ["SINGLE_CAPTION", "SINGLE_VQA"], "image": 0}
+{"id": "m024", "config": "BITEMPORAL_PAIR", "lang": "hinglish", "query": "dono ko compare karo", "accept": ["TEMPORAL_CHANGE_DESC"]}
+{"id": "m025", "config": "BITEMPORAL_PAIR", "lang": "hinglish", "query": "kya paani ka area kam hua hai?", "accept": ["TEMPORAL_CHANGE_VQA"]}
+{"id": "m026", "config": "BITEMPORAL_PAIR", "lang": "hinglish", "query": "shukriya", "accept": ["CLARIFY_OR_ABSTAIN"]}
+{"id": "m027", "config": "CROSSMODAL_PAIR", "lang": "hinglish", "query": "optical aur radar dono milake buildings dhundo", "accept": ["XMODAL_JOINT_EXTRACT"]}
+{"id": "m028", "config": "CROSSMODAL_PAIR", "lang": "hinglish", "query": "SAR aur optical ko jodke paani nikalo", "accept": ["XMODAL_JOINT_EXTRACT"]}
+{"id": "m029", "config": "CROSSMODAL_PAIR", "lang": "hinglish", "query": "is scene mein kya kya hai batao", "accept": ["SINGLE_CAPTION", "SINGLE_VQA", "XMODAL_JOINT_EXTRACT"]}
+{"id": "m030", "config": "SINGLE", "lang": "hindi", "query": "इस तस्वीर में कितनी इमारतें हैं?", "accept": ["SINGLE_VQA"]}
+{"id": "m031", "config": "SINGLE", "lang": "hindi", "query": "क्या यहाँ पानी है?", "accept": ["SINGLE_VQA"]}
+{"id": "m032", "config": "SINGLE", "lang": "hindi", "query": "सड़क कहाँ है?", "accept": ["SINGLE_GROUND"]}
+{"id": "m033", "config": "SINGLE", "lang": "hindi", "query": "इस चित्र का वर्णन करो", "accept": ["SINGLE_CAPTION", "SINGLE_VQA"]}
+{"id": "m034", "config": "SINGLE", "lang": "hindi", "query": "भूमि आवरण का वर्गीकरण करें", "accept": ["SINGLE_LANDCOVER"]}
+{"id": "m035", "config": "SINGLE", "lang": "hindi", "query": "यह इलाका शहरी है या ग्रामीण?", "accept": ["SINGLE_VQA"]}
+{"id": "m036", "config": "SINGLE", "lang": "hindi", "query": "पुल ढूंढो", "accept": ["SINGLE_GROUND"]}
+{"id": "m037", "config": "SINGLE", "lang": "hindi", "query": "कितने पेड़ दिख रहे हैं?", "accept": ["SINGLE_VQA"]}
+{"id": "m038", "config": "SINGLE", "lang": "hindi", "query": "नमस्ते", "accept": ["CLARIFY_OR_ABSTAIN"]}
+{"id": "m039", "config": "SINGLE", "lang": "hindi", "query": "कल का मौसम बताओ", "accept": ["CLARIFY_OR_ABSTAIN"]}
+{"id": "m040", "config": "BITEMPORAL_PAIR", "lang": "hindi", "query": "दोनों तस्वीरों में क्या बदला है?", "accept": ["TEMPORAL_CHANGE_DESC"]}
+{"id": "m041", "config": "BITEMPORAL_PAIR", "lang": "hindi", "query": "बदलाव कहाँ हुआ है दिखाओ", "accept": ["TEMPORAL_CHANGE_MAP"]}
+{"id": "m042", "config": "BITEMPORAL_PAIR", "lang": "hindi", "query": "क्या नई इमारतें बनी हैं?", "accept": ["TEMPORAL_CHANGE_VQA", "TEMPORAL_CHANGE_DESC"]}
+{"id": "m043", "config": "BITEMPORAL_PAIR", "lang": "hindi", "query": "कितना क्षेत्र बदला?", "accept": ["TEMPORAL_CHANGE_MAP", "TEMPORAL_CHANGE_VQA"]}
+{"id": "m044", "config": "BITEMPORAL_PAIR", "lang": "hindi", "query": "दोनों की तुलना करो", "accept": ["TEMPORAL_CHANGE_DESC"]}
+{"id": "m045", "config": "BITEMPORAL_PAIR", "lang": "hindi", "query": "क्या हरियाली कम हुई है?", "accept": ["TEMPORAL_CHANGE_VQA"]}
+{"id": "m046", "config": "CROSSMODAL_PAIR", "lang": "hindi", "query": "ऑप्टिकल और रडार को मिलाकर इमारतें खोजो", "accept": ["XMODAL_JOINT_EXTRACT"]}
+{"id": "m047", "config": "SINGLE", "lang": "hindi", "query": "धन्यवाद", "accept": ["CLARIFY_OR_ABSTAIN"]}
+{"id": "m048", "config": "SINGLE", "lang": "hindi", "query": "इस तस्वीर का कैप्शन लिखो", "accept": ["SINGLE_CAPTION"]}

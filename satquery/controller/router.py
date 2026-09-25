@@ -37,6 +37,7 @@ from satquery.controller.matrix_loader import CapabilityMatrix
 from satquery.controller.understanding import (
     QueryUnderstanding,
     is_bare_comparison,
+    is_code_like,
     is_open_scene_question,
     is_overall_change_amount,
     resolve_follow_up,
@@ -370,12 +371,16 @@ class Router:
             # confidence takes that off the knife edge in the safe direction.
             if prediction.is_confident or prediction.task == "CLARIFY_OR_ABSTAIN":
                 task = prediction.task
+            elif is_code_like(text):
+                # An unsure pick on SQL/shell/template text: the default
+                # would answer a payload as if it were a question.
+                task = "CLARIFY_OR_ABSTAIN"
             else:
                 task = CONFIG_DEFAULT_TASK.get(manifest.config, "SINGLE_VQA")
                 if task not in legal:
                     task = "CLARIFY_OR_ABSTAIN"
             if (
-                task == "CLARIFY_OR_ABSTAIN"
+                not task.startswith("TEMPORAL_CHANGE")
                 and manifest.config == "BITEMPORAL_PAIR"
                 and is_bare_comparison(text)
             ):
