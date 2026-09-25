@@ -232,16 +232,21 @@ class TestRouterIntegration:
 
 
 def _norm(text: str) -> str:
-    return re.sub(r"[^a-z0-9 ]", "", text.lower()).strip()
+    # Devanagari kept: stripped to a-z0-9 every Hindi query normalised to "".
+    return re.sub(r"[^a-z0-9 ऀ-ॿ]", "", text.lower()).strip()
 
 
 class TestBenchmarkIntegrity:
     @pytest.fixture(scope="class")
     def eval_rows(self):
         rows = []
-        for name in ("queries.jsonl", "queries_test.jsonl", "queries_final.jsonl"):
+        for name in ("queries.jsonl", "queries_test.jsonl", "queries_final.jsonl",
+                     "queries_multilingual_dev.jsonl", "queries_multilingual_test.jsonl"):
             rows += [json.loads(l) for l in (NL_DIR / name).read_text(encoding="utf-8").splitlines() if l.strip()]
         return rows
+
+    def test_normalisation_keeps_devanagari(self):
+        assert _norm("क्या यहाँ पानी है?") == "क्या यहाँ पानी है"
 
     def test_no_bank_expansion_equals_a_benchmark_query(self, eval_rows):
         bank = {_norm(e.text) for e in generate()}
