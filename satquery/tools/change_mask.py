@@ -41,7 +41,7 @@ from satquery.tools.base import ToolProtocol
 from satquery.tools.provenance import record
 
 TOOL_NAME = "change_mask"
-TOOL_VERSION = "1.1.0"  # 1.1.0: dihedral TTA (2026-09-21)
+TOOL_VERSION = "1.1.1"  # 1.1.0: dihedral TTA (2026-09-21); 1.1.1: m2 below 1 km2
 ENV_CHECKPOINT = "SATQUERY_CHANGE_MASK"
 
 # The detector was trained on 256px RGB tiles; inference tiles at the same
@@ -55,6 +55,13 @@ DEFAULT_THRESHOLD = 0.5
 # side. Eight passes of a 24M-parameter net: well under a second on a GPU,
 # a few seconds on a CPU host. SATQUERY_CHANGE_MASK_TTA=0 disables it.
 ENV_TTA = "SATQUERY_CHANGE_MASK_TTA"
+
+
+def _area_text(km2: float) -> str:
+    # 0.007 km2 printed as "0.01 km2" overstated a 7,000 m2 change by 40%.
+    if km2 >= 1.0:
+        return f"{km2:.2f} km2"
+    return f"about {round(km2 * 1_000_000, -2):,.0f} m2"
 
 
 def tta_enabled() -> bool:
@@ -233,7 +240,7 @@ class ChangeMaskTool(ToolProtocol):
             "mean_change_probability": round(float(probability.mean()), 6),
             "answer": (
                 f"About {changed_fraction:.1%} of the scene changed "
-                f"({area_km2:.2f} km2), detected at threshold {threshold}."
+                f"({_area_text(area_km2)}), detected at threshold {threshold}."
             ),
         })
 

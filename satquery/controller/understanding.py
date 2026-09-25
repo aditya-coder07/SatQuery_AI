@@ -370,12 +370,42 @@ _OPEN_FILLER = frozenset({
 })
 
 
+# The same shape in Hinglish ("is photo mein kya dikh raha hai?", "yeh
+# kaunsi jagah hai?") and Hindi ("इस तस्वीर में क्या है?"): the users of this
+# system write both, and the classifier's n-grams are English-only.
+_OPEN_WHAT = frozenset({"what", "whats", "what's", "kya", "kaunsi", "kaun", "kaisi", "kaisa", "क्या", "कौन", "कौनसी", "कैसी"})
+_OPEN_FILLER_HI = frozenset({
+    "hai", "hain", "yeh", "ye", "is", "isme", "ismein", "mein", "me", "photo", "tasveer",
+    "tasvir", "dikh", "raha", "rahi", "rahe", "jagah", "ka", "ki", "ke", "batao",
+    "bataiye", "sa", "si", "hota",
+    "है", "हैं", "यह", "ये", "इस", "इसमें", "में", "तस्वीर", "फोटो", "चित्र", "दिख", "रहा",
+    "रही", "जगह", "सी", "का", "की", "के", "बताओ", "बताइए",
+})
+
+
 def is_open_scene_question(text: str) -> bool:
-    words = re.findall(r"[a-z']+", (text or "").lower())
+    words = re.findall(r"[^\s.,!?;:()\"“”।]+", (text or "").lower())
     return (
         bool(words)
-        and any(w in ("what", "whats", "what's") for w in words)
-        and all(w in _OPEN_FILLER for w in words)
+        and any(w in _OPEN_WHAT for w in words)
+        and all(w in _OPEN_WHAT or w in _OPEN_FILLER or w in _OPEN_FILLER_HI for w in words)
+    )
+
+
+_CHANGE_SUBJECT = re.compile(
+    r"vegetat|forest|tree|crop|farm|green|arable|water|river|lake|flood|wetland|sea|"
+    r"reservoir|built|urban|building|settlement|industrial|city|construction|road",
+    re.IGNORECASE,
+)
+
+
+def is_overall_change_amount(text: str) -> bool:
+    """"How much area changed?" - an amount of change with no subject named."""
+    t = text or ""
+    return (
+        extract_quantity(t) in ("area", "fraction")
+        and bool(re.search(r"chang", t, re.IGNORECASE))
+        and not _CHANGE_SUBJECT.search(t)
     )
 
 

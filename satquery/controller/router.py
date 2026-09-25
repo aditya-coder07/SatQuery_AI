@@ -38,6 +38,7 @@ from satquery.controller.understanding import (
     QueryUnderstanding,
     is_bare_comparison,
     is_open_scene_question,
+    is_overall_change_amount,
     resolve_follow_up,
     understand,
 )
@@ -380,7 +381,16 @@ class Router:
             ):
                 task = "TEMPORAL_CHANGE_DESC"
             if (
-                task == "SINGLE_VQA"
+                task == "TEMPORAL_CHANGE_VQA"
+                and "TEMPORAL_CHANGE_MAP" in legal
+                and is_overall_change_amount(text)
+            ):
+                # "How much area changed?" names no subject, so the change-VQA
+                # path (per-subject index deltas) declines it; the change mask
+                # measures exactly this total.
+                task = "TEMPORAL_CHANGE_MAP"
+            if (
+                task in ("SINGLE_VQA", "CLARIFY_OR_ABSTAIN")
                 and "SINGLE_CAPTION" in legal
                 and is_open_scene_question(text)
                 and self._captioner_loaded()

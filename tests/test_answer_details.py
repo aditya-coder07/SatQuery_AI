@@ -162,3 +162,55 @@ class TestChangeExtentInTheDescription:
         )
         assert "Many" not in answer  # the caption is kept as written
         assert "The change detector marks 42.7% of the scene as changed (about 7,000 m2)." in answer
+
+
+class TestLiveCheckTwo:
+    """Second live check (2026-09-25): three more answer gaps."""
+
+    @pytest.mark.parametrize("query", [
+        "is photo mein kya dikh raha hai?", "yeh kaunsi jagah hai?",
+        "इस तस्वीर में क्या है?", "यह कौन सी जगह है?",
+    ])
+    def test_hinglish_and_hindi_open_questions(self, query):
+        from satquery.controller.understanding import is_open_scene_question
+        assert is_open_scene_question(query)
+
+    @pytest.mark.parametrize("query", ["kya haal hai bhai", "is this urban?", "what is this place used for?"])
+    def test_not_open_questions(self, query):
+        from satquery.controller.understanding import is_open_scene_question
+        assert not is_open_scene_question(query)
+
+    @pytest.mark.parametrize("query,expected", [
+        ("how much area changed?", True),
+        ("what percentage of the scene changed?", True),
+        ("how much did the water area change?", False),
+        ("did anything change?", False),
+    ])
+    def test_overall_change_amount(self, query, expected):
+        from satquery.controller.understanding import is_overall_change_amount
+        assert is_overall_change_amount(query) is expected
+
+    def test_how_much_area_changed_routes_to_the_change_mask(self, tmp_path):
+        from evaluation.nl_understanding_eval import manifests
+        from satquery.controller.matrix_loader import load_matrix
+        from satquery.controller.router import Router
+
+        router = Router(load_matrix("configs/capability_matrix.yaml"))
+        pair = manifests(tmp_path)["BITEMPORAL_PAIR"]
+        assert router.decide("how much area changed?", pair).plan.tasks[0] == "TEMPORAL_CHANGE_MAP"
+        assert router.decide("how much did the water area change?", pair).plan.tasks[0] == "TEMPORAL_CHANGE_VQA"
+
+    def test_hinglish_open_question_captions_when_the_captioner_is_loaded(self, tmp_path, monkeypatch):
+        from evaluation.nl_understanding_eval import manifests
+        from satquery.controller.matrix_loader import load_matrix
+        from satquery.controller.router import Router
+
+        monkeypatch.setattr(Router, "_captioner_loaded", lambda self: True)
+        router = Router(load_matrix("configs/capability_matrix.yaml"))
+        single = manifests(tmp_path)["SINGLE"]
+        assert router.decide("yeh kaunsi jagah hai?", single).plan.tasks[0] == "SINGLE_CAPTION"
+
+    def test_change_area_below_a_square_kilometre_is_in_square_metres(self):
+        from satquery.tools.change_mask import _area_text
+        assert _area_text(0.007) == "about 7,000 m2"
+        assert _area_text(2.345) == "2.35 km2"
